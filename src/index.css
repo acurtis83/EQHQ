@@ -1,0 +1,80 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; min-height: 100%; }
+body { background: var(--bg); -webkit-font-smoothing: antialiased; }
+
+:root, html[data-theme="light"] {
+  --ink: #17181c; --sub: #626974; --faint: #979da7;
+  --bg: #eef0f4; --panel: #ffffff; --inset: #f5f6f9; --seg: #ffffff;
+  --line: #d3d7e0; --line-soft: #e5e7ee;
+  --primary: #0a7aff; --primary-deep: #0063d6; --primary-soft: #eaf3ff;
+  --on-primary: #ffffff;
+  --gold: #a07724; --gold-soft: #f7f0de;
+  --green: #2e7d51; --green-soft: #e7f2ec;
+  --red: #d64541; --red-soft: #fbeceb;
+  --chrome: rgba(255,255,255,.88);
+  --card-shadow: 0 1px 3px rgba(16,24,40,.09), 0 1px 2px rgba(16,24,40,.05);
+  color-scheme: light;
+}
+html[data-theme="dark"] {
+  /* dark gray surfaces (not pure black), off-white text (not pure white),
+     depth via lighter elevated surfaces instead of shadows,
+     accents desaturated and lightened for dark backgrounds */
+  --ink: #ececef; --sub: #a6abb4; --faint: #75797f;
+  --bg: #131417; --panel: #1d1e23; --inset: #24262b; --seg: #33353c;
+  --line: #2c2e35; --line-soft: #232529;
+  --primary: #8ab6e8; --primary-deep: #a8c8ef; --primary-soft: #202b39;
+  --on-primary: #10151b;
+  --gold: #c9a761; --gold-soft: #2a2418;
+  --green: #82bd9b; --green-soft: #1d2a23;
+  --red: #d78d88; --red-soft: #2e201f;
+  --chrome: rgba(24,25,29,.88);
+  --card-shadow: none;
+  color-scheme: dark;
+}
+@media print {
+  html, html[data-theme="dark"] {
+    --ink: #111; --sub: #444; --faint: #777;
+    --bg: #fff; --panel: #fff; --inset: #fff; --seg: #fff;
+    --line: #ddd; --line-soft: #eee;
+    --primary: #0063d6; --primary-deep: #0063d6; --primary-soft: #fff;
+    --on-primary: #fff;
+    --gold: #8a6a20; --gold-soft: #fff;
+    --green: #2e7d51; --green-soft: #fff;
+    --red: #b03a36; --red-soft: #fff;
+    --card-shadow: none;
+  }
+}
+
+/* ---------- responsive / mobile fit ---------- */
+html, body { overflow-x: hidden; }
+#root { max-width: 100%; }
+
+/* Form controls must never exceed their container.
+   iOS gives date/time inputs a wide intrinsic size — this reins that in. */
+input, select, textarea, button { max-width: 100%; box-sizing: border-box; }
+input[type="date"], input[type="time"] {
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Flex/grid children default to min-width:auto, which is what forces
+   rows to overflow instead of wrapping. */
+.eq-main [style*="flex"] { min-width: 0; }
+/* Grid and flex children default to min-width:auto, which refuses to shrink
+   below the intrinsic width of inputs — the cause of sideways overflow. */
+.eq-main > *, .eq-main > * > *, .eq-main [style*="display: grid"] > * { min-width: 0; }
+
+@media (max-width: 620px) {
+  .eq-main { padding-left: 12px !important; padding-right: 12px !important; }
+  /* keep multi-column grids to a single column on phones */
+  .eq-main [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  input[type="date"], input[type="time"] { font-size: 12.5px; padding: 6px 8px; }
+}
+
+/* The callings board scrolls sideways on purpose — don't collapse it. */
+.eq-callings-board { grid-template-columns: none !important; }
+
+/* The home tiles are meant to stay four across on phones — the mobile rule
+   above would otherwise stack them vertically. */
+.eq-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
