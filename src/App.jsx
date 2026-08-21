@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Home, Users, ClipboardList, CalendarDays, GraduationCap,
-  HeartHandshake, LayoutGrid, Settings, LogOut, Lock, FileText,
+  HeartHandshake, LayoutGrid, Settings, LogOut, Lock, FileText, LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "./lib/useAuth";
 import { T, Btn, Stub } from "./components/ui";
@@ -11,15 +11,19 @@ import Roster from "./presidency/Roster";
 import Presidency from "./presidency/Presidency";
 import Teaching from "./presidency/Teaching";
 import Forms from "./presidency/Forms";
+import Callings from "./presidency/Callings";
+import HomeHub from "./presidency/HomeHub";
 import ImportLegacy from "./presidency/ImportLegacy";
 import TalkLibrary from "./presidency/TalkLibrary";
 import SignIn from "./presidency/SignIn";
+import Splash from "./components/Splash";
 
 // Member tabs are always present. Presidency tabs only mount when signed in —
 // and even if someone forced them open, RLS returns nothing without a session.
 const MEMBER_TABS = [{ id: "feed", label: "Feed", icon: Home }];
 
 const PRESIDENCY_TABS = [
+  { id: "hub", label: "Home", icon: LayoutDashboard },
   { id: "presagenda", label: "Presidency", icon: ClipboardList },
   { id: "sunday", label: "Sunday", icon: CalendarDays },
   { id: "teaching", label: "Teaching", icon: GraduationCap },
@@ -43,6 +47,7 @@ function sharedFormId() {
 export default function App() {
   const { isPresidency, presidency, ready, signOut } = useAuth();
   const [sharedForm] = useState(sharedFormId);
+  const [splashDone, setSplashDone] = useState(() => !!sharedFormId());
   const [tab, setTab] = useState("feed");
   const [showSignIn, setShowSignIn] = useState(false);
 
@@ -64,12 +69,23 @@ export default function App() {
     if (!isPresidency && tab !== "feed") setTab("feed");
   }, [isPresidency, tab]);
 
+  // Signing in lands on the presidency hub rather than the member feed.
+  const [landed, setLanded] = useState(false);
+  useEffect(() => {
+    if (isPresidency && !landed) { setTab("hub"); setLanded(true); }
+    if (!isPresidency && landed) setLanded(false);
+  }, [isPresidency, landed]);
+
   const tabs = isPresidency ? [...MEMBER_TABS, ...PRESIDENCY_TABS] : MEMBER_TABS;
+
+  if (!splashDone) {
+    return <Splash onDone={() => setSplashDone(true)} />;
+  }
 
   if (sharedForm) {
     return (
       <div style={{ minHeight: "100vh", background: T.bg, padding: "20px 16px 40px" }}>
-        <div style={{ maxWidth: 560, margin: "0 auto" }}>
+        <div className="eq-scale" style={{ maxWidth: 620, margin: "0 auto" }}>
           <div style={{ fontSize: 10.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
             HOLBROOK FARMS 8TH WARD
           </div>
@@ -99,7 +115,7 @@ export default function App() {
           borderBottom: `1px solid ${T.lineSoft}`, padding: "14px 16px",
         }}
       >
-        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="eq-shell" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 10.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
               HOLBROOK FARMS 8TH WARD
@@ -122,8 +138,9 @@ export default function App() {
         </div>
       </header>
 
-      <main className="eq-main" style={{ maxWidth: 720, margin: "0 auto", padding: "18px 16px", width: "100%" }}>
+      <main className="eq-main eq-shell eq-scale" style={{ padding: "18px 16px" }}>
         {tab === "feed" && <Feed />}
+        {tab === "hub" && <HomeHub onGo={setTab} />}
         {tab === "roster" && <Roster />}
         {tab === "settings" && (
           <>
@@ -141,9 +158,7 @@ export default function App() {
         {tab === "ministering" && (
           <Stub title="Ministering" note="Districts, companionships, households, and quarterly interviews. Presidency-only, enforced in the database." />
         )}
-        {tab === "callings" && (
-          <Stub title="Callings tracker" note="Kanban pipeline from Need through Set Apart. Stages are already carried over." />
-        )}
+        {tab === "callings" && <Callings />}
       </main>
 
       {isPresidency && (
@@ -156,7 +171,7 @@ export default function App() {
             overflowX: "auto",
           }}
         >
-          <div style={{ display: "flex", gap: 4, maxWidth: 720, margin: "0 auto", minWidth: "min-content" }}>
+          <div className="eq-nav-inner" style={{ display: "flex", gap: 4, maxWidth: 720, margin: "0 auto", minWidth: "min-content" }}>
             {tabs.map((t) => {
               const Icon = t.icon;
               const on = tab === t.id;

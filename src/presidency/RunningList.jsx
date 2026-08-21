@@ -95,7 +95,7 @@ export default function RunningList({ onCountChange }) {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading running list…</div>;
+    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading Planner…</div>;
   }
 
   return (
@@ -174,8 +174,8 @@ export default function RunningList({ onCountChange }) {
       {!items.length && (
         <div style={{ marginTop: 12 }}>
           <Empty
-            title="The running list is empty"
-            hint="Add anything that should come up at the next presidency meeting. Items here can be pulled straight onto an agenda."
+            title="The Planner is empty"
+            hint="Add anything that should come up at the next Presidency Meeting. Items here can be pulled straight onto an agenda."
           />
         </div>
       )}

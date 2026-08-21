@@ -84,12 +84,83 @@ Built and verified:
 - Forms — a builder for surveys, sign-ups and assignments with nine question
   types, templates, share links, publish/unpublish, results and CSV export
 
+- Callings — board across the eight stages with move controls, group view by
+  committee, auto-stamped stage dates, and editable groups
+- Branded splash on launch, using the ward logo
+- Presidency Home Hub — this Sunday, upcoming activities and temple trips,
+  calling statuses, quorum stats by age band, and open action items per person
+
 Stubbed, with tabs in place:
 
 - Group chat (the Groups tile explains it's coming)
 - Sunday quorum meeting agenda
 - Ministering
-- Callings tracker
+
+
+## Layout
+
+The phone layout is the baseline and is untouched. Above 900px the shell widens
+to 980px and card lists go two-column; above 1280px it widens to 1120px and the
+whole surface scales up ~6%, because everything is sized in px for a phone and
+nudging the container is more predictable than re-specifying every size.
+
+Borders and card shadows were strengthened in both themes so cards read as
+distinct objects rather than floating text.
+
+## Age bands
+
+18–35, 36–45, 46–55, 56–64, 65+. No overlap — 65 counts in "65+" only, so the
+bands always sum to the member total. Counts are computed from `age` at read
+time rather than the stored `band`, so rows written under the old four-band
+scheme still land in the right bucket without a migration.
+
+## Presidency Meetings and the Planner
+
+- **Planner** is the standing list (six buckets) that feeds agendas.
+- **Presidency Meetings** are the dated meetings themselves.
+
+An agenda can be **saved as PDF** — the PDF button opens the browser print
+dialog against a print-only layout, so "Save as PDF" produces a real document.
+That works everywhere including iOS, unlike generating a file client-side.
+
+Agenda items take a **link or a file**. Files go to a Supabase Storage bucket
+named `agenda-files`.
+
+**Create that bucket before attaching anything:** Supabase → Storage → New
+bucket → name it `agenda-files` → tick **Public bucket**. Without it, uploads
+fail with a clear message rather than silently.
+
+## Logo and splash
+
+`public/logo.png` is the ward mark with the black background removed;
+`logo-light.png` recolours the white elements to ink so the mark also reads on
+a light background. The originals were designed for dark, so the splash screen
+is deliberately dark in both themes.
+
+The splash shows briefly on every launch, and:
+
+- a tap skips it
+- the OS "reduce motion" setting skips it entirely
+- it never shows on a `?f=` form link, where someone arrived to do one thing
+
+App icons are generated from the same mark. The maskable icon has its own 22%
+safe margin and an opaque background, otherwise Android launchers crop into the
+artwork.
+
+## Callings
+
+Two views over the same data:
+
+- **Board** — the eight stages as a horizontal pipeline (Need → Proposed →
+  Approved → Called → Sustained → Set Apart, plus Need to Release → Released),
+  with arrows to move a calling along.
+- **By group** — broken down by committee: EQ Presidency, Teachers, Activities
+  Committee, Service Committee, Ministering. Groups are rows, so you can rename
+  and add them; one holding callings can't be deleted until they're moved.
+
+Moving a stage **stamps the date it was reached** into `stage_dates`, so you can
+see how long something has been sitting at Proposed. An existing stamp is never
+overwritten if you move backwards and forwards again.
 
 ## Post categories
 
@@ -258,7 +329,13 @@ Automated checks across the project:
   templates, summaries, and CSV escaping.
 - **51** on the forms UI — templates, builder, reorder, publish, share links,
   required validation, capacity closing when full, and anonymity.
-- **17** end-to-end regression across feed, sign-ups, agenda, roster, teaching.
+- **37** on callings — board ordering, stage moves, date stamping, group view,
+  group protection, and editing.
+- **26** on the Home Hub — panels, quorum stats using the new bands, action
+  items by owner, and the renames.
+- **20** on the age bands — every boundary, and that counts never double-count.
+- **17** end-to-end regression across feed, sign-ups, agenda, roster, teaching,
+  forms, and callings.
 
 `eq-hub-preview.html` (one folder up) is a no-install click-through of the same
 UI with sample data.

@@ -7,14 +7,28 @@ export const OFFICES = [
   "Deacon", "Unordained", "Bishop", "Patriarch", "Seventy",
 ];
 
-export const BANDS = ["18–35", "36–45", "46–64", "65+", "Unknown"];
+// Five bands, no overlap — 65 belongs to "65+", not to the band below.
+export const BANDS = ["18–35", "36–45", "46–55", "56–64", "65+", "Unknown"];
 
 export function bandForAge(a) {
   if (a == null || isNaN(a)) return "Unknown";
   if (a <= 35) return "18–35";
   if (a <= 45) return "36–45";
-  if (a <= 64) return "46–64";
+  if (a <= 55) return "46–55";
+  if (a <= 64) return "56–64";
   return "65+";
+}
+
+// Counts computed from age rather than the stored band, so rows written under
+// the old four-band scheme still land in the right bucket.
+export function bandCounts(members) {
+  const out = {};
+  for (const b of BANDS) out[b] = 0;
+  for (const m of members || []) {
+    const b = bandForAge(m.age == null ? null : Number(m.age));
+    out[b] = (out[b] || 0) + 1;
+  }
+  return out;
 }
 
 // Turn "Last, First Middle" (or "Last, First, Middle") into "First Last"

@@ -134,7 +134,7 @@ export default function Feed() {
           hint={isPresidency ? "Tap the + button to post the first announcement." : "Check back soon."}
         />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {visible.map((post) => (
             <PostCard
               key={post.id}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Check, Copy, ChevronLeft, CalendarPlus, ArrowDownToLine } from "lucide-react";
+import { Plus, Trash2, Check, Copy, ChevronLeft, CalendarPlus, ArrowDownToLine, Printer, Paperclip, Link2, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import { fmtDate, fmtShort, toIso } from "../lib/domain/dates";
@@ -11,6 +11,10 @@ const SECTIONS = [
 ];
 
 const blankItem = { text: "", who: "", notes: "", due_date: "", section: "items" };
+
+// Files live in a public Supabase Storage bucket named agenda-files.
+// See README — create it once, marked public, before attaching anything.
+const BUCKET = "agenda-files";
 
 export default function PresidencyAgenda() {
   const [agendas, setAgendas] = useState([]);
@@ -93,10 +97,10 @@ export default function PresidencyAgenda() {
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 19, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
-            Presidency meetings
+            Presidency Meetings
           </div>
           <div style={{ fontSize: 13.5, color: T.sub, marginTop: 3 }}>
-            Agendas build from the running list and carry unfinished items forward.
+            Agendas build from the Planner and carry unfinished items forward.
           </div>
         </div>
         <Btn kind="primary" style={{ marginLeft: "auto", flex: "0 0 auto" }} onClick={createAgenda}>
@@ -112,8 +116,8 @@ export default function PresidencyAgenda() {
 
       {!agendas.length ? (
         <Empty
-          title="No presidency agendas yet"
-          hint="Start one and it will pull in whatever is open on the running list."
+          title="No Presidency Meetings yet"
+          hint="Start one and it will pull in whatever is open on the Planner."
         />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -142,6 +146,8 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
   const [draft, setDraft] = useState(blankItem);
   const [editing, setEditing] = useState(null);
   const [pullOpen, setPullOpen] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const [attachFor, setAttachFor] = useState(null);
 
   const bySection = useMemo(() => {
     const out = {};
@@ -220,6 +226,18 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
     return lines.join("\n");
   };
 
+  // Print rather than generate a PDF file: every browser can "Save as PDF"
+  // from the print dialog, including iOS, and the layout stays a real document
+  // rather than a screenshot.
+  const printAgenda = () => {
+    setPrinting(true);
+    // Let the print-only markup mount before the dialog opens.
+    setTimeout(() => {
+      window.print();
+      setPrinting(false);
+    }, 60);
+  };
+
   const copy = async () => {
     const text = agendaText();
     try {
@@ -238,7 +256,8 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Btn kind="plain" size="sm" onClick={onBack}><ChevronLeft size={16} />All meetings</Btn>
-        <Btn kind="plain" size="sm" style={{ marginLeft: "auto" }} onClick={copy}><Copy size={14} />Copy</Btn>
+        <Btn kind="plain" size="sm" style={{ marginLeft: "auto" }} onClick={printAgenda}><Printer size={14} />PDF</Btn>
+        <Btn kind="plain" size="sm" onClick={copy}><Copy size={14} />Copy</Btn>
         <Btn kind="plain" size="sm" onClick={onDelete}><Trash2 size={14} /></Btn>
       </div>
 
@@ -265,7 +284,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <Btn kind="soft" onClick={() => setPullOpen(true)}><ArrowDownToLine size={15} />Pull from running list</Btn>
+        <Btn kind="soft" onClick={() => setPullOpen(true)}><ArrowDownToLine size={15} />Pull from Planner</Btn>
         <Btn kind="ghost" onClick={carryOver}>Carry over open items</Btn>
       </div>
 
@@ -320,6 +339,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
                     editing={editing === it.id}
                     onEdit={() => setEditing(editing === it.id ? null : it.id)}
                     onPatch={patchItem} onRemove={removeItem}
+                    onAttach={() => setAttachFor(it)}
                   />
                 ))}
               </div>
@@ -327,6 +347,16 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
           </div>
         );
       })}
+
+      {printing && <PrintDoc agenda={agenda} bySection={bySection} />}
+
+      {attachFor && (
+        <AttachSheet
+          item={attachFor}
+          onClose={() => setAttachFor(null)}
+          onSaved={() => { setAttachFor(null); onReloadItems(); }}
+        />
+      )}
 
       {pullOpen && (
         <PullSheet
@@ -387,7 +417,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
           borderRadius: "18px 18px 0 0", padding: 18, display: "flex", flexDirection: "column", gap: 12,
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Pull from running list</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Pull from Planner</div>
         <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
           Open items only. Watch-list entries land under Ministering checks.
         </div>
@@ -442,7 +472,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
   );
 }
 
-function ItemRow({ it, editing, onEdit, onPatch, onRemove }) {
+function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
   const [text, setText] = useState(it.text);
   const [who, setWho] = useState(it.who || "");
   const [notes, setNotes] = useState(it.notes || "");
@@ -467,6 +497,9 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove }) {
             onEdit();
           }}>Save</Btn>
           <Btn kind="plain" size="sm" onClick={onEdit}>Cancel</Btn>
+          {onAttach && (
+            <Btn kind="plain" size="sm" onClick={onAttach}><Paperclip size={14} /></Btn>
+          )}
           <Btn kind="plain" size="sm" style={{ marginLeft: "auto" }} onClick={() => onRemove(it)}>
             <Trash2 size={14} />
           </Btn>
@@ -505,6 +538,202 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove }) {
           )}
         </div>
         {it.notes && <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>}
+        {(it.link_url || it.attachment_url) && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+            {it.link_url && (
+              <a href={it.link_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                <Link2 size={12} />Link
+              </a>
+            )}
+            {it.attachment_url && (
+              <a href={it.attachment_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                <Paperclip size={12} />{it.attachment_name || "Attachment"}
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Print-only rendering. Hidden on screen; the print stylesheet hides everything
+// else and shows this, so "Save as PDF" produces a clean one-page document.
+function PrintDoc({ agenda, bySection }) {
+  return (
+    <div className="eq-print-only">
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .eq-print-only, .eq-print-only * { visibility: visible !important; }
+          .eq-print-only {
+            position: absolute !important; left: 0; top: 0; width: 100%;
+            padding: 0 !important; background: #fff !important; color: #111 !important;
+          }
+          @page { margin: 18mm 16mm; }
+        }
+        .eq-print-only { display: none; }
+        @media print { .eq-print-only { display: block; } }
+      `}</style>
+
+      <div style={{ fontFamily: "system-ui, sans-serif", color: "#111" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.14em", color: "#666", fontWeight: 700 }}>
+          HOLBROOK FARMS 8TH WARD
+        </div>
+        <h1 style={{ fontSize: 22, margin: "4px 0 2px", fontWeight: 800 }}>
+          Elders Quorum Presidency Meeting
+        </h1>
+        <div style={{ fontSize: 13, color: "#444" }}>
+          {[agenda.meeting_date ? fmtDate(agenda.meeting_date) : "", agenda.meeting_time, agenda.location]
+            .filter(Boolean).join("  ·  ")}
+        </div>
+
+        {SECTIONS.map((s) => {
+          const list = bySection[s.key] || [];
+          if (!list.length) return null;
+          return (
+            <div key={s.key} style={{ marginTop: 18, breakInside: "avoid" }}>
+              <div style={{
+                fontSize: 11, letterSpacing: "0.1em", fontWeight: 800, color: "#111",
+                borderBottom: "1.5px solid #111", paddingBottom: 4, marginBottom: 8,
+                textTransform: "uppercase",
+              }}>
+                {s.label}
+              </div>
+              {list.map((it) => (
+                <div key={it.id} style={{ display: "flex", gap: 8, marginBottom: 9, breakInside: "avoid" }}>
+                  <span style={{
+                    flex: "0 0 auto", width: 11, height: 11, marginTop: 3,
+                    border: "1.2px solid #111", borderRadius: 2,
+                    background: it.done ? "#111" : "transparent",
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>
+                      {it.text}
+                      {it.who ? <span style={{ fontWeight: 400, color: "#444" }}>{`  — ${it.who}`}</span> : null}
+                      {it.due_date ? <span style={{ fontWeight: 400, color: "#444" }}>{`  (${fmtShort(it.due_date)})`}</span> : null}
+                    </div>
+                    {it.notes && (
+                      <div style={{ fontSize: 12, color: "#444", marginTop: 2, lineHeight: 1.4 }}>{it.notes}</div>
+                    )}
+                    {(it.link_url || it.attachment_url) && (
+                      <div style={{ fontSize: 11, color: "#555", marginTop: 2, wordBreak: "break-all" }}>
+                        {it.link_url && <div>Link: {it.link_url}</div>}
+                        {it.attachment_url && <div>{it.attachment_name || "Attachment"}: {it.attachment_url}</div>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+
+        <div style={{ marginTop: 26, fontSize: 10.5, color: "#888" }}>
+          Printed {new Date().toLocaleDateString("en-US")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AttachSheet({ item, onClose, onSaved }) {
+  const [link, setLink] = useState(item.link_url || "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true); setErr("");
+    const path = `${item.agenda_id}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
+    const up = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
+    if (up.error) {
+      setErr(
+        up.error.message.includes("Bucket not found")
+          ? `No storage bucket named "${BUCKET}". Create it in Supabase → Storage, marked public.`
+          : up.error.message
+      );
+      setBusy(false);
+      return;
+    }
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    const { error } = await supabase.from("agenda_items")
+      .update({ attachment_url: data.publicUrl, attachment_name: file.name })
+      .eq("id", item.id);
+    setBusy(false);
+    if (error) setErr(error.message);
+    else onSaved();
+  };
+
+  const saveLink = async () => {
+    setBusy(true);
+    const { error } = await supabase.from("agenda_items")
+      .update({ link_url: link.trim() || null }).eq("id", item.id);
+    setBusy(false);
+    if (error) setErr(error.message);
+    else onSaved();
+  };
+
+  const clearFile = async () => {
+    await supabase.from("agenda_items")
+      .update({ attachment_url: null, attachment_name: null }).eq("id", item.id);
+    onSaved();
+  };
+
+  return (
+    <div onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(10,12,16,.5)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 60,
+      }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{
+          background: T.bg, width: "100%", maxWidth: 520, borderRadius: "18px 18px 0 0",
+          padding: 18, display: "flex", flexDirection: "column", gap: 12,
+        }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>Attach</div>
+          <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
+        </div>
+        <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.5 }}>{item.text}</div>
+
+        {err && (
+          <div style={{
+            background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
+            borderRadius: 10, padding: "9px 12px", fontSize: 13, lineHeight: 1.5,
+          }}>
+            {err}
+          </div>
+        )}
+
+        <Lbl label="Link">
+          <Input value={link} onChange={setLink} placeholder="https://…" />
+        </Lbl>
+        <Btn kind="soft" onClick={saveLink} disabled={busy}>Save link</Btn>
+
+        <div style={{ borderTop: `1px solid ${T.lineSoft}`, paddingTop: 12 }}>
+          <Lbl label="File">
+            <input
+              type="file"
+              accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt"
+              onChange={(e) => upload(e.target.files?.[0])}
+              style={{ fontSize: 13.5, color: T.sub }}
+            />
+          </Lbl>
+          {item.attachment_url && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9 }}>
+              <a href={item.attachment_url} target="_blank" rel="noreferrer"
+                style={{ fontSize: 13, fontWeight: 700, color: T.primaryDeep, textDecoration: "none", flex: 1, minWidth: 0 }}>
+                {item.attachment_name || "Attachment"}
+              </a>
+              <Btn size="sm" kind="plain" onClick={clearFile}><Trash2 size={14} /></Btn>
+            </div>
+          )}
+        </div>
+
+        {busy && <div style={{ fontSize: 13, color: T.sub }}>Working…</div>}
       </div>
     </div>
   );

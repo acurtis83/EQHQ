@@ -333,6 +333,10 @@ create table if not exists agenda_items (
   due_date date,
   done boolean not null default false,
   category text,
+  -- A link, or a file in the agenda-files storage bucket.
+  link_url text,
+  attachment_url text,
+  attachment_name text,
   sort_order int not null default 0
 );
 create index if not exists agenda_items_agenda_idx on agenda_items (agenda_id);
@@ -352,17 +356,31 @@ create table if not exists running_items (
 );
 create index if not exists running_bucket_idx on running_items (bucket);
 
+-- Committees. Renameable, so they're rows rather than a hardcoded list.
+create table if not exists calling_groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  sort_order int not null default 0
+);
+
 create table if not exists callings (
   id uuid primary key default gen_random_uuid(),
   position text not null,
   member_id uuid references members (id) on delete set null,
   candidate_name text,
   stage text not null default 'Need',
+  group_id uuid references calling_groups (id) on delete set null,
   group_name text,
+  -- Stage -> date reached, e.g. {"Called":"2026-08-09","Sustained":"2026-08-16"}.
+  -- Stamped automatically when the stage changes, so you can see how long
+  -- something has been sitting.
+  stage_dates jsonb not null default '{}',
+  set_apart_by text,
   notes text,
   sort_order int not null default 0,
   updated_at timestamptz not null default now()
 );
+create index if not exists callings_group_idx on callings (group_id);
 create index if not exists callings_stage_idx on callings (stage);
 
 alter table calendar_exceptions enable row level security;
@@ -375,6 +393,7 @@ alter table ministering_interviews enable row level security;
 alter table agendas enable row level security;
 alter table agenda_items enable row level security;
 alter table running_items enable row level security;
+alter table calling_groups enable row level security;
 alter table callings enable row level security;
 
 -- One policy shape for every presidency table: no session, no data.
@@ -398,6 +417,8 @@ create policy "Presidency only" on agendas
 create policy "Presidency only" on agenda_items
   for all using (is_presidency()) with check (is_presidency());
 create policy "Presidency only" on running_items
+  for all using (is_presidency()) with check (is_presidency());
+create policy "Presidency only" on calling_groups
   for all using (is_presidency()) with check (is_presidency());
 create policy "Presidency only" on callings
   for all using (is_presidency()) with check (is_presidency());
@@ -465,4 +486,25 @@ with (security_invoker = off) as
   join forms f on f.id = r.form_id and f.published;
 
 grant select on public_form_capacity to anon, authenticated;
+
+-- Starter committees. Safe to re-run: only inserts when the table is empty.
+insert into calling_groups (name, sort_order)
+select * from (values
+  ('EQ Presidency', 0),
+  ('Teachers', 1),
+  ('Activities Committee', 2),
+  ('Service Committee', 3),
+  ('Ministering', 4)
+) as v(name, sort_order)
+where not exists (select 1 from calling_groups);
+
+-- If you already ran an earlier version of this file:
+-- alter table callings add column if not exists group_id uuid references calling_groups (id) on delete set null;
+-- alter table callings add column if not exists stage_dates jsonb not null default '{}';
+-- alter table callings add column if not exists set_apart_by text;
+
+-- If you already ran an earlier version of this file:
+-- alter table agenda_items add column if not exists link_url text;
+-- alter table agenda_items add column if not exists attachment_url text;
+-- alter table agenda_items add column if not exists attachment_name text;
 

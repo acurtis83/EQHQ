@@ -5,14 +5,14 @@ body { background: var(--bg); -webkit-font-smoothing: antialiased; }
 :root, html[data-theme="light"] {
   --ink: #17181c; --sub: #626974; --faint: #979da7;
   --bg: #eef0f4; --panel: #ffffff; --inset: #f5f6f9; --seg: #ffffff;
-  --line: #d3d7e0; --line-soft: #e5e7ee;
+  --line: #b9c0ce; --line-soft: #d4d9e4;
   --primary: #0a7aff; --primary-deep: #0063d6; --primary-soft: #eaf3ff;
   --on-primary: #ffffff;
   --gold: #a07724; --gold-soft: #f7f0de;
   --green: #2e7d51; --green-soft: #e7f2ec;
   --red: #d64541; --red-soft: #fbeceb;
   --chrome: rgba(255,255,255,.88);
-  --card-shadow: 0 1px 3px rgba(16,24,40,.09), 0 1px 2px rgba(16,24,40,.05);
+  --card-shadow: 0 1px 2px rgba(16,24,40,.10), 0 4px 12px rgba(16,24,40,.08);
   color-scheme: light;
 }
 html[data-theme="dark"] {
@@ -21,14 +21,16 @@ html[data-theme="dark"] {
      accents desaturated and lightened for dark backgrounds */
   --ink: #ececef; --sub: #a6abb4; --faint: #75797f;
   --bg: #131417; --panel: #1d1e23; --inset: #24262b; --seg: #33353c;
-  --line: #2c2e35; --line-soft: #232529;
+  --line: #3d4048; --line-soft: #2e3138;
   --primary: #8ab6e8; --primary-deep: #a8c8ef; --primary-soft: #202b39;
   --on-primary: #10151b;
   --gold: #c9a761; --gold-soft: #2a2418;
   --green: #82bd9b; --green-soft: #1d2a23;
   --red: #d78d88; --red-soft: #2e201f;
   --chrome: rgba(24,25,29,.88);
-  --card-shadow: none;
+  /* Dark mode gets depth from lighter surfaces, but a faint ring still helps
+     cards separate from the page. */
+  --card-shadow: 0 0 0 1px rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.35);
   color-scheme: dark;
 }
 @media print {
@@ -78,3 +80,38 @@ input[type="date"], input[type="time"] {
 /* The home tiles are meant to stay four across on phones — the mobile rule
    above would otherwise stack them vertically. */
 .eq-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+
+/* ---------- widths ----------
+   The phone layout is the baseline and deliberately untouched. Above tablet
+   width the shell widens and content goes multi-column, so a laptop isn't
+   showing a phone-width column down the middle of a big screen. */
+.eq-shell { max-width: 720px; margin: 0 auto; width: 100%; }
+
+@media (min-width: 900px) {
+  .eq-shell { max-width: 980px; }
+  /* Two columns for card lists that are just a vertical stack on a phone. */
+  .eq-cols-2 {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+}
+
+@media (min-width: 1280px) {
+  .eq-shell { max-width: 1120px; }
+  /* Everything is sized in px for the phone; nudging the whole surface up on a
+     large screen is simpler and more predictable than re-specifying each size. */
+  .eq-scale { zoom: 1.06; }
+  .eq-cols-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+}
+
+/* Bottom nav becomes a centred bar rather than stretching edge to edge. */
+@media (min-width: 900px) {
+  .eq-nav-inner { max-width: 760px; }
+}

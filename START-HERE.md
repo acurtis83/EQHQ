@@ -15,6 +15,16 @@ Five steps, about 20 minutes. You only do this once.
 5. You should see "Success. No rows returned." That's correct — it creates
    tables, it doesn't return data.
 
+It also seeds five calling groups (EQ Presidency, Teachers, Activities
+Committee, Service Committee, Ministering). Re-running the file later is safe —
+it won't duplicate them.
+
+### Storage bucket (for agenda attachments)
+
+Supabase → **Storage** → **New bucket** → name it `agenda-files` → tick
+**Public bucket** → Create. Skip this and attaching a file to an agenda item
+fails with a message telling you the bucket is missing.
+
 ---
 
 ## 2. Your four logins

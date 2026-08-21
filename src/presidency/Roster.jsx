@@ -130,7 +130,7 @@ export default function Roster() {
           hint="Paste your ward directory export to bring everyone in at once, or add brethren one at a time."
         />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {visible.map((r) => (
             <div key={r.id} style={{ ...card, padding: 13, display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>

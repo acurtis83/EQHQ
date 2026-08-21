@@ -10,8 +10,8 @@ export default defineConfig({
       manifest: {
         name: "Holbrook Farms 8th Ward — Elders Quorum",
         short_name: "EQ Hub",
-        theme_color: "#0a7aff",
-        background_color: "#eef0f4",
+        theme_color: "#17181c",
+        background_color: "#17181c",
         display: "standalone",
         start_url: "/",
         scope: "/",

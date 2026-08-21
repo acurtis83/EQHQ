@@ -3,7 +3,8 @@ import { T } from "../components/ui";
 import RunningList from "./RunningList";
 import PresidencyAgenda from "./PresidencyAgenda";
 
-// Mirrors the old app's presMode toggle: the standing list vs. a dated meeting.
+// Planner is the standing list that feeds agendas; Presidency Meetings are the
+// dated meetings themselves.
 export default function Presidency() {
   const [mode, setMode] = useState("agenda");
   const [openCount, setOpenCount] = useState(null);
@@ -18,8 +19,8 @@ export default function Presidency() {
         }}
       >
         {[
-          { id: "agenda", label: "Meetings" },
-          { id: "plan", label: openCount == null ? "Running list" : `Running list (${openCount})` },
+          { id: "agenda", label: "Presidency Meetings" },
+          { id: "plan", label: openCount == null ? "Planner" : `Planner (${openCount})` },
         ].map((t) => (
           <button
             key={t.id}

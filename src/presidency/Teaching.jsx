@@ -144,7 +144,7 @@ export default function Teaching() {
       {!sundays.length ? (
         <Empty title="No Sundays in range" hint="Try unchecking “Hide past Sundays”." />
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {sundays.map((s) => (
             <SundayCard
               key={s.date}
