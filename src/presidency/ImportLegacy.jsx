@@ -40,7 +40,7 @@ export default function ImportLegacy() {
   return (
     <div>
       <SectionTitle sub="One-time move of your old Planner data into the new tables.">
-        Import from the old app
+        Import From the Old App
       </SectionTitle>
 
       <div style={{ ...card, marginBottom: 12 }}>
@@ -64,7 +64,7 @@ export default function ImportLegacy() {
 
       {summary && !report && (
         <div style={{ ...card, marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginBottom: 10 }}>Found in the backup</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginBottom: 10 }}>Found in the Backup</div>
           <Rows rows={Object.entries(summary)} />
           <div style={{ fontSize: 13, color: T.sub, marginTop: 12, lineHeight: 1.6 }}>
             Importing adds these as new rows. If you've already imported once, clear the
@@ -78,7 +78,7 @@ export default function ImportLegacy() {
 
       {report && (
         <div style={{ ...card }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginBottom: 10 }}>Import complete</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, marginBottom: 10 }}>Import Complete</div>
           <Rows rows={Object.entries(report.inserted)} />
           {report.errors.length > 0 && (
             <div style={{ marginTop: 12 }}>

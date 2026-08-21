@@ -39,7 +39,7 @@ export default function SignIn({ onClose }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Lock size={18} color={T.sub} />
-            <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Presidency sign in</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Presidency Sign In</span>
           </div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>

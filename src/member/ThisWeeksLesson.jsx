@@ -76,7 +76,7 @@ export default function ThisWeeksLesson() {
     title = row.talk_title || "Lesson";
     sub = [row.teacher_name, row.speaker].filter(Boolean).join(" · ");
   } else {
-    title = "Lesson coming";
+    title = "Lesson Coming";
     sub = "Not posted yet — check back before Sunday.";
   }
 

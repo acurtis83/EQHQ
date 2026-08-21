@@ -32,7 +32,7 @@ export default function Forms() {
   const createFrom = async (tpl) => {
     const { data: f, error } = await supabase
       .from("forms")
-      .insert({ ...tpl.form, title: tpl.form.title || "Untitled form", created_by: presidency?.name || "Presidency" })
+      .insert({ ...tpl.form, title: tpl.form.title || "Untitled Form", created_by: presidency?.name || "Presidency" })
       .select().single();
     if (error) { setErr(error.message); return; }
     if (tpl.questions.length) {
@@ -67,7 +67,7 @@ export default function Forms() {
     <div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <SectionTitle sub="Sign-ups, assignments, and surveys. Share by link or post to the feed.">
+          <SectionTitle sub="Sign-Ups, assignments, and surveys. Share by link or post to the feed.">
             Forms
           </SectionTitle>
         </div>
@@ -83,7 +83,7 @@ export default function Forms() {
       )}
 
       {!forms.length ? (
-        <Empty title="No forms yet" hint="Start from a template — temple cleaning shifts, volunteer sign-up, or the ministering check-in." />
+        <Empty title="No Forms Yet" hint="Start from a template — temple cleaning shifts, volunteer sign-up, or the ministering check-in." />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {forms.map((f) => (
@@ -105,7 +105,7 @@ export default function Forms() {
       )}
 
       {newOpen && (
-        <Sheet title="Start a form" onClose={() => setNewOpen(false)}>
+        <Sheet title="Start a Form" onClose={() => setNewOpen(false)}>
           <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
             Pick a starting point — everything is editable afterwards.
           </div>
@@ -232,7 +232,7 @@ function FormDetail({ form, onBack, onChanged, onDeleted }) {
       {tab === "results" && <Results form={form} questions={questions} />}
 
       {preview && (
-        <Sheet title="How members see it" onClose={() => setPreview(false)}>
+        <Sheet title="How Members See It" onClose={() => setPreview(false)}>
           <FormFill formId={form.id} onDone={() => setPreview(false)} embedded />
         </Sheet>
       )}
@@ -287,7 +287,7 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Lbl label="Type">
             <Select value={form.kind} onChange={(v) => patchForm({ kind: v })}>
-              <option value="signup">Sign-up / assignment</option>
+              <option value="signup">Sign-Up / assignment</option>
               <option value="survey">Survey</option>
             </Select>
           </Lbl>
@@ -302,7 +302,7 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
         </label>
         {form.anonymous && (
           <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55 }}>
-            Sign-up slots still work, but you won't know who took which one.
+            Sign-Up Slots still work, but you won't know who took which one.
           </div>
         )}
       </div>
@@ -383,7 +383,7 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
       <div style={{ ...card }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
           <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
-            {form.published ? "This form is live" : "Not published yet"}
+            {form.published ? "This Form Is Live" : "Not Published Yet"}
           </span>
           <Chip color={form.published ? T.green : T.sub} bg={form.published ? T.greenSoft : T.inset}>
             {form.published ? "Live" : "Draft"}
@@ -411,7 +411,7 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
 
       {form.published && (
         <div style={{ ...card, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Lbl label="Share link">
+          <Lbl label="Share Link">
             <Input value={shareUrl} onChange={() => {}} readOnly />
           </Lbl>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -471,7 +471,7 @@ function Results({ form, questions }) {
   }
 
   if (!responses.length) {
-    return <Empty title="No responses yet" hint={form.published ? "Share the link and they'll show up here." : "Publish the form first."} />;
+    return <Empty title="No Responses Yet" hint={form.published ? "Share the link and they'll show up here." : "Publish the form first."} />;
   }
 
   return (

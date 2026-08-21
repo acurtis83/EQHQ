@@ -95,7 +95,7 @@ export default function Callings() {
       )}
 
       <div role="tablist" style={{ display: "flex", gap: 4, background: T.inset, borderRadius: 12, padding: 4, marginBottom: 14 }}>
-        {[["board", "Board"], ["groups", "By group"]].map(([id, label]) => (
+        {[["board", "Board"], ["groups", "By Group"]].map(([id, label]) => (
           <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)}
             style={{
               flex: 1, padding: "9px 12px", borderRadius: 9, border: "none",
@@ -110,7 +110,7 @@ export default function Callings() {
       </div>
 
       {!rows.length ? (
-        <Empty title="No callings tracked yet" hint="Add one and move it along as it progresses — Need, Proposed, Approved, Called, Sustained, Set Apart." />
+        <Empty title="No Callings Tracked Yet" hint="Add one and move it along as it progresses — Need, Proposed, Approved, Called, Sustained, Set Apart." />
       ) : view === "board" ? (
         <Board byStage={byStage} groups={groups} onOpen={setEditing} onStage={setStage} />
       ) : (
@@ -183,7 +183,7 @@ function GroupView({ byGroup, groups, onOpen, onManage }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-        <Btn size="sm" kind="plain" onClick={onManage}>Manage groups</Btn>
+        <Btn size="sm" kind="plain" onClick={onManage}>Manage Groups</Btn>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {groups.map((g) => {
@@ -208,7 +208,7 @@ function GroupView({ byGroup, groups, onOpen, onManage }) {
         {unassigned.length > 0 && (
           <div style={{ ...card, padding: 14, borderStyle: "dashed" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 15.5, fontWeight: 800, color: T.sub }}>No group</span>
+              <span style={{ fontSize: 15.5, fontWeight: 800, color: T.sub }}>No Group</span>
               <Chip color={T.gold} bg={T.goldSoft}>{unassigned.length}</Chip>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -336,7 +336,7 @@ function EditSheet({ row, groups, members, onClose, onSaved, onStage, setErr }) 
 
       <div style={{ ...card, background: T.inset, borderColor: "transparent", padding: 12 }}>
         <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub, marginBottom: 7 }}>
-          Stage dates
+          Stage Dates
         </div>
         {Object.keys(dates).length ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>

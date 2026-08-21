@@ -99,7 +99,7 @@ export default function HomeHub({ onGo }) {
   return (
     <div>
       <SectionTitle sub={presidency?.name ? `Signed in as ${presidency.name}` : undefined}>
-        Presidency home
+        Presidency Home
       </SectionTitle>
 
       {err && (
@@ -122,20 +122,20 @@ export default function HomeHub({ onGo }) {
                 )
               ) : (
                 <Chip color={T.sub} bg={T.inset}>
-                  {nextSunday.reason === NO_LESSON.FIFTH_SUNDAY ? "5th Sunday — bishopric directed" : nextSunday.reason}
+                  {nextSunday.reason === NO_LESSON.FIFTH_SUNDAY ? "5th Sunday — Bishopric Directed" : nextSunday.reason}
                 </Chip>
               )}
             </>
           )}
         </Panel>
 
-        <Panel icon={CalendarDays} title="Upcoming activities" count={events.length} onGo={() => onGo?.("feed")}>
+        <Panel icon={CalendarDays} title="Upcoming Activities" count={events.length} onGo={() => onGo?.("feed")}>
           {events.length ? events.slice(0, 4).map((e) => (
             <Row key={e.id} label={e.title} meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")} />
           )) : <Muted>Nothing in the next {HORIZON_DAYS} days.</Muted>}
         </Panel>
 
-        <Panel icon={Star} title="Temple trips" count={temple.length} onGo={() => onGo?.("feed")}>
+        <Panel icon={Star} title="Temple Trips" count={temple.length} onGo={() => onGo?.("feed")}>
           {temple.length ? temple.slice(0, 4).map((e) => (
             <Row key={e.id} label={e.title} meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")} />
           )) : <Muted>None scheduled.</Muted>}
@@ -157,7 +157,7 @@ export default function HomeHub({ onGo }) {
           ) : <Muted>Nothing in progress.</Muted>}
         </Panel>
 
-        <Panel icon={Users} title="Quorum stats" onGo={() => onGo?.("roster")}>
+        <Panel icon={Users} title="Quorum Stats" onGo={() => onGo?.("roster")}>
           <div style={{ fontSize: 28, fontWeight: 800, color: T.ink, lineHeight: 1.1 }}>
             {stats.total}
             <span style={{ fontSize: 13, fontWeight: 700, color: T.sub, marginLeft: 7 }}>members</span>
@@ -186,7 +186,7 @@ export default function HomeHub({ onGo }) {
 
       <div style={{ marginTop: 18 }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 10 }}>
-          Open action items
+          Open Action Items
         </div>
         {!byOwner.length ? (
           <div style={{ ...card, padding: 16 }}>

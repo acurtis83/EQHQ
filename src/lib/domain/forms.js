@@ -7,7 +7,7 @@ export const QUESTION_TYPES = [
   { type: "long", label: "Paragraph", hasOptions: false },
   { type: "choice", label: "Multiple choice (pick one)", hasOptions: true },
   { type: "checkboxes", label: "Checkboxes (pick any)", hasOptions: true },
-  { type: "capacity", label: "Sign-up slots (limited spots)", hasOptions: true },
+  { type: "capacity", label: "Sign-Up Slots (limited spots)", hasOptions: true },
   { type: "scale", label: "Scale 1–5", hasOptions: false },
   { type: "yesno", label: "Yes / No", hasOptions: false },
   { type: "date", label: "Date", hasOptions: false },
@@ -108,9 +108,9 @@ export const FORM_TEMPLATES = [
   },
   {
     key: "assignment",
-    label: "Assignment sign-up",
+    label: "Assignment Sign-Up",
     form: {
-      title: "Temple cleaning assignment",
+      title: "Temple Cleaning Assignment",
       description: "Pick a slot that works for you.",
       kind: "signup",
       anonymous: false,
@@ -132,9 +132,9 @@ export const FORM_TEMPLATES = [
   },
   {
     key: "volunteer",
-    label: "Volunteer shifts",
+    label: "Volunteer Shifts",
     form: {
-      title: "Volunteer sign-up",
+      title: "Volunteer Sign-Up",
       description: "Thanks for helping out.",
       kind: "signup",
       anonymous: false,
@@ -161,9 +161,9 @@ export const FORM_TEMPLATES = [
   },
   {
     key: "ministering",
-    label: "Ministering check-in",
+    label: "Ministering Check-In",
     form: {
-      title: "Ministering check-in",
+      title: "Ministering Check-In",
       description: "A few questions so we know how to support you.",
       kind: "survey",
       anonymous: false,
@@ -194,9 +194,9 @@ export const FORM_TEMPLATES = [
   },
   {
     key: "feedback",
-    label: "Anonymous feedback",
+    label: "Anonymous Feedback",
     form: {
-      title: "How is the quorum doing?",
+      title: "How Is the Quorum Doing?",
       description: "Answers are anonymous — no name is collected.",
       kind: "survey",
       anonymous: true,

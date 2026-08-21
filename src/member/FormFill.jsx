@@ -86,7 +86,7 @@ export default function FormFill({ formId, onDone, embedded }) {
     return (
       <div style={{ ...card, textAlign: "center", padding: 28 }}>
         <Check size={26} style={{ color: T.green }} />
-        <div style={{ fontSize: 16.5, fontWeight: 800, color: T.ink, marginTop: 8 }}>Thanks — you're in</div>
+        <div style={{ fontSize: 16.5, fontWeight: 800, color: T.ink, marginTop: 8 }}>Thanks — You're In</div>
         <div style={{ fontSize: 14, color: T.sub, marginTop: 6 }}>
           {form.anonymous ? "Your answers were submitted anonymously." : "We've got your response."}
         </div>

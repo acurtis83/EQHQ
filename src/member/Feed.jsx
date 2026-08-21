@@ -130,7 +130,7 @@ export default function Feed() {
         <div style={{ color: T.sub, fontSize: 14, padding: 30, textAlign: "center" }}>Loading…</div>
       ) : !visible.length ? (
         <Empty
-          title="Nothing here yet"
+          title="Nothing Here Yet"
           hint={isPresidency ? "Tap the + button to post the first announcement." : "Check back soon."}
         />
       ) : (
@@ -157,7 +157,7 @@ export default function Feed() {
       {isPresidency && (
         <button
           onClick={() => setDraft({ ...emptyDraft })}
-          aria-label="New post"
+          aria-label="New Post"
           style={{
             position: "fixed", right: 18, bottom: "calc(88px + env(safe-area-inset-bottom))",
             width: 54, height: 54, borderRadius: "50%", background: T.primary,
@@ -317,7 +317,7 @@ function Composer({ draft, setDraft, onPublish, onClose }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>New post</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>New Post</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
 

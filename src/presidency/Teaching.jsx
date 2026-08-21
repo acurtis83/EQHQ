@@ -113,7 +113,7 @@ export default function Teaching() {
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 19, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
-            Teaching schedule
+            Teaching Schedule
           </div>
           <div style={{ fontSize: 13.5, color: T.sub, marginTop: 3 }}>
             {teachable.length} teaching Sunday{teachable.length === 1 ? "" : "s"} ahead
@@ -142,7 +142,7 @@ export default function Teaching() {
       </label>
 
       {!sundays.length ? (
-        <Empty title="No Sundays in range" hint="Try unchecking “Hide past Sundays”." />
+        <Empty title="No Sundays in Range" hint="Try unchecking “Hide past Sundays”." />
       ) : (
         <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {sundays.map((s) => (
@@ -390,7 +390,7 @@ function GenerateSheet({ members, sundays, existing, onClose, onDone }) {
   };
 
   return (
-    <Sheet title="Generate rotation" onClose={onClose}>
+    <Sheet title="Generate Rotation" onClose={onClose}>
       <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
         Rotates the brethren you pick across upcoming teaching Sundays. General
         Conference, stake conference, and 5th Sundays are skipped automatically.
@@ -423,7 +423,7 @@ function GenerateSheet({ members, sundays, existing, onClose, onDone }) {
         ))}
         {!active.length && (
           <div style={{ fontSize: 13.5, color: T.sub }}>
-            No one on the roster yet — add brethren first.
+            No One on the Roster Yet — add brethren first.
           </div>
         )}
       </div>

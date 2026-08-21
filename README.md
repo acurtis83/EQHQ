@@ -97,6 +97,16 @@ Stubbed, with tabs in place:
 - Ministering
 
 
+## Wording
+
+Titles and headings are Title Case — section titles, panel headings, sheet
+titles, tab labels, empty-state headings, and template names. Standard title
+case, so short joining words stay lowercase inside a phrase ("Import From the
+Old App", "Start a Form").
+
+Body copy, form questions, option lists and buttons stay sentence case. A
+question like "How are you doing overall?" is a sentence, not a heading.
+
 ## Layout
 
 The phone layout is the baseline and is untouched. Above 900px the shell widens
@@ -334,6 +344,8 @@ Automated checks across the project:
 - **26** on the Home Hub — panels, quorum stats using the new bands, action
   items by owner, and the renames.
 - **20** on the age bands — every boundary, and that counts never double-count.
+- **35** on Title Case headings — every tab checked for the new heading and for
+  the absence of the old sentence-case one.
 - **17** end-to-end regression across feed, sign-ups, agenda, roster, teaching,
   forms, and callings.
 

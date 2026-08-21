@@ -15,7 +15,7 @@ export const SIGNUP_TEMPLATES = [
   },
   {
     key: "temple",
-    label: "Temple trip",
+    label: "Temple Trip",
     slots: [
       { label: "Driver", quantity_needed: 3 },
       { label: "Riding along", quantity_needed: 8 },
@@ -23,7 +23,7 @@ export const SIGNUP_TEMPLATES = [
   },
   {
     key: "service",
-    label: "Service project",
+    label: "Service Project",
     slots: [
       { label: "Truck", quantity_needed: 2 },
       { label: "Trailer", quantity_needed: 1 },
@@ -33,7 +33,7 @@ export const SIGNUP_TEMPLATES = [
   },
   {
     key: "meal",
-    label: "Meal train",
+    label: "Meal Train",
     slots: [
       { label: "Main dish", quantity_needed: 3 },
       { label: "Sides", quantity_needed: 3 },

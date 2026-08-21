@@ -151,7 +151,7 @@ export default function App() {
         )}
         {tab === "presagenda" && <Presidency />}
         {tab === "sunday" && (
-          <Stub title="Sunday quorum meeting agenda" note="The 25-minute block — cadence-aware, with the teaching schedule and talk link pulled in." />
+          <Stub title="Sunday Quorum Meeting Agenda" note="The 25-minute block — cadence-aware, with the teaching schedule and talk link pulled in." />
         )}
         {tab === "teaching" && <Teaching />}
         {tab === "forms" && <Forms />}

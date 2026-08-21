@@ -20,7 +20,7 @@ export default function SignUpList({
       <>
         <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 10, paddingTop: 10 }}>
           <Btn size="sm" kind="soft" onClick={() => setManage(true)}>
-            <ClipboardList size={14} />Add a sign-up
+            <ClipboardList size={14} />Add a Sign-Up
           </Btn>
         </div>
         {manage && (
@@ -50,7 +50,7 @@ export default function SignUpList({
     <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 10, paddingTop: 11 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink, letterSpacing: "0.02em" }}>
-          Sign-up
+          Sign-Up
         </span>
         {summary && (
           <Chip
@@ -209,7 +209,7 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>Sign-up slots</div>
+          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>Sign-Up Slots</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
 

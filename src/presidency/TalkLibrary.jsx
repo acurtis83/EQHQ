@@ -109,7 +109,7 @@ export default function TalkLibrary() {
   return (
     <div>
       <SectionTitle sub="Reload after each General Conference. Talks come in with their real Gospel Library links.">
-        Conference talks
+        Conference Talks
       </SectionTitle>
 
       {err && (

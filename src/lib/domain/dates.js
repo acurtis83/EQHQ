@@ -84,7 +84,7 @@ export const WEEKLY_CHANGE = "2026-09-06";
 export const NO_LESSON = {
   GENERAL_CONF: "General Conference",
   STAKE_CONF: "Stake Conference",
-  FIFTH_SUNDAY: "5th Sunday — bishopric directed",
+  FIFTH_SUNDAY: "5th Sunday — Bishopric Directed",
 };
 
 // True when the quorum gathers as a quorum with its own lesson and teacher.

@@ -6,9 +6,9 @@ import { fmtShort, toIso } from "../lib/domain/dates";
 
 export const BUCKETS = [
   { key: "topics", label: "Topics", hint: "Things to talk through together" },
-  { key: "actions", label: "Action items", hint: "Someone owes something" },
-  { key: "watch", label: "Watch list", hint: "Brethren to check on" },
-  { key: "moves", label: "Move-ins / outs", hint: "New faces and departures" },
+  { key: "actions", label: "Action Items", hint: "Someone owes something" },
+  { key: "watch", label: "Watch List", hint: "Brethren to check on" },
+  { key: "moves", label: "Move-Ins / Outs", hint: "New faces and departures" },
   { key: "service", label: "Service", hint: "Needs and opportunities" },
   { key: "missionary", label: "Missionary", hint: "Referrals and returning members" },
 ];
@@ -174,7 +174,7 @@ export default function RunningList({ onCountChange }) {
       {!items.length && (
         <div style={{ marginTop: 12 }}>
           <Empty
-            title="The Planner is empty"
+            title="The Planner Is Empty"
             hint="Add anything that should come up at the next Presidency Meeting. Items here can be pulled straight onto an agenda."
           />
         </div>

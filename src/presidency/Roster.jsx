@@ -100,7 +100,7 @@ export default function Roster() {
   return (
     <div>
       <SectionTitle sub="The roster other sections reference — ministering, teaching, and callings all point back here.">
-        Quorum roster
+        Quorum Roster
       </SectionTitle>
 
       {err && (
@@ -126,7 +126,7 @@ export default function Roster() {
         <div style={{ color: T.sub, fontSize: 14, padding: 20, textAlign: "center" }}>Loading roster…</div>
       ) : !rows.length ? (
         <Empty
-          title="No one on the roster yet"
+          title="No One on the Roster Yet"
           hint="Paste your ward directory export to bring everyone in at once, or add brethren one at a time."
         />
       ) : (
@@ -159,7 +159,7 @@ export default function Roster() {
       )}
 
       {editing && (
-        <Sheet title={editing.id ? "Edit brother" : "Add brother"} onClose={() => setEditing(null)}>
+        <Sheet title={editing.id ? "Edit Brother" : "Add Brother"} onClose={() => setEditing(null)}>
           <Field label="Name">
             <Input value={editing.name} onChange={(v) => setEditing({ ...editing, name: v })} placeholder="First Last" />
           </Field>
@@ -200,7 +200,7 @@ export default function Roster() {
       )}
 
       {pasteOpen && (
-        <Sheet title="Paste ward directory" onClose={() => setPasteOpen(false)}>
+        <Sheet title="Paste Ward Directory" onClose={() => setPasteOpen(false)}>
           <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
             Paste straight from an LDS Tools or Ward Directory export. It reads
             name, age, birth date, phone, email, and priesthood office.

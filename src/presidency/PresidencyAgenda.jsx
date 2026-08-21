@@ -6,8 +6,8 @@ import { fmtDate, fmtShort, toIso } from "../lib/domain/dates";
 import { BUCKETS, overdueDays } from "./RunningList";
 
 const SECTIONS = [
-  { key: "items", label: "Agenda items" },
-  { key: "ministering", label: "Ministering checks" },
+  { key: "items", label: "Agenda Items" },
+  { key: "ministering", label: "Ministering Checks" },
 ];
 
 const blankItem = { text: "", who: "", notes: "", due_date: "", section: "items" };
@@ -116,7 +116,7 @@ export default function PresidencyAgenda() {
 
       {!agendas.length ? (
         <Empty
-          title="No Presidency Meetings yet"
+          title="No Presidency Meetings Yet"
           hint="Start one and it will pull in whatever is open on the Planner."
         />
       ) : (
@@ -128,7 +128,7 @@ export default function PresidencyAgenda() {
               style={{ ...card, padding: 14, textAlign: "left", cursor: "pointer", width: "100%" }}
             >
               <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
-                {a.meeting_date ? fmtDate(a.meeting_date) : "Undated meeting"}
+                {a.meeting_date ? fmtDate(a.meeting_date) : "Undated Meeting"}
               </div>
               <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>
                 {[a.meeting_time, a.location].filter(Boolean).join(" · ") || "Tap to open"}
@@ -284,8 +284,8 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <Btn kind="soft" onClick={() => setPullOpen(true)}><ArrowDownToLine size={15} />Pull from Planner</Btn>
-        <Btn kind="ghost" onClick={carryOver}>Carry over open items</Btn>
+        <Btn kind="soft" onClick={() => setPullOpen(true)}><ArrowDownToLine size={15} />Pull From Planner</Btn>
+        <Btn kind="ghost" onClick={carryOver}>Carry Over Open Items</Btn>
       </div>
 
       {toast && (
@@ -417,9 +417,9 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
           borderRadius: "18px 18px 0 0", padding: 18, display: "flex", flexDirection: "column", gap: 12,
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Pull from Planner</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Pull From Planner</div>
         <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
-          Open items only. Watch-list entries land under Ministering checks.
+          Open items only. Watch-list entries land under Ministering Checks.
         </div>
 
         {loading ? (
