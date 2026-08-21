@@ -7,8 +7,8 @@ import { useEffect, useState } from "react";
 //  - tapping skips it
 //  - "reduce motion" in the OS skips it entirely
 //  - it never shows on a shared form link, where someone is trying to do one thing
-const HOLD_MS = 1100;
-const FADE_MS = 350;
+const HOLD_MS = 2000;
+const FADE_MS = 375;
 
 export default function Splash({ onDone }) {
   const [leaving, setLeaving] = useState(false);

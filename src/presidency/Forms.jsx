@@ -49,7 +49,7 @@ export default function Forms() {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading forms…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading forms…</div>;
   }
 
   if (selected) {
@@ -77,7 +77,7 @@ export default function Forms() {
       </div>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
@@ -90,14 +90,14 @@ export default function Forms() {
             <button key={f.id} onClick={() => setSelected(f)}
               style={{ ...card, padding: 14, textAlign: "left", cursor: "pointer", width: "100%" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{f.title}</span>
+                <span style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>{f.title}</span>
                 <Chip color={f.published ? T.green : T.sub} bg={f.published ? T.greenSoft : T.inset}>
                   {f.published ? "Live" : "Draft"}
                 </Chip>
                 {f.anonymous && <Chip color={T.primaryDeep} bg={T.primarySoft}>Anonymous</Chip>}
               </div>
               {f.description && (
-                <div style={{ fontSize: 13, color: T.sub, marginTop: 4 }}>{f.description}</div>
+                <div style={{ fontSize: 14, color: T.sub, marginTop: 4 }}>{f.description}</div>
               )}
             </button>
           ))}
@@ -106,7 +106,7 @@ export default function Forms() {
 
       {newOpen && (
         <Sheet title="Start a Form" onClose={() => setNewOpen(false)}>
-          <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
             Pick a starting point — everything is editable afterwards.
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -115,8 +115,8 @@ export default function Forms() {
                 style={{
                   ...card, padding: 13, textAlign: "left", cursor: "pointer", width: "100%",
                 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>{t.label}</div>
-                <div style={{ fontSize: 12.5, color: T.sub, marginTop: 3 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{t.label}</div>
+                <div style={{ fontSize: 13.5, color: T.sub, marginTop: 3 }}>
                   {t.questions.length ? `${t.questions.length} questions` : "Empty — build it yourself"}
                   {t.form.anonymous ? " · anonymous" : ""}
                 </div>
@@ -194,10 +194,10 @@ function FormDetail({ form, onBack, onChanged, onDeleted }) {
       </div>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>{err}</div>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>{err}</div>
       )}
       {toast && (
-        <div style={{ ...card, background: T.greenSoft, borderColor: T.green, color: T.green, marginBottom: 12, fontSize: 13.5, padding: "10px 14px" }}>{toast}</div>
+        <div style={{ ...card, background: T.greenSoft, borderColor: T.green, color: T.green, marginBottom: 12, fontSize: 14.5, padding: "10px 14px" }}>{toast}</div>
       )}
 
       <div role="tablist" style={{ display: "flex", gap: 4, background: T.inset, borderRadius: 12, padding: 4, marginBottom: 14 }}>
@@ -207,7 +207,7 @@ function FormDetail({ form, onBack, onChanged, onDeleted }) {
               flex: 1, padding: "9px 12px", borderRadius: 9, border: "none",
               background: tab === id ? T.panel : "transparent",
               color: tab === id ? T.ink : T.sub,
-              fontSize: 14, fontWeight: 700, cursor: "pointer",
+              fontSize: 15, fontWeight: 700, cursor: "pointer",
               boxShadow: tab === id ? "var(--card-shadow)" : "none",
             }}>
             {label}
@@ -295,13 +295,13 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
             <Input type="date" value={form.closes_on || ""} onChange={(v) => patchForm({ closes_on: v || null })} />
           </Lbl>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: T.ink }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
           <input type="checkbox" checked={form.anonymous}
             onChange={(e) => patchForm({ anonymous: e.target.checked })} />
           Anonymous — don't collect names
         </label>
         {form.anonymous && (
-          <div style={{ fontSize: 12.5, color: T.sub, lineHeight: 1.55 }}>
+          <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.55 }}>
             Sign-Up Slots still work, but you won't know who took which one.
           </div>
         )}
@@ -312,10 +312,10 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
           <div key={q.id} style={{ ...card, padding: 13 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
+                <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
                   {q.label}{q.required && <span style={{ color: T.red, marginLeft: 4 }}>*</span>}
                 </div>
-                <div style={{ fontSize: 12.5, color: T.sub, marginTop: 3 }}>
+                <div style={{ fontSize: 13.5, color: T.sub, marginTop: 3 }}>
                   {QUESTION_TYPES.find((t) => t.type === q.type)?.label || q.type}
                 </div>
                 {needsOptions(q.type) && (
@@ -358,7 +358,7 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
                 placeholder={draft.type === "capacity" ? "Saturday 6:00 AM ×4\nSaturday 8:00 AM ×4" : "Truck\nTrailer\nNeither"} />
             </Lbl>
           )}
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: T.ink }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
             <input type="checkbox" checked={draft.required}
               onChange={(e) => setDraft({ ...draft, required: e.target.checked })} />
             Required
@@ -382,14 +382,14 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ ...card }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
+          <span style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>
             {form.published ? "This Form Is Live" : "Not Published Yet"}
           </span>
           <Chip color={form.published ? T.green : T.sub} bg={form.published ? T.greenSoft : T.inset}>
             {form.published ? "Live" : "Draft"}
           </Chip>
         </div>
-        <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6, marginBottom: 12 }}>
+        <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6, marginBottom: 12 }}>
           {form.published
             ? "Anyone with the link can fill it out — no account needed."
             : "Publish it before sharing, or the link will show nothing."}
@@ -397,7 +397,7 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
         {questionCount === 0 && (
           <div style={{
             background: T.goldSoft, color: T.gold, borderRadius: 10,
-            padding: "9px 12px", fontSize: 13, marginBottom: 12,
+            padding: "9px 12px", fontSize: 14, marginBottom: 12,
           }}>
             This form has no questions yet.
           </div>
@@ -418,7 +418,7 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
             <Btn kind="soft" onClick={copyLink}><Copy size={15} />Copy link</Btn>
             <Btn kind="soft" onClick={postToFeed}>Post to the feed</Btn>
           </div>
-          <div style={{ fontSize: 12.5, color: T.faint, lineHeight: 1.55 }}>
+          <div style={{ fontSize: 13.5, color: T.faint, lineHeight: 1.55 }}>
             Posting adds a card to the home feed linking here. Copy the link to
             send it in GroupMe or a text.
           </div>
@@ -467,7 +467,7 @@ function Results({ form, questions }) {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading results…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading results…</div>;
   }
 
   if (!responses.length) {
@@ -477,7 +477,7 @@ function Results({ form, questions }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>
           {responses.length} response{responses.length === 1 ? "" : "s"}
         </span>
         <Btn size="sm" kind="plain" style={{ marginLeft: "auto" }}
@@ -493,14 +493,14 @@ function Results({ form, questions }) {
             const s = summarize(q, valuesFor(q.id));
             return (
               <div key={q.id} style={{ ...card, padding: 14 }}>
-                <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>{q.label}</div>
-                <div style={{ fontSize: 12.5, color: T.faint, marginTop: 3, marginBottom: 8 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{q.label}</div>
+                <div style={{ fontSize: 13.5, color: T.faint, marginTop: 3, marginBottom: 8 }}>
                   {s.count} answered
                 </div>
                 {s.kind === "number" && (
-                  <div style={{ fontSize: 22, fontWeight: 800, color: T.ink }}>
+                  <div style={{ fontSize: 24, fontWeight: 800, color: T.ink }}>
                     {s.average == null ? "—" : s.average}
-                    <span style={{ fontSize: 13, fontWeight: 600, color: T.sub, marginLeft: 6 }}>average</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: T.sub, marginLeft: 6 }}>average</span>
                   </div>
                 )}
                 {s.kind === "tally" && (
@@ -510,8 +510,8 @@ function Results({ form, questions }) {
                       const cap = q.type === "capacity" && opt ? capacityState(opt, valuesFor(q.id)) : null;
                       return (
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 14, color: T.ink, flex: 1, minWidth: 0 }}>{label}</span>
-                          <span style={{ fontSize: 13.5, fontWeight: 700, color: cap?.full ? T.green : T.sub }}>
+                          <span style={{ fontSize: 15, color: T.ink, flex: 1, minWidth: 0 }}>{label}</span>
+                          <span style={{ fontSize: 14.5, fontWeight: 700, color: cap?.full ? T.green : T.sub }}>
                             {cap ? `${cap.taken}/${cap.limit}` : n}
                           </span>
                         </div>
@@ -522,11 +522,11 @@ function Results({ form, questions }) {
                 {s.kind === "text" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {s.samples.map((t, i) => (
-                      <div key={i} style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.5, background: T.inset, borderRadius: 8, padding: "8px 10px" }}>
+                      <div key={i} style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.5, background: T.inset, borderRadius: 8, padding: "8px 10px" }}>
                         {t}
                       </div>
                     ))}
-                    {!s.samples.length && <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic" }}>No answers.</div>}
+                    {!s.samples.length && <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>No answers.</div>}
                   </div>
                 )}
               </div>
@@ -538,10 +538,10 @@ function Results({ form, questions }) {
           {responses.map((r) => (
             <div key={r.id} style={{ ...card, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
+                <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
                   {form.anonymous ? "Anonymous" : r.respondent_name || "—"}
                 </span>
-                <span style={{ marginLeft: "auto", fontSize: 12, color: T.faint }}>
+                <span style={{ marginLeft: "auto", fontSize: 13, color: T.faint }}>
                   {new Date(r.created_at).toLocaleDateString("en-US")}
                 </span>
               </div>
@@ -551,8 +551,8 @@ function Results({ form, questions }) {
                   if (v == null || v === "") return null;
                   return (
                     <div key={q.id}>
-                      <div style={{ fontSize: 12.5, color: T.faint }}>{q.label}</div>
-                      <div style={{ fontSize: 14, color: T.ink }}>
+                      <div style={{ fontSize: 13.5, color: T.faint }}>{q.label}</div>
+                      <div style={{ fontSize: 15, color: T.ink }}>
                         {Array.isArray(v) ? v.join(", ") : String(v)}
                       </div>
                     </div>
@@ -580,7 +580,7 @@ function Sheet({ title, children, onClose }) {
           borderRadius: "18px 18px 0 0", padding: 18, display: "flex", flexDirection: "column", gap: 12,
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>{title}</div>
+          <div style={{ fontSize: 18.5, fontWeight: 800, color: T.ink }}>{title}</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
         {children}
@@ -592,7 +592,7 @@ function Sheet({ title, children, onClose }) {
 function Lbl({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
         {label}
       </span>
       {children}

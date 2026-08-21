@@ -103,7 +103,8 @@ effect until a rebuild.
 
 - Open the site. You'll see the member feed.
 - Tap **Presidency** → sign in with the email and password from step 2.
-- **Roster** → *Paste directory* → paste your ward directory export.
+- **Roster** → *Paste Ward Directory* → paste your directory. Check the per-field
+  counts in the preview before importing.
 - **Teaching** → *Generate* → set the rotation.
 - **Settings** → *Conference talks* → fetch the latest conference.
 - **Settings** → *Import from the old app* if you want your old Planner data.

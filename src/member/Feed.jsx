@@ -113,7 +113,7 @@ export default function Feed() {
 
       {filter !== "all" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
             {categoryMeta(filter).label}
           </span>
           <Btn size="sm" kind="plain" onClick={() => setFilter("all")}>Show all</Btn>
@@ -121,13 +121,13 @@ export default function Feed() {
       )}
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
 
       {loading ? (
-        <div style={{ color: T.sub, fontSize: 14, padding: 30, textAlign: "center" }}>Loading…</div>
+        <div style={{ color: T.sub, fontSize: 15, padding: 30, textAlign: "center" }}>Loading…</div>
       ) : !visible.length ? (
         <Empty
           title="Nothing Here Yet"
@@ -161,7 +161,7 @@ export default function Feed() {
           style={{
             position: "fixed", right: 18, bottom: "calc(88px + env(safe-area-inset-bottom))",
             width: 54, height: 54, borderRadius: "50%", background: T.primary,
-            color: "var(--on-primary)", border: "none", fontSize: 26, cursor: "pointer",
+            color: "var(--on-primary)", border: "none", fontSize: 28, cursor: "pointer",
             boxShadow: "0 4px 16px rgba(10,30,60,.28)", zIndex: 40,
           }}
         >
@@ -202,12 +202,12 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <Chip color={m.accent} bg={m.soft}>{m.label}</Chip>
         {post.pinned && <Chip color={T.sub} bg={T.inset}>Pinned</Chip>}
-        <span style={{ marginLeft: "auto", fontSize: 12, color: T.faint }}>{timeAgo(post.created_at)}</span>
+        <span style={{ marginLeft: "auto", fontSize: 13, color: T.faint }}>{timeAgo(post.created_at)}</span>
       </div>
 
-      <div style={{ fontSize: 16.5, fontWeight: 700, color: T.ink, marginBottom: 5 }}>{post.title}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: T.ink, marginBottom: 5 }}>{post.title}</div>
       {post.body && (
-        <div style={{ fontSize: 14.5, lineHeight: 1.55, color: T.sub, whiteSpace: "pre-wrap", marginBottom: 9 }}>
+        <div style={{ fontSize: 15.5, lineHeight: 1.55, color: T.sub, whiteSpace: "pre-wrap", marginBottom: 9 }}>
           {post.body}
         </div>
       )}
@@ -226,7 +226,7 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
       {post.link_url && (
         <a
           href={post.link_url} target="_blank" rel="noreferrer"
-          style={{ display: "inline-block", fontSize: 14, fontWeight: 700, color: T.primaryDeep, textDecoration: "none", marginBottom: 9 }}
+          style={{ display: "inline-block", fontSize: 15, fontWeight: 700, color: T.primaryDeep, textDecoration: "none", marginBottom: 9 }}
         >
           {post.link_label || "Open link"} →
         </a>
@@ -245,7 +245,7 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
       <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 8, paddingTop: 9 }}>
         <button
           onClick={onToggle}
-          style={{ background: "none", border: "none", padding: 0, fontSize: 13, fontWeight: 600, color: T.sub, cursor: "pointer" }}
+          style={{ background: "none", border: "none", padding: 0, fontSize: 14, fontWeight: 600, color: T.sub, cursor: "pointer" }}
         >
           {comments.length ? `${comments.length} comment${comments.length === 1 ? "" : "s"}` : "Add a comment"}
         </button>
@@ -256,25 +256,25 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
               <div key={c.id} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
                 <div style={{
                   flex: "0 0 auto", width: 26, height: 26, borderRadius: "50%",
-                  background: T.primarySoft, color: T.primaryDeep, fontSize: 12, fontWeight: 700,
+                  background: T.primarySoft, color: T.primaryDeep, fontSize: 13, fontWeight: 700,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   {c.author_name.trim().charAt(0).toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{c.author_name}</span>
-                    <span style={{ fontSize: 11.5, color: T.faint }}>{timeAgo(c.created_at)}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{c.author_name}</span>
+                    <span style={{ fontSize: 12.5, color: T.faint }}>{timeAgo(c.created_at)}</span>
                   </div>
-                  <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.45 }}>{c.body}</div>
+                  <div style={{ fontSize: 15, color: T.sub, lineHeight: 1.45 }}>{c.body}</div>
                 </div>
               </div>
             ))}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <Input value={name} onChange={setName} placeholder="Your name" style={{ fontSize: 13.5 }} />
+              <Input value={name} onChange={setName} placeholder="Your name" style={{ fontSize: 14.5 }} />
               <div style={{ display: "flex", gap: 8 }}>
-                <Input value={body} onChange={setBody} placeholder="Write a comment…" style={{ fontSize: 13.5 }} />
+                <Input value={body} onChange={setBody} placeholder="Write a comment…" style={{ fontSize: 14.5 }} />
                 <Btn
                   kind="primary" disabled={!name.trim() || !body.trim()}
                   onClick={() => { onComment(post.id, body); setBody(""); }}
@@ -317,7 +317,7 @@ function Composer({ draft, setDraft, onPublish, onClose }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>New Post</div>
+          <div style={{ fontSize: 19.5, fontWeight: 700, color: T.ink }}>New Post</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
 
@@ -363,7 +363,7 @@ function Composer({ draft, setDraft, onPublish, onClose }) {
           </Lbl>
         </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600, color: T.ink }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
           <input type="checkbox" checked={draft.pinned} onChange={(e) => setDraft({ ...draft, pinned: e.target.checked })} />
           Pin to top of feed
         </label>
@@ -379,7 +379,7 @@ function Composer({ draft, setDraft, onPublish, onClose }) {
 function Lbl({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
         {label}
       </span>
       {children}
@@ -405,8 +405,8 @@ function GroupsSheet({ onClose }) {
           padding: 20, display: "flex", flexDirection: "column", gap: 12,
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>Groups</div>
-        <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 19.5, fontWeight: 800, color: T.ink }}>Groups</div>
+        <div style={{ fontSize: 15, color: T.sub, lineHeight: 1.6 }}>
           Group chat is being built next — brotherhood groups with their own
           conversation inside the app.
         </div>

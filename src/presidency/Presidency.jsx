@@ -31,7 +31,7 @@ export default function Presidency() {
               flex: 1, padding: "9px 12px", borderRadius: 9, border: "none",
               background: mode === t.id ? "var(--seg, var(--panel))" : "transparent",
               color: mode === t.id ? T.ink : T.sub,
-              fontSize: 14, fontWeight: 700, cursor: "pointer",
+              fontSize: 15, fontWeight: 700, cursor: "pointer",
               boxShadow: mode === t.id ? "var(--card-shadow)" : "none",
             }}
           >

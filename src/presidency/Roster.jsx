@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Upload, Search, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { BANDS, OFFICES, bandForAge, lastNameOf, parseRoster } from "../lib/domain/roster";
+import { BANDS, OFFICES, bandForAge, lastNameOf, parseDirectory } from "../lib/domain/roster";
 import { T, card, Btn, Input, Select, Chip, SectionTitle, Empty } from "../components/ui";
 
 const blank = {
-  name: "", age: "", phone: "", email: "",
+  name: "", age: "", address: "", phone: "", email: "",
   office: "Elder", calling: "", active: true, notes: "",
 };
 
@@ -19,6 +19,7 @@ export default function Roster() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pastePreview, setPastePreview] = useState([]);
+  const [pasteSkipped, setPasteSkipped] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -57,6 +58,7 @@ export default function Roster() {
       name: row.name.trim(),
       last_name: lastNameOf(row.name),
       age: Number.isFinite(age) ? age : null,
+      address: row.address?.trim() || null,
       phone: row.phone?.trim() || null,
       email: row.email?.trim() || null,
       office: row.office || null,
@@ -82,7 +84,9 @@ export default function Roster() {
 
   const runPaste = (text) => {
     setPasteText(text);
-    setPastePreview(parseRoster(text));
+    const { rows, skipped } = parseDirectory(text);
+    setPastePreview(rows);
+    setPasteSkipped(skipped);
   };
 
   const commitPaste = async () => {
@@ -93,6 +97,7 @@ export default function Roster() {
       setPasteOpen(false);
       setPasteText("");
       setPastePreview([]);
+      setPasteSkipped([]);
       load();
     }
   };
@@ -104,7 +109,7 @@ export default function Roster() {
       </SectionTitle>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
@@ -123,7 +128,7 @@ export default function Roster() {
       </div>
 
       {loading ? (
-        <div style={{ color: T.sub, fontSize: 14, padding: 20, textAlign: "center" }}>Loading roster…</div>
+        <div style={{ color: T.sub, fontSize: 15, padding: 20, textAlign: "center" }}>Loading roster…</div>
       ) : !rows.length ? (
         <Empty
           title="No One on the Roster Yet"
@@ -135,15 +140,18 @@ export default function Roster() {
             <div key={r.id} style={{ ...card, padding: 13, display: "flex", alignItems: "center", gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{r.name}</span>
+                  <span style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>{r.name}</span>
                   {r.age != null && <Chip color={T.sub} bg={T.inset}>{r.age}</Chip>}
                   {r.office && <Chip>{r.office}</Chip>}
                   {!r.active && <Chip color={T.red} bg={T.redSoft}>Inactive</Chip>}
                 </div>
                 {(r.calling || r.phone) && (
-                  <div style={{ fontSize: 13, color: T.sub, marginTop: 4 }}>
+                  <div style={{ fontSize: 14, color: T.sub, marginTop: 4 }}>
                     {[r.calling, r.phone].filter(Boolean).join(" · ")}
                   </div>
+                )}
+                {r.address && (
+                  <div style={{ fontSize: 13.5, color: T.faint, marginTop: 2 }}>{r.address}</div>
                 )}
               </div>
               <Btn size="sm" kind="plain" onClick={() => setEditing({ ...r, age: r.age ?? "" })}>Edit</Btn>
@@ -151,7 +159,7 @@ export default function Roster() {
             </div>
           ))}
           {!visible.length && (
-            <div style={{ color: T.sub, fontSize: 14, padding: 20, textAlign: "center" }}>
+            <div style={{ color: T.sub, fontSize: 15, padding: 20, textAlign: "center" }}>
               No one matches that search.
             </div>
           )}
@@ -177,6 +185,10 @@ export default function Roster() {
           <Field label="Calling">
             <Input value={editing.calling || ""} onChange={(v) => setEditing({ ...editing, calling: v })} />
           </Field>
+          <Field label="Address">
+            <Input value={editing.address || ""} onChange={(v) => setEditing({ ...editing, address: v })}
+              placeholder="1234 N Holbrook Way, Lehi, UT" />
+          </Field>
           <div style={{ display: "flex", gap: 10 }}>
             <Field label="Phone">
               <Input value={editing.phone || ""} onChange={(v) => setEditing({ ...editing, phone: v })} />
@@ -185,7 +197,7 @@ export default function Roster() {
               <Input value={editing.email || ""} onChange={(v) => setEditing({ ...editing, email: v })} />
             </Field>
           </div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: T.ink, fontWeight: 600 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, color: T.ink, fontWeight: 600 }}>
             <input
               type="checkbox"
               checked={editing.active !== false}
@@ -201,7 +213,7 @@ export default function Roster() {
 
       {pasteOpen && (
         <Sheet title="Paste Ward Directory" onClose={() => setPasteOpen(false)}>
-          <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
             Paste straight from an LDS Tools or Ward Directory export. It reads
             name, age, birth date, phone, email, and priesthood office.
           </div>
@@ -212,21 +224,18 @@ export default function Roster() {
             placeholder="Curtis, Andrew  M  42  3 Feb 1983  (801) 874-4085  Elder"
             style={{
               background: T.inset, border: `1px solid ${T.line}`, borderRadius: 10,
-              padding: 11, fontSize: 14, color: T.ink, width: "100%",
+              padding: 11, fontSize: 15, color: T.ink, width: "100%",
               fontFamily: "ui-monospace, monospace", resize: "vertical",
             }}
           />
-          {pastePreview.length > 0 && (
-            <div style={{ ...card, background: T.inset, padding: 12 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: T.ink, marginBottom: 6 }}>
-                Found {pastePreview.length} {pastePreview.length === 1 ? "brother" : "brethren"}
-              </div>
-              <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.7, maxHeight: 150, overflowY: "auto" }}>
-                {pastePreview.slice(0, 20).map((p, i) => (
-                  <div key={i}>{p.name}{p.age ? ` · ${p.age}` : ""}{p.office ? ` · ${p.office}` : ""}</div>
-                ))}
-                {pastePreview.length > 20 && <div style={{ color: T.faint }}>+{pastePreview.length - 20} more…</div>}
-              </div>
+          {pastePreview.length > 0 && <PastePreview rows={pastePreview} skipped={pasteSkipped} />}
+          {!pastePreview.length && pasteSkipped.length > 0 && (
+            <div style={{
+              background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
+              borderRadius: 10, padding: "10px 12px", fontSize: 14, lineHeight: 1.55,
+            }}>
+              Couldn't read any names from that. Send me a couple of lines exactly as
+              they paste and I'll adjust the parser.
             </div>
           )}
           <Btn
@@ -244,7 +253,7 @@ export default function Roster() {
 function Field({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
         {label}
       </span>
       {children}
@@ -270,11 +279,79 @@ function Sheet({ title, children, onClose }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>{title}</div>
+          <div style={{ fontSize: 19.5, fontWeight: 700, color: T.ink }}>{title}</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+// Field-by-field so a mismatch is obvious before anything is written — and so
+// it's easy to report back exactly which column came out wrong.
+function PastePreview({ rows, skipped }) {
+  const FIELDS = [
+    ["name", "Name"],
+    ["age", "Age"],
+    ["birth_date", "Birthdate"],
+    ["address", "Address"],
+    ["phone", "Phone"],
+    ["email", "Email"],
+  ];
+
+  // How many rows got a value for each field — a zero column means the parser
+  // missed that field entirely.
+  const filled = {};
+  for (const [k] of FIELDS) {
+    filled[k] = rows.filter((r) => r[k] != null && String(r[k]).trim() !== "").length;
+  }
+
+  return (
+    <div style={{ ...card, background: T.inset, padding: 12 }}>
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink, marginBottom: 8 }}>
+        Found {rows.length} {rows.length === 1 ? "brother" : "brethren"}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        {FIELDS.map(([k, label]) => (
+          <Chip
+            key={k}
+            color={filled[k] ? T.green : T.gold}
+            bg={filled[k] ? T.greenSoft : T.goldSoft}
+          >
+            {label} {filled[k]}/{rows.length}
+          </Chip>
+        ))}
+      </div>
+
+      <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.slice(0, 12).map((p, i) => (
+          <div key={i} style={{ background: T.panel, borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
+              {p.name}{p.age ? ` · ${p.age}` : ""}
+            </div>
+            {FIELDS.slice(2).map(([k, label]) =>
+              p[k] ? (
+                <div key={k} style={{ fontSize: 13.5, color: T.sub, marginTop: 1 }}>
+                  <span style={{ color: T.faint }}>{label}: </span>{p[k]}
+                </div>
+              ) : null
+            )}
+          </div>
+        ))}
+        {rows.length > 12 && (
+          <div style={{ fontSize: 13.5, color: T.faint }}>+{rows.length - 12} more…</div>
+        )}
+      </div>
+
+      {skipped.length > 0 && (
+        <div style={{ marginTop: 10, fontSize: 13.5, color: T.gold, lineHeight: 1.55 }}>
+          {skipped.length} line{skipped.length === 1 ? "" : "s"} couldn't be read:{" "}
+          {skipped.slice(0, 3).map((x) => `"${x}"`).join(", ")}
+          {skipped.length > 3 ? "…" : ""}
+        </div>
+      )}
     </div>
   );
 }

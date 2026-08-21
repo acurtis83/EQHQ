@@ -39,12 +39,12 @@ export default function SignIn({ onClose }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
             <Lock size={18} color={T.sub} />
-            <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Presidency Sign In</span>
+            <span style={{ fontSize: 19.5, fontWeight: 700, color: T.ink }}>Presidency Sign In</span>
           </div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
 
-        <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
           For the quorum presidency. Members don't need an account — the feed is open.
         </div>
 
@@ -54,7 +54,7 @@ export default function SignIn({ onClose }) {
         {err && (
           <div style={{
             background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
-            borderRadius: 10, padding: "9px 12px", fontSize: 13,
+            borderRadius: 10, padding: "9px 12px", fontSize: 14,
           }}>
             {err}
           </div>

@@ -113,12 +113,12 @@ export default function TalkLibrary() {
       </SectionTitle>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5, lineHeight: 1.6 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5, lineHeight: 1.6 }}>
           {err}
         </div>
       )}
       {toast && (
-        <div style={{ ...card, background: T.greenSoft, borderColor: T.green, color: T.green, marginBottom: 12, fontSize: 13.5, padding: "10px 14px" }}>
+        <div style={{ ...card, background: T.greenSoft, borderColor: T.green, color: T.green, marginBottom: 12, fontSize: 14.5, padding: "10px 14px" }}>
           {toast}
         </div>
       )}
@@ -126,7 +126,7 @@ export default function TalkLibrary() {
       <div style={{ ...card, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
           <label style={{ flex: "1 1 180px", minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
               Conference
             </span>
             <Select value={pick} onChange={setPick}>
@@ -136,7 +136,7 @@ export default function TalkLibrary() {
             </Select>
           </label>
           {discovered?.length > 0 && (
-            <div style={{ fontSize: 12, color: T.faint, flex: "1 1 100%" }}>
+            <div style={{ fontSize: 13, color: T.faint, flex: "1 1 100%" }}>
               {discovered.length} conferences available, newest first.
             </div>
           )}
@@ -149,7 +149,7 @@ export default function TalkLibrary() {
       {result && (
         <div style={{ ...card, marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-            <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{result.conf}</span>
+            <span style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>{result.conf}</span>
             <Chip color={T.green} bg={T.greenSoft}>{result.count} talks</Chip>
             {result.lowConfidence > 0 && (
               <Chip color={T.gold} bg={T.goldSoft}>{result.lowConfidence} to check</Chip>
@@ -159,7 +159,7 @@ export default function TalkLibrary() {
           {result.lowConfidence > 0 && (
             <div style={{
               display: "flex", gap: 8, alignItems: "flex-start", background: T.goldSoft,
-              borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 13, color: T.gold, lineHeight: 1.55,
+              borderRadius: 10, padding: "10px 12px", marginBottom: 10, fontSize: 14, color: T.gold, lineHeight: 1.55,
             }}>
               <AlertTriangle size={15} style={{ flex: "0 0 auto", marginTop: 1 }} />
               <span>
@@ -170,7 +170,7 @@ export default function TalkLibrary() {
           )}
 
           {result.skipped?.length > 0 && (
-            <div style={{ fontSize: 12.5, color: T.faint, marginBottom: 10, lineHeight: 1.55 }}>
+            <div style={{ fontSize: 13.5, color: T.faint, marginBottom: 10, lineHeight: 1.55 }}>
               Skipped {result.skipped.length} procedural item{result.skipped.length === 1 ? "" : "s"}: {result.skipped.join(", ")}
             </div>
           )}
@@ -184,12 +184,12 @@ export default function TalkLibrary() {
                   borderRadius: 10, padding: "9px 11px",
                 }}
               >
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink }}>{t.title}</div>
-                <div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>
+                <div style={{ fontSize: 14.5, fontWeight: 600, color: T.ink }}>{t.title}</div>
+                <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>
                   {t.speaker || "—"}{t.session ? ` · ${t.session}` : ""}
                 </div>
                 {t.confidence === "low" && t.rawText && (
-                  <div style={{ fontSize: 12, color: T.gold, marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: T.gold, marginTop: 4 }}>
                     page said: “{t.rawText}”
                   </div>
                 )}
@@ -204,11 +204,11 @@ export default function TalkLibrary() {
       )}
 
       {loading ? (
-        <div style={{ color: T.sub, fontSize: 14, padding: 20, textAlign: "center" }}>Loading library…</div>
+        <div style={{ color: T.sub, fontSize: 15, padding: 20, textAlign: "center" }}>Loading library…</div>
       ) : !rows.length ? (
         <div style={{ ...card, textAlign: "center", padding: 28 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>No talks loaded yet</div>
-          <div style={{ fontSize: 13.5, color: T.sub, marginTop: 6, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>No talks loaded yet</div>
+          <div style={{ fontSize: 14.5, color: T.sub, marginTop: 6, lineHeight: 1.6 }}>
             Pick a conference above and fetch. Until then the teaching schedule falls
             back to the bundled April 2026 list.
           </div>
@@ -218,7 +218,7 @@ export default function TalkLibrary() {
           {Object.entries(byConf).map(([conf, list]) => (
             <div key={conf} style={{ ...card, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{conf}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{conf}</span>
                 <Chip>{list.length}</Chip>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -227,8 +227,8 @@ export default function TalkLibrary() {
                     key={t.slug} href={t.url} target="_blank" rel="noreferrer"
                     style={{ textDecoration: "none", color: "inherit", display: "flex", gap: 8, alignItems: "baseline" }}
                   >
-                    <span style={{ fontSize: 13.5, color: T.ink, fontWeight: 500 }}>{t.title}</span>
-                    <span style={{ fontSize: 12.5, color: T.sub }}>{t.speaker}</span>
+                    <span style={{ fontSize: 14.5, color: T.ink, fontWeight: 500 }}>{t.title}</span>
+                    <span style={{ fontSize: 13.5, color: T.sub }}>{t.speaker}</span>
                     <ExternalLink size={12} style={{ color: T.faint, flex: "0 0 auto", marginLeft: "auto" }} />
                   </a>
                 ))}

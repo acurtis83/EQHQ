@@ -52,7 +52,7 @@ export default function HomeTiles({ counts, active, onPick, onGroups }) {
               style={{
                 // "Announcements" is long for a quarter-width tile — small and
                 // allowed to wrap so it can never spill outside the tile.
-                fontSize: 9.5,
+                fontSize: 10.5,
                 fontWeight: 700,
                 color: on ? t.accent : T.ink,
                 textAlign: "center",
@@ -64,7 +64,7 @@ export default function HomeTiles({ counts, active, onPick, onGroups }) {
               {t.short}
             </span>
             {count > 0 && (
-              <span style={{ fontSize: 9.5, color: T.faint, fontWeight: 600 }}>{count}</span>
+              <span style={{ fontSize: 10.5, color: T.faint, fontWeight: 600 }}>{count}</span>
             )}
           </button>
         );

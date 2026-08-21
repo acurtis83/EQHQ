@@ -89,7 +89,7 @@ export default function HomeHub({ onGo }) {
   }, [d]);
 
   if (!d) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading…</div>;
   }
 
   const events = d.posts.filter((p) => p.category === "activity");
@@ -103,7 +103,7 @@ export default function HomeHub({ onGo }) {
       </SectionTitle>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>{err}</div>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>{err}</div>
       )}
 
       <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -148,8 +148,8 @@ export default function HomeHub({ onGo }) {
                 const n = openCallings.filter((c) => c.stage === s).length;
                 return (
                   <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 13.5, color: T.ink, flex: 1, minWidth: 0 }}>{s}</span>
-                    <span style={{ fontSize: 13.5, fontWeight: 800, color: T.sub }}>{n}</span>
+                    <span style={{ fontSize: 14.5, color: T.ink, flex: 1, minWidth: 0 }}>{s}</span>
+                    <span style={{ fontSize: 14.5, fontWeight: 800, color: T.sub }}>{n}</span>
                   </div>
                 );
               })}
@@ -158,9 +158,9 @@ export default function HomeHub({ onGo }) {
         </Panel>
 
         <Panel icon={Users} title="Quorum Stats" onGo={() => onGo?.("roster")}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: T.ink, lineHeight: 1.1 }}>
+          <div style={{ fontSize: 30, fontWeight: 800, color: T.ink, lineHeight: 1.1 }}>
             {stats.total}
-            <span style={{ fontSize: 13, fontWeight: 700, color: T.sub, marginLeft: 7 }}>members</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.sub, marginLeft: 7 }}>members</span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 10 }}>
             {BANDS.filter((b) => stats.bands[b] > 0).map((b) => {
@@ -168,11 +168,11 @@ export default function HomeHub({ onGo }) {
               const pct = stats.total ? Math.round((n / stats.total) * 100) : 0;
               return (
                 <div key={b} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13.5, color: T.ink, width: 62, flex: "0 0 auto" }}>{b}</span>
+                  <span style={{ fontSize: 14.5, color: T.ink, width: 62, flex: "0 0 auto" }}>{b}</span>
                   <div style={{ flex: 1, height: 7, background: T.inset, borderRadius: 999, minWidth: 0, overflow: "hidden" }}>
                     <div style={{ width: `${pct}%`, height: "100%", background: T.primary, borderRadius: 999 }} />
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.sub, width: 26, textAlign: "right" }}>{n}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: T.sub, width: 26, textAlign: "right" }}>{n}</span>
                 </div>
               );
             })}
@@ -185,7 +185,7 @@ export default function HomeHub({ onGo }) {
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: T.ink, marginBottom: 10 }}>
+        <div style={{ fontSize: 17.5, fontWeight: 800, color: T.ink, marginBottom: 10 }}>
           Open Action Items
         </div>
         {!byOwner.length ? (
@@ -201,12 +201,12 @@ export default function HomeHub({ onGo }) {
                     width: 26, height: 26, borderRadius: "50%",
                     background: owner.unassigned ? T.goldSoft : T.primarySoft,
                     color: owner.unassigned ? T.gold : T.primaryDeep,
-                    fontSize: 12, fontWeight: 800,
+                    fontSize: 13, fontWeight: 800,
                     display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto",
                   }}>
                     {owner.unassigned ? "?" : owner.name.trim().charAt(0).toUpperCase()}
                   </span>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: T.ink, flex: 1, minWidth: 0 }}>{owner.name}</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: T.ink, flex: 1, minWidth: 0 }}>{owner.name}</span>
                   <Chip color={T.sub} bg={T.inset}>{owner.items.length}</Chip>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -219,7 +219,7 @@ export default function HomeHub({ onGo }) {
                           background: late ? T.red : T.line,
                         }} />
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4 }}>{i.text}</div>
+                          <div style={{ fontSize: 14.5, color: T.ink, lineHeight: 1.4 }}>{i.text}</div>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 3 }}>
                             <Chip color={T.faint} bg={T.inset}>{i.source}</Chip>
                             {i.due_date && (
@@ -250,7 +250,7 @@ function Panel({ icon: Icon, title, count, onGo, children }) {
     <div style={{ ...card, padding: 15 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <Icon size={16} style={{ color: T.sub, flex: "0 0 auto" }} />
-        <span style={{ fontSize: 14.5, fontWeight: 800, color: T.ink, flex: 1, minWidth: 0 }}>{title}</span>
+        <span style={{ fontSize: 15.5, fontWeight: 800, color: T.ink, flex: 1, minWidth: 0 }}>{title}</span>
         {count > 0 && <Chip color={T.sub} bg={T.inset}>{count}</Chip>}
         {onGo && <Btn size="sm" kind="plain" onClick={onGo}>Open</Btn>}
       </div>
@@ -262,12 +262,12 @@ function Panel({ icon: Icon, title, count, onGo, children }) {
 function Row({ label, meta, strong }) {
   return (
     <div style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: 14, fontWeight: strong ? 800 : 600, color: T.ink, lineHeight: 1.35 }}>{label}</div>
-      {meta && <div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>{meta}</div>}
+      <div style={{ fontSize: 15, fontWeight: strong ? 800 : 600, color: T.ink, lineHeight: 1.35 }}>{label}</div>
+      {meta && <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>{meta}</div>}
     </div>
   );
 }
 
 function Muted({ children }) {
-  return <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.55 }}>{children}</div>;
+  return <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.55 }}>{children}</div>;
 }

@@ -74,7 +74,7 @@ export default function Callings() {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading callings…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading callings…</div>;
   }
 
   const open = rows.filter((r) => !["Set Apart", "Released"].includes(r.stage)).length;
@@ -91,7 +91,7 @@ export default function Callings() {
       </div>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>{err}</div>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>{err}</div>
       )}
 
       <div role="tablist" style={{ display: "flex", gap: 4, background: T.inset, borderRadius: 12, padding: 4, marginBottom: 14 }}>
@@ -101,7 +101,7 @@ export default function Callings() {
               flex: 1, padding: "9px 12px", borderRadius: 9, border: "none",
               background: view === id ? T.panel : "transparent",
               color: view === id ? T.ink : T.sub,
-              fontSize: 14, fontWeight: 700, cursor: "pointer",
+              fontSize: 15, fontWeight: 700, cursor: "pointer",
               boxShadow: view === id ? "var(--card-shadow)" : "none",
             }}>
             {label}
@@ -151,12 +151,12 @@ function Board({ byStage, groups, onOpen, onStage }) {
           <div key={stage} style={{ flex: "0 0 auto", width: 208, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
               <span style={{
-                background: bg, color: fg, fontSize: 11.5, fontWeight: 800,
+                background: bg, color: fg, fontSize: 12.5, fontWeight: 800,
                 padding: "4px 10px", borderRadius: 999,
               }}>
                 {stage}
               </span>
-              <span style={{ fontSize: 12, color: T.faint, fontWeight: 700 }}>{list.length}</span>
+              <span style={{ fontSize: 13, color: T.faint, fontWeight: 700 }}>{list.length}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {list.map((r) => (
@@ -165,7 +165,7 @@ function Board({ byStage, groups, onOpen, onStage }) {
               {!list.length && (
                 <div style={{
                   border: `1px dashed ${T.line}`, borderRadius: 12, padding: "14px 10px",
-                  fontSize: 12.5, color: T.faint, textAlign: "center",
+                  fontSize: 13.5, color: T.faint, textAlign: "center",
                 }}>
                   Empty
                 </div>
@@ -191,7 +191,7 @@ function GroupView({ byGroup, groups, onOpen, onManage }) {
           return (
             <div key={g.id} style={{ ...card, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 15.5, fontWeight: 800, color: T.ink }}>{g.name}</span>
+                <span style={{ fontSize: 16.5, fontWeight: 800, color: T.ink }}>{g.name}</span>
                 <Chip color={T.sub} bg={T.inset}>{list.length}</Chip>
               </div>
               {list.length ? (
@@ -199,7 +199,7 @@ function GroupView({ byGroup, groups, onOpen, onManage }) {
                   {list.map((r) => <CallingCard key={r.id} row={r} groups={groups} onOpen={onOpen} />)}
                 </div>
               ) : (
-                <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic" }}>Nobody assigned yet.</div>
+                <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>Nobody assigned yet.</div>
               )}
             </div>
           );
@@ -208,7 +208,7 @@ function GroupView({ byGroup, groups, onOpen, onManage }) {
         {unassigned.length > 0 && (
           <div style={{ ...card, padding: 14, borderStyle: "dashed" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 15.5, fontWeight: 800, color: T.sub }}>No Group</span>
+              <span style={{ fontSize: 16.5, fontWeight: 800, color: T.sub }}>No Group</span>
               <Chip color={T.gold} bg={T.goldSoft}>{unassigned.length}</Chip>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -233,13 +233,13 @@ function CallingCard({ row, groups, onOpen, onStage, showStageNav }) {
         onClick={() => onOpen(row)}
         style={{ background: "none", border: "none", padding: 0, width: "100%", textAlign: "left", cursor: "pointer" }}
       >
-        <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink, lineHeight: 1.3 }}>{row.position}</div>
+        <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink, lineHeight: 1.3 }}>{row.position}</div>
         {row.candidate_name && (
-          <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>{row.candidate_name}</div>
+          <div style={{ fontSize: 14, color: T.sub, marginTop: 3 }}>{row.candidate_name}</div>
         )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
           {!showStageNav && (
-            <span style={{ background: bg, color: fg, fontSize: 11, fontWeight: 800, padding: "3px 8px", borderRadius: 999 }}>
+            <span style={{ background: bg, color: fg, fontSize: 12, fontWeight: 800, padding: "3px 8px", borderRadius: 999 }}>
               {row.stage}
             </span>
           )}
@@ -335,20 +335,20 @@ function EditSheet({ row, groups, members, onClose, onSaved, onStage, setErr }) 
       </Lbl>
 
       <div style={{ ...card, background: T.inset, borderColor: "transparent", padding: 12 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub, marginBottom: 7 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub, marginBottom: 7 }}>
           Stage Dates
         </div>
         {Object.keys(dates).length ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             {CALLING_STAGES.filter((s) => dates[s]).map((s) => (
-              <div key={s} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+              <div key={s} style={{ display: "flex", gap: 8, fontSize: 14 }}>
                 <span style={{ width: 120, color: s === row.stage ? T.ink : T.sub, fontWeight: s === row.stage ? 700 : 500 }}>{s}</span>
                 <span style={{ color: T.sub }}>{fmtShort(dates[s])}</span>
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic" }}>
+          <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
             Nothing stamped yet — dates record themselves as the stage changes.
           </div>
         )}
@@ -424,7 +424,7 @@ function Sheet({ title, children, onClose }) {
           borderRadius: "18px 18px 0 0", padding: 18, display: "flex", flexDirection: "column", gap: 12,
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>{title}</div>
+          <div style={{ fontSize: 18.5, fontWeight: 800, color: T.ink }}>{title}</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
         {children}
@@ -436,7 +436,7 @@ function Sheet({ title, children, onClose }) {
 function Lbl({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
         {label}
       </span>
       {children}

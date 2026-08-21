@@ -102,7 +102,7 @@ export default function Teaching() {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading schedule…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading schedule…</div>;
   }
 
   const teachable = sundays.filter((s) => s.teaches);
@@ -112,10 +112,10 @@ export default function Teaching() {
     <div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 19, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
+          <div style={{ fontSize: 20.5, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
             Teaching Schedule
           </div>
-          <div style={{ fontSize: 13.5, color: T.sub, marginTop: 3 }}>
+          <div style={{ fontSize: 14.5, color: T.sub, marginTop: 3 }}>
             {teachable.length} teaching Sunday{teachable.length === 1 ? "" : "s"} ahead
             {unassigned > 0 ? ` · ${unassigned} unassigned` : " · all assigned"}
           </div>
@@ -126,17 +126,17 @@ export default function Teaching() {
       </div>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
       {toast && (
-        <div style={{ ...card, background: T.greenSoft, borderColor: T.green, color: T.green, marginBottom: 12, fontSize: 13.5, padding: "10px 14px" }}>
+        <div style={{ ...card, background: T.greenSoft, borderColor: T.green, color: T.green, marginBottom: 12, fontSize: 14.5, padding: "10px 14px" }}>
           {toast}
         </div>
       )}
 
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.sub, fontWeight: 600, marginBottom: 12 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: T.sub, fontWeight: 600, marginBottom: 12 }}>
         <input type="checkbox" checked={hidePast} onChange={(e) => setHidePast(e.target.checked)} />
         Hide past Sundays
       </label>
@@ -198,7 +198,7 @@ function SundayCard({ sunday, row, onOpen }) {
         style={{ background: "none", border: "none", padding: 0, width: "100%", textAlign: "left", cursor: "pointer" }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>{fmtDate(sunday.date)}</span>
+          <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{fmtDate(sunday.date)}</span>
           {!teaches && (
             <Chip
               color={sunday.reason === NO_LESSON.STAKE_CONF ? T.primaryDeep : T.sub}
@@ -211,14 +211,14 @@ function SundayCard({ sunday, row, onOpen }) {
         </div>
 
         {teaches && row?.teacher_name && (
-          <div style={{ fontSize: 13.5, color: T.sub, marginTop: 5 }}>
+          <div style={{ fontSize: 14.5, color: T.sub, marginTop: 5 }}>
             <strong style={{ color: T.ink }}>{row.teacher_name}</strong>
             {row.talk_title ? ` — ${row.talk_title}` : row.topic ? ` — ${row.topic}` : ""}
             {row.speaker ? ` (${row.speaker})` : ""}
           </div>
         )}
         {row?.notes && (
-          <div style={{ fontSize: 13, color: T.faint, marginTop: 4, lineHeight: 1.5 }}>{row.notes}</div>
+          <div style={{ fontSize: 14, color: T.faint, marginTop: 4, lineHeight: 1.5 }}>{row.notes}</div>
         )}
       </button>
 
@@ -227,7 +227,7 @@ function SundayCard({ sunday, row, onOpen }) {
           href={url} target="_blank" rel="noreferrer"
           style={{
             display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8,
-            fontSize: 13, fontWeight: 700, color: T.primaryDeep, textDecoration: "none",
+            fontSize: 14, fontWeight: 700, color: T.primaryDeep, textDecoration: "none",
           }}
         >
           <ExternalLink size={13} />Open talk in Gospel Library
@@ -265,8 +265,8 @@ function AssignSheet({ sunday, row, members, talks, isStakeConf, onClose, onSave
       {!sunday.teaches ? (
         <>
           <div style={{ ...card, background: T.inset, padding: 13 }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>{sunday.reason}</div>
-            <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{sunday.reason}</div>
+            <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.6 }}>
               {sunday.reason === NO_LESSON.FIFTH_SUNDAY
                 ? "The quorum still meets, but the bishopric directs it — no teacher to assign."
                 : "No quorum meeting this Sunday."}
@@ -315,8 +315,8 @@ function AssignSheet({ sunday, row, members, talks, isStakeConf, onClose, onSave
                       borderRadius: 10, padding: "9px 11px", cursor: "pointer",
                     }}
                   >
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: T.ink }}>{t.title}</div>
-                    <div style={{ fontSize: 12.5, color: T.sub, marginTop: 2 }}>{t.speaker} · {t.conf}</div>
+                    <div style={{ fontSize: 14.5, fontWeight: 600, color: T.ink }}>{t.title}</div>
+                    <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>{t.speaker} · {t.conf}</div>
                   </button>
                 ))}
               </div>
@@ -391,7 +391,7 @@ function GenerateSheet({ members, sundays, existing, onClose, onDone }) {
 
   return (
     <Sheet title="Generate Rotation" onClose={onClose}>
-      <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
         Rotates the brethren you pick across upcoming teaching Sundays. General
         Conference, stake conference, and 5th Sundays are skipped automatically.
       </div>
@@ -411,7 +411,7 @@ function GenerateSheet({ members, sundays, existing, onClose, onDone }) {
               display: "flex", alignItems: "center", gap: 10, padding: "9px 11px",
               background: picked[m.id] ? T.primarySoft : T.panel,
               border: `1px solid ${picked[m.id] ? T.primary : T.lineSoft}`,
-              borderRadius: 10, cursor: "pointer", fontSize: 14, color: T.ink,
+              borderRadius: 10, cursor: "pointer", fontSize: 15, color: T.ink,
             }}
           >
             <input
@@ -422,18 +422,18 @@ function GenerateSheet({ members, sundays, existing, onClose, onDone }) {
           </label>
         ))}
         {!active.length && (
-          <div style={{ fontSize: 13.5, color: T.sub }}>
+          <div style={{ fontSize: 14.5, color: T.sub }}>
             No One on the Roster Yet — add brethren first.
           </div>
         )}
       </div>
 
-      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: T.ink, fontWeight: 600 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, color: T.ink, fontWeight: 600 }}>
         <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
         Replace Sundays that already have a teacher
       </label>
 
-      <div style={{ ...card, background: T.inset, padding: 12, fontSize: 13.5, color: T.sub }}>
+      <div style={{ ...card, background: T.inset, padding: 12, fontSize: 14.5, color: T.sub }}>
         {pool.length} teacher{pool.length === 1 ? "" : "s"} across {targets.length} Sunday
         {targets.length === 1 ? "" : "s"}
         {pool.length > 0 && targets.length > 0 && (
@@ -468,7 +468,7 @@ function Sheet({ title, children, onClose }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{title}</div>
+          <div style={{ fontSize: 18.5, fontWeight: 700, color: T.ink }}>{title}</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
         {children}
@@ -480,7 +480,7 @@ function Sheet({ title, children, onClose }) {
 function Lbl({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
         {label}
       </span>
       {children}

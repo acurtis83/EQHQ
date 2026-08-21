@@ -117,6 +117,37 @@ nudging the container is more predictable than re-specifying every size.
 Borders and card shadows were strengthened in both themes so cards read as
 distinct objects rather than floating text.
 
+## Directory paste
+
+Roster → **Paste Ward Directory**. Fields are identified by **shape, not column
+position** — an email looks like an email wherever it sits, a phone like a
+phone, a birthdate like a date, an address starts with a house number. Whatever
+survives is the name.
+
+That means it survives columns in a different order, tabs or runs of spaces,
+missing fields, and records spread over several lines (name on one line,
+address and phone underneath).
+
+Captured: name (handles `Last, First`), age, birthdate, address, phone, email,
+and priesthood office.
+
+The preview shows a **per-field hit count** — `Address 12/14` — before anything
+is imported, so a column the parser missed is obvious rather than silent. Lines
+it can't read are listed rather than quietly dropped.
+
+Three bugs this design flushed out, all caught before any real data was
+written:
+
+- The date pattern accepted any word as a month, so "Andrew 42 1234" parsed as
+  a birthdate and ate the name and age.
+- The address pattern was greedy enough to start on an age and swallow the
+  house number after it.
+- **A city/state/ZIP line on its own ("Lehi UT 84048") read as a person's
+  name**, splitting one member into two records and stranding their phone and
+  email on the phantom second row. Every member would have imported twice.
+  Those lines are now recognised as belonging to the address above, and joined
+  with a comma: `2685 N Drexler Dr, Lehi UT 84048`.
+
 ## Age bands
 
 18–35, 36–45, 46–55, 56–64, 65+. No overlap — 65 counts in "65+" only, so the
@@ -147,7 +178,7 @@ fail with a clear message rather than silently.
 a light background. The originals were designed for dark, so the splash screen
 is deliberately dark in both themes.
 
-The splash shows briefly on every launch, and:
+The splash holds for ~2 seconds, then fades over 350ms. It:
 
 - a tap skips it
 - the OS "reduce motion" setting skips it entirely
@@ -344,6 +375,17 @@ Automated checks across the project:
 - **26** on the Home Hub — panels, quorum stats using the new bands, action
   items by owner, and the renames.
 - **20** on the age bands — every boundary, and that counts never double-count.
+- **42** on the directory parser — six layouts including tabs, multi-space,
+  multi-line records, reordered columns, missing fields, and the old LDS Tools
+  format, plus junk reporting.
+- **23** on the real ward directory format specifically — single and multiple
+  members, ZIP+4, comma and no-comma city lines, and that contact details never
+  cross between people.
+- **41** against four real rows from the ward directory, including one member
+  with no phone and one with no email — the two shapes most likely to slide a
+  field onto the wrong person.
+- **39** on the paste screen — per-field detection counts, import, and that
+  address survives to the roster card.
 - **35** on Title Case headings — every tab checked for the new heading and for
   the absence of the old sentence-case one.
 - **17** end-to-end regression across feed, sign-ups, agenda, roster, teaching,

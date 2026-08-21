@@ -1,6 +1,24 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; min-height: 100%; }
-body { background: var(--bg); -webkit-font-smoothing: antialiased; }
+
+/* ---------- typography ----------
+   One family everywhere. This resolves to SF Pro on iPhone and Mac, Roboto on
+   Android, and Segoe on Windows — so it looks native on each device and costs
+   no download, which matters for a home-screen PWA that may open offline.
+
+   Nothing declared a font at all before this, so text fell back to the
+   browser's default serif while buttons and inputs used the system font. That
+   mismatch is why type looked inconsistent from screen to screen. */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text",
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+}
+html, body { font-family: var(--font-sans); }
+body { background: var(--bg); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Form controls don't inherit the page font — they have to be told. */
+input, select, textarea, button { font-family: inherit; }
 
 :root, html[data-theme="light"] {
   --ink: #17181c; --sub: #626974; --faint: #979da7;
@@ -71,7 +89,11 @@ input[type="date"], input[type="time"] {
   .eq-main { padding-left: 12px !important; padding-right: 12px !important; }
   /* keep multi-column grids to a single column on phones */
   .eq-main [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
-  input[type="date"], input[type="time"] { font-size: 12.5px; padding: 6px 8px; }
+  /* Held below 16px on purpose: iOS gives date/time inputs a very wide
+     intrinsic size, and this is what keeps them inside their row. The cost is
+     that iOS zooms in slightly when one is tapped. Text inputs are 16px, so
+     they don't do that. */
+  input[type="date"], input[type="time"] { font-size: 13.5px; padding: 6px 8px; }
 }
 
 /* The callings board scrolls sideways on purpose — don't collapse it. */
@@ -114,4 +136,44 @@ input[type="date"], input[type="time"] {
 /* Bottom nav becomes a centred bar rather than stretching edge to edge. */
 @media (min-width: 900px) {
   .eq-nav-inner { max-width: 760px; }
+}
+
+/* ---------- header mark ----------
+   Two files, because the logo's non-blue elements are white in one and ink in
+   the other. White artwork disappears on a light header; ink artwork
+   disappears on a dark one. Swapped by theme in CSS so it flips instantly
+   with the theme rather than waiting on JS state. */
+.eq-logo { height: 40px; width: auto; flex: 0 0 auto; display: block; }
+.eq-logo-dark { display: none; }
+html[data-theme="dark"] .eq-logo-light { display: none; }
+html[data-theme="dark"] .eq-logo-dark { display: block; }
+
+@media (max-width: 380px) {
+  .eq-logo { height: 32px; }
+}
+
+/* ---------- header fit ----------
+   The ward name plus the eyebrow plus the sign-in button is a lot to fit
+   across a phone. Measured against real font metrics, the eyebrow's wide
+   0.14em tracking is what pushes it over — it alone is wider than the ward
+   name. So on phones the tracking eases off and the eyebrow drops half a
+   pixel; on a laptop there's room to spare and it keeps the wide spacing.
+   Both lines are held to one line so the header never grows to two rows. */
+/* Held to one line, and if a device is narrower than anything anticipated the
+   eyebrow quietly truncates rather than wrapping the header onto two rows.
+   That turns a possible layout break into a cosmetic one. */
+.eq-eyebrow, .eq-wordmark {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 620px) {
+  .eq-eyebrow { font-size: 11px !important; letter-spacing: 0.06em !important; }
+}
+
+/* Below this the button's label is dropped and the padlock speaks for itself,
+   which is the only way the ward name still fits on a small iPhone. */
+@media (max-width: 380px) {
+  .eq-btn-label { display: none; }
 }

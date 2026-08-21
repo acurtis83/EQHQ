@@ -63,7 +63,7 @@ export default function PresidencyAgenda() {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading agendas…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading agendas…</div>;
   }
 
   if (selected) {
@@ -96,10 +96,10 @@ export default function PresidencyAgenda() {
     <div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 12 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 19, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
+          <div style={{ fontSize: 20.5, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
             Presidency Meetings
           </div>
-          <div style={{ fontSize: 13.5, color: T.sub, marginTop: 3 }}>
+          <div style={{ fontSize: 14.5, color: T.sub, marginTop: 3 }}>
             Agendas build from the Planner and carry unfinished items forward.
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function PresidencyAgenda() {
       </div>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
@@ -127,10 +127,10 @@ export default function PresidencyAgenda() {
               onClick={() => setSelected(a)}
               style={{ ...card, padding: 14, textAlign: "left", cursor: "pointer", width: "100%" }}
             >
-              <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
+              <div style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>
                 {a.meeting_date ? fmtDate(a.meeting_date) : "Undated Meeting"}
               </div>
-              <div style={{ fontSize: 13, color: T.sub, marginTop: 3 }}>
+              <div style={{ fontSize: 14, color: T.sub, marginTop: 3 }}>
                 {[a.meeting_time, a.location].filter(Boolean).join(" · ") || "Tap to open"}
               </div>
             </button>
@@ -262,7 +262,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
       </div>
 
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
@@ -291,7 +291,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
       {toast && (
         <div style={{
           ...card, background: T.greenSoft, borderColor: T.green, color: T.green,
-          marginBottom: 12, fontSize: 13.5, padding: "10px 14px",
+          marginBottom: 12, fontSize: 14.5, padding: "10px 14px",
         }}>
           {toast}
         </div>
@@ -302,7 +302,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
         return (
           <div key={s.key} style={{ ...card, marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{s.label}</span>
+              <span style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>{s.label}</span>
               {list.length > 0 && <Chip>{list.filter((i) => !i.done).length} open</Chip>}
               <Btn
                 size="sm" kind="plain" style={{ marginLeft: "auto" }}
@@ -328,7 +328,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
             )}
 
             {!list.length ? (
-              <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic" }}>
+              <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
                 {s.key === "ministering" ? "No ministering checks yet." : "Nothing on the agenda yet."}
               </div>
             ) : (
@@ -417,15 +417,15 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
           borderRadius: "18px 18px 0 0", padding: 18, display: "flex", flexDirection: "column", gap: 12,
         }}
       >
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Pull From Planner</div>
-        <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
+        <div style={{ fontSize: 19.5, fontWeight: 700, color: T.ink }}>Pull From Planner</div>
+        <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
           Open items only. Watch-list entries land under Ministering Checks.
         </div>
 
         {loading ? (
-          <div style={{ color: T.sub, fontSize: 14, padding: 16, textAlign: "center" }}>Loading…</div>
+          <div style={{ color: T.sub, fontSize: 15, padding: 16, textAlign: "center" }}>Loading…</div>
         ) : !rows.length ? (
-          <div style={{ color: T.sub, fontSize: 14, padding: 16, textAlign: "center" }}>
+          <div style={{ color: T.sub, fontSize: 15, padding: 16, textAlign: "center" }}>
             Nothing left to pull — it's all on the agenda already.
           </div>
         ) : (
@@ -448,7 +448,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
                     onChange={(e) => setPicked({ ...picked, [r.id]: e.target.checked })}
                   />
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 14.5, color: T.ink, fontWeight: 500 }}>{r.text}</div>
+                    <div style={{ fontSize: 15.5, color: T.ink, fontWeight: 500 }}>{r.text}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
                       <Chip color={T.sub} bg={T.inset}>{b?.label || r.bucket}</Chip>
                       {r.who && <Chip color={T.sub} bg={T.inset}>{r.who}</Chip>}
@@ -524,7 +524,7 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
       </button>
       <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={onEdit}>
         <div style={{
-          fontSize: 14.5, color: it.done ? T.faint : T.ink, fontWeight: 500,
+          fontSize: 15.5, color: it.done ? T.faint : T.ink, fontWeight: 500,
           textDecoration: it.done ? "line-through" : "none",
         }}>
           {it.text}
@@ -537,18 +537,18 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
             </Chip>
           )}
         </div>
-        {it.notes && <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>}
+        {it.notes && <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>}
         {(it.link_url || it.attachment_url) && (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
             {it.link_url && (
               <a href={it.link_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
                 <Link2 size={12} />Link
               </a>
             )}
             {it.attachment_url && (
               <a href={it.attachment_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
                 <Paperclip size={12} />{it.attachment_name || "Attachment"}
               </a>
             )}
@@ -579,13 +579,13 @@ function PrintDoc({ agenda, bySection }) {
       `}</style>
 
       <div style={{ fontFamily: "system-ui, sans-serif", color: "#111" }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.14em", color: "#666", fontWeight: 700 }}>
+        <div style={{ fontSize: 12, letterSpacing: "0.14em", color: "#666", fontWeight: 700 }}>
           HOLBROOK FARMS 8TH WARD
         </div>
-        <h1 style={{ fontSize: 22, margin: "4px 0 2px", fontWeight: 800 }}>
+        <h1 style={{ fontSize: 24, margin: "4px 0 2px", fontWeight: 800 }}>
           Elders Quorum Presidency Meeting
         </h1>
-        <div style={{ fontSize: 13, color: "#444" }}>
+        <div style={{ fontSize: 14, color: "#444" }}>
           {[agenda.meeting_date ? fmtDate(agenda.meeting_date) : "", agenda.meeting_time, agenda.location]
             .filter(Boolean).join("  ·  ")}
         </div>
@@ -596,7 +596,7 @@ function PrintDoc({ agenda, bySection }) {
           return (
             <div key={s.key} style={{ marginTop: 18, breakInside: "avoid" }}>
               <div style={{
-                fontSize: 11, letterSpacing: "0.1em", fontWeight: 800, color: "#111",
+                fontSize: 12, letterSpacing: "0.1em", fontWeight: 800, color: "#111",
                 borderBottom: "1.5px solid #111", paddingBottom: 4, marginBottom: 8,
                 textTransform: "uppercase",
               }}>
@@ -610,16 +610,16 @@ function PrintDoc({ agenda, bySection }) {
                     background: it.done ? "#111" : "transparent",
                   }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>
+                    <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.35 }}>
                       {it.text}
                       {it.who ? <span style={{ fontWeight: 400, color: "#444" }}>{`  — ${it.who}`}</span> : null}
                       {it.due_date ? <span style={{ fontWeight: 400, color: "#444" }}>{`  (${fmtShort(it.due_date)})`}</span> : null}
                     </div>
                     {it.notes && (
-                      <div style={{ fontSize: 12, color: "#444", marginTop: 2, lineHeight: 1.4 }}>{it.notes}</div>
+                      <div style={{ fontSize: 13, color: "#444", marginTop: 2, lineHeight: 1.4 }}>{it.notes}</div>
                     )}
                     {(it.link_url || it.attachment_url) && (
-                      <div style={{ fontSize: 11, color: "#555", marginTop: 2, wordBreak: "break-all" }}>
+                      <div style={{ fontSize: 12, color: "#555", marginTop: 2, wordBreak: "break-all" }}>
                         {it.link_url && <div>Link: {it.link_url}</div>}
                         {it.attachment_url && <div>{it.attachment_name || "Attachment"}: {it.attachment_url}</div>}
                       </div>
@@ -631,7 +631,7 @@ function PrintDoc({ agenda, bySection }) {
           );
         })}
 
-        <div style={{ marginTop: 26, fontSize: 10.5, color: "#888" }}>
+        <div style={{ marginTop: 26, fontSize: 11.5, color: "#888" }}>
           Printed {new Date().toLocaleDateString("en-US")}
         </div>
       </div>
@@ -694,15 +694,15 @@ function AttachSheet({ item, onClose, onSaved }) {
           padding: 18, display: "flex", flexDirection: "column", gap: 12,
         }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>Attach</div>
+          <div style={{ fontSize: 18.5, fontWeight: 800, color: T.ink }}>Attach</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
-        <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.5 }}>{item.text}</div>
+        <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.5 }}>{item.text}</div>
 
         {err && (
           <div style={{
             background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
-            borderRadius: 10, padding: "9px 12px", fontSize: 13, lineHeight: 1.5,
+            borderRadius: 10, padding: "9px 12px", fontSize: 14, lineHeight: 1.5,
           }}>
             {err}
           </div>
@@ -719,13 +719,13 @@ function AttachSheet({ item, onClose, onSaved }) {
               type="file"
               accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt"
               onChange={(e) => upload(e.target.files?.[0])}
-              style={{ fontSize: 13.5, color: T.sub }}
+              style={{ fontSize: 14.5, color: T.sub }}
             />
           </Lbl>
           {item.attachment_url && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 9 }}>
               <a href={item.attachment_url} target="_blank" rel="noreferrer"
-                style={{ fontSize: 13, fontWeight: 700, color: T.primaryDeep, textDecoration: "none", flex: 1, minWidth: 0 }}>
+                style={{ fontSize: 14, fontWeight: 700, color: T.primaryDeep, textDecoration: "none", flex: 1, minWidth: 0 }}>
                 {item.attachment_name || "Attachment"}
               </a>
               <Btn size="sm" kind="plain" onClick={clearFile}><Trash2 size={14} /></Btn>
@@ -733,7 +733,7 @@ function AttachSheet({ item, onClose, onSaved }) {
           )}
         </div>
 
-        {busy && <div style={{ fontSize: 13, color: T.sub }}>Working…</div>}
+        {busy && <div style={{ fontSize: 14, color: T.sub }}>Working…</div>}
       </div>
     </div>
   );
@@ -742,7 +742,7 @@ function AttachSheet({ item, onClose, onSaved }) {
 function Lbl({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
-      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
         {label}
       </span>
       {children}

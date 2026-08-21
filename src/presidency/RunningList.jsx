@@ -95,22 +95,22 @@ export default function RunningList({ onCountChange }) {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading Planner…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading Planner…</div>;
   }
 
   return (
     <div>
       {err && (
-        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 13.5 }}>
+        <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
         </div>
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={{ fontSize: 13.5, color: T.sub }}>
+        <div style={{ fontSize: 14.5, color: T.sub }}>
           {items.filter((i) => !i.done).length} open
         </div>
-        <label style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: T.sub, fontWeight: 600 }}>
+        <label style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 7, fontSize: 14, color: T.sub, fontWeight: 600 }}>
           <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
           Show completed
         </label>
@@ -123,7 +123,7 @@ export default function RunningList({ onCountChange }) {
           return (
             <div key={b.key} style={{ ...card, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>{b.label}</span>
+                <span style={{ fontSize: 16.5, fontWeight: 700, color: T.ink }}>{b.label}</span>
                 {open > 0 && <Chip>{open}</Chip>}
                 <Btn
                   size="sm" kind="plain" style={{ marginLeft: "auto" }}
@@ -132,7 +132,7 @@ export default function RunningList({ onCountChange }) {
                   <Plus size={15} />Add
                 </Btn>
               </div>
-              <div style={{ fontSize: 12.5, color: T.faint, marginBottom: 10 }}>{b.hint}</div>
+              <div style={{ fontSize: 13.5, color: T.faint, marginBottom: 10 }}>{b.hint}</div>
 
               {draftFor === b.key && (
                 <div style={{ background: T.inset, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -153,7 +153,7 @@ export default function RunningList({ onCountChange }) {
               )}
 
               {!list.length ? (
-                <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic" }}>Nothing here.</div>
+                <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>Nothing here.</div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {list.map((it) => (
@@ -238,7 +238,7 @@ function Row({ it, editing, onEdit, onPatch, onRemove }) {
 
       <div style={{ flex: 1, minWidth: 0 }} onClick={onEdit}>
         <div style={{
-          fontSize: 14.5, color: it.done ? T.faint : T.ink, fontWeight: 500,
+          fontSize: 15.5, color: it.done ? T.faint : T.ink, fontWeight: 500,
           textDecoration: it.done ? "line-through" : "none", cursor: "pointer",
         }}>
           {it.text}
@@ -255,7 +255,7 @@ function Row({ it, editing, onEdit, onPatch, onRemove }) {
           )}
         </div>
         {it.notes && (
-          <div style={{ fontSize: 13, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>
+          <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>
         )}
       </div>
     </div>

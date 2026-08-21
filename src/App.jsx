@@ -34,6 +34,17 @@ const PRESIDENCY_TABS = [
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
+// The ward mark. Both files are transparent; they differ in whether the
+// non-blue artwork is white or ink, so each theme gets the one that shows up.
+function Logo() {
+  return (
+    <>
+      <img className="eq-logo eq-logo-light" src="/logo-light.png" alt="" aria-hidden="true" />
+      <img className="eq-logo eq-logo-dark" src="/logo.png" alt="" aria-hidden="true" />
+    </>
+  );
+}
+
 // ?f=<id> — a shareable form link. Renders on its own so someone who has never
 // opened the app (or isn't in the quorum) can still fill it out.
 function sharedFormId() {
@@ -86,11 +97,16 @@ export default function App() {
     return (
       <div style={{ minHeight: "100vh", background: T.bg, padding: "20px 16px 40px" }}>
         <div className="eq-scale" style={{ maxWidth: 620, margin: "0 auto" }}>
-          <div style={{ fontSize: 10.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
-            HOLBROOK FARMS 8TH WARD
-          </div>
-          <div style={{ fontSize: 21, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em", margin: "2px 0 16px" }}>
-            Elders Quorum
+          <div style={{ display: "flex", alignItems: "center", gap: 11, marginBottom: 16 }}>
+            <Logo />
+            <div style={{ minWidth: 0 }}>
+              <div className="eq-eyebrow" style={{ fontSize: 11.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
+                HOLBROOK FARMS 8TH WARD
+              </div>
+              <div className="eq-wordmark" style={{ fontSize: 22.5, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em", marginTop: 2 }}>
+                Elders Quorum
+              </div>
+            </div>
           </div>
           <FormFill formId={sharedForm} />
         </div>
@@ -100,7 +116,7 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.sub, fontSize: 14 }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.sub, fontSize: 15 }}>
         Loading…
       </div>
     );
@@ -115,12 +131,13 @@ export default function App() {
           borderBottom: `1px solid ${T.lineSoft}`, padding: "14px 16px",
         }}
       >
-        <div className="eq-shell" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div className="eq-shell" style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <Logo />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 10.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
+            <div style={{ fontSize: 11.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
               HOLBROOK FARMS 8TH WARD
             </div>
-            <div style={{ fontSize: 21, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em", marginTop: 2 }}>
+            <div style={{ fontSize: 22.5, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em", marginTop: 2 }}>
               Elders Quorum
             </div>
           </div>
@@ -130,8 +147,8 @@ export default function App() {
                 <LogOut size={15} />Sign out
               </Btn>
             ) : (
-              <Btn kind="ghost" size="sm" onClick={() => setShowSignIn(true)}>
-                <Lock size={14} />Presidency
+              <Btn kind="ghost" size="sm" onClick={() => setShowSignIn(true)} title="Presidency sign in">
+                <Lock size={14} /><span className="eq-btn-label">Presidency</span>
               </Btn>
             )}
           </div>
@@ -183,7 +200,7 @@ export default function App() {
                     flex: "1 0 auto", display: "flex", flexDirection: "column", alignItems: "center",
                     gap: 3, padding: "7px 10px", background: on ? T.primarySoft : "transparent",
                     color: on ? T.primaryDeep : T.sub, border: "none", borderRadius: 10,
-                    fontSize: 10.5, fontWeight: 700, cursor: "pointer", minWidth: 62,
+                    fontSize: 11.5, fontWeight: 700, cursor: "pointer", minWidth: 62,
                   }}
                 >
                   <Icon size={19} />

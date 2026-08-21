@@ -49,7 +49,7 @@ export default function SignUpList({
   return (
     <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 10, paddingTop: 11 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink, letterSpacing: "0.02em" }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink, letterSpacing: "0.02em" }}>
           Sign-Up
         </span>
         {summary && (
@@ -84,10 +84,10 @@ export default function SignUpList({
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.ink, minWidth: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: T.ink, minWidth: 0 }}>
                   {slot.label}
                 </span>
-                <span style={{ fontSize: 12.5, color: st.full ? T.green : T.sub, fontWeight: 600 }}>
+                <span style={{ fontSize: 13.5, color: st.full ? T.green : T.sub, fontWeight: 600 }}>
                   {st.taken} of {st.needed}
                 </span>
                 {!st.full && !isOpen && (
@@ -110,7 +110,7 @@ export default function SignUpList({
                       key={c.id}
                       style={{
                         background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: 999,
-                        padding: "3px 9px", fontSize: 12, color: T.ink, display: "inline-flex",
+                        padding: "3px 9px", fontSize: 13, color: T.ink, display: "inline-flex",
                         alignItems: "center", gap: 5,
                       }}
                     >
@@ -123,8 +123,8 @@ export default function SignUpList({
 
               {isOpen && (
                 <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
-                  <Input value={name} onChange={setName} placeholder="Your name" style={{ fontSize: 13.5 }} />
-                  <Input value={note} onChange={setNote} placeholder="Bringing what? (optional)" style={{ fontSize: 13.5 }} />
+                  <Input value={name} onChange={setName} placeholder="Your name" style={{ fontSize: 14.5 }} />
+                  <Input value={note} onChange={setNote} placeholder="Bringing what? (optional)" style={{ fontSize: 14.5 }} />
                   <div style={{ display: "flex", gap: 7 }}>
                     <Btn kind="primary" disabled={busy || !name.trim()} onClick={() => claim(slot)}>
                       Sign up
@@ -209,14 +209,14 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>Sign-Up Slots</div>
+          <div style={{ fontSize: 18.5, fontWeight: 800, color: T.ink }}>Sign-Up Slots</div>
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
 
         {err && (
           <div style={{
             background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
-            borderRadius: 10, padding: "9px 12px", fontSize: 13,
+            borderRadius: 10, padding: "9px 12px", fontSize: 14,
           }}>
             {err}
           </div>
@@ -224,7 +224,7 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
 
         {!slots.length && (
           <>
-            <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
               Start from a template, or add slots one at a time.
             </div>
             <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
@@ -245,8 +245,8 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
               return (
                 <div key={s.id} style={{ background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: 12, padding: 11 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: T.ink, flex: 1, minWidth: 0 }}>{s.label}</span>
-                    <span style={{ fontSize: 12.5, color: T.sub }}>{st.taken}/{st.needed}</span>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: T.ink, flex: 1, minWidth: 0 }}>{s.label}</span>
+                    <span style={{ fontSize: 13.5, color: T.sub }}>{st.taken}/{st.needed}</span>
                     <Btn size="sm" kind="plain" onClick={() => removeSlot(s)}><Trash2 size={14} /></Btn>
                   </div>
                   {mine.length > 0 && (
@@ -258,7 +258,7 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
                           title="Remove"
                           style={{
                             background: T.inset, border: `1px solid ${T.lineSoft}`, borderRadius: 999,
-                            padding: "3px 9px", fontSize: 12, color: T.ink, cursor: "pointer",
+                            padding: "3px 9px", fontSize: 13, color: T.ink, cursor: "pointer",
                             display: "inline-flex", alignItems: "center", gap: 5,
                           }}
                         >
@@ -285,7 +285,7 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
           </Btn>
         </div>
 
-        <div style={{ fontSize: 12.5, color: T.faint, lineHeight: 1.55 }}>
+        <div style={{ fontSize: 13.5, color: T.faint, lineHeight: 1.55 }}>
           Members sign up without an account, so only the presidency can take
           someone off a slot — tap a name above to remove it.
         </div>

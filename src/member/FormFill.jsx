@@ -76,18 +76,18 @@ export default function FormFill({ formId, onDone, embedded }) {
   };
 
   if (loading) {
-    return <div style={{ color: T.sub, fontSize: 14, padding: 24, textAlign: "center" }}>Loading…</div>;
+    return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading…</div>;
   }
   if (err && !form) {
-    return <div style={{ ...card, color: T.sub, fontSize: 14 }}>{err}</div>;
+    return <div style={{ ...card, color: T.sub, fontSize: 15 }}>{err}</div>;
   }
 
   if (done) {
     return (
       <div style={{ ...card, textAlign: "center", padding: 28 }}>
         <Check size={26} style={{ color: T.green }} />
-        <div style={{ fontSize: 16.5, fontWeight: 800, color: T.ink, marginTop: 8 }}>Thanks — You're In</div>
-        <div style={{ fontSize: 14, color: T.sub, marginTop: 6 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: T.ink, marginTop: 8 }}>Thanks — You're In</div>
+        <div style={{ fontSize: 15, color: T.sub, marginTop: 6 }}>
           {form.anonymous ? "Your answers were submitted anonymously." : "We've got your response."}
         </div>
         {onDone && (
@@ -99,9 +99,9 @@ export default function FormFill({ formId, onDone, embedded }) {
 
   return (
     <div style={{ ...card, padding: 17 }}>
-      <div style={{ fontSize: 18, fontWeight: 800, color: T.ink }}>{form.title}</div>
+      <div style={{ fontSize: 19.5, fontWeight: 800, color: T.ink }}>{form.title}</div>
       {form.description && (
-        <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.55 }}>{form.description}</div>
+        <div style={{ fontSize: 15, color: T.sub, marginTop: 5, lineHeight: 1.55 }}>{form.description}</div>
       )}
       <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 9 }}>
         {form.anonymous && <Chip color={T.primaryDeep} bg={T.primarySoft}>Anonymous</Chip>}
@@ -113,7 +113,7 @@ export default function FormFill({ formId, onDone, embedded }) {
       </div>
 
       {closed ? (
-        <div style={{ fontSize: 14, color: T.sub, marginTop: 14 }}>
+        <div style={{ fontSize: 15, color: T.sub, marginTop: 14 }}>
           This form is closed. Reach out to the presidency if you still need to get on.
         </div>
       ) : (
@@ -141,7 +141,7 @@ export default function FormFill({ formId, onDone, embedded }) {
           {err && (
             <div style={{
               background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
-              borderRadius: 10, padding: "9px 12px", fontSize: 13, marginTop: 14,
+              borderRadius: 10, padding: "9px 12px", fontSize: 14, marginTop: 14,
             }}>
               {err}
             </div>
@@ -166,13 +166,13 @@ export default function FormFill({ formId, onDone, embedded }) {
 function Field({ label, help, required, error, children }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 14.5, fontWeight: 700, color: T.ink, marginBottom: help ? 2 : 7 }}>
+      <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink, marginBottom: help ? 2 : 7 }}>
         {label}
         {required && <span style={{ color: T.red, marginLeft: 4 }}>*</span>}
       </div>
-      {help && <div style={{ fontSize: 13, color: T.sub, marginBottom: 7 }}>{help}</div>}
+      {help && <div style={{ fontSize: 14, color: T.sub, marginBottom: 7 }}>{help}</div>}
       {children}
-      {error && <div style={{ fontSize: 13, color: T.red, marginTop: 5 }}>{error}</div>}
+      {error && <div style={{ fontSize: 14, color: T.red, marginTop: 5 }}>{error}</div>}
     </div>
   );
 }
@@ -277,7 +277,7 @@ function QuestionInput({ q, value, onChange, picks }) {
               }}
             >
               <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: st.full ? T.red : T.sub }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: st.full ? T.red : T.sub }}>
                 {st.full ? "Full" : `${st.remaining} left`}
               </span>
             </button>
@@ -296,7 +296,7 @@ function pickStyle(on) {
     border: `1px solid ${on ? T.primary : T.line}`,
     borderRadius: 10,
     padding: "11px 13px",
-    fontSize: 14.5,
+    fontSize: 15.5,
     fontWeight: on ? 700 : 500,
     color: on ? T.primaryDeep : T.ink,
     cursor: "pointer",

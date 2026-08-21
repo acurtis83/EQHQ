@@ -92,7 +92,7 @@ export default function ThisWeeksLesson() {
     >
       <div
         style={{
-          fontSize: 10,
+          fontSize: 11,
           letterSpacing: "0.14em",
           fontWeight: 700,
           color: ON_INK_ACCENT,
@@ -103,7 +103,7 @@ export default function ThisWeeksLesson() {
 
       <div
         style={{
-          fontSize: 20,
+          fontSize: 21.5,
           fontWeight: 800,
           color: ON_INK,
           letterSpacing: "-0.02em",
@@ -115,7 +115,7 @@ export default function ThisWeeksLesson() {
       </div>
 
       {sub && (
-        <div style={{ fontSize: 13.5, color: ON_INK_SOFT, marginTop: 5, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 14.5, color: ON_INK_SOFT, marginTop: 5, lineHeight: 1.5 }}>
           {sub}
         </div>
       )}
@@ -130,7 +130,7 @@ export default function ThisWeeksLesson() {
             alignItems: "center",
             gap: 5,
             marginTop: 12,
-            fontSize: 13.5,
+            fontSize: 14.5,
             fontWeight: 700,
             color: ON_INK_ACCENT,
             textDecoration: "none",

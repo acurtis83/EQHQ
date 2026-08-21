@@ -229,6 +229,7 @@ create table if not exists members (
   last_name text,
   age int,
   birth_date text,
+  address text,
   phone text,
   email text,
   office text,
@@ -507,4 +508,7 @@ where not exists (select 1 from calling_groups);
 -- alter table agenda_items add column if not exists link_url text;
 -- alter table agenda_items add column if not exists attachment_url text;
 -- alter table agenda_items add column if not exists attachment_name text;
+
+-- If you already ran an earlier version of this file:
+-- alter table members add column if not exists address text;
 
