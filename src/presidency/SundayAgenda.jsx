@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle } from "../components/ui";
 import {
-  fmtDate, fmtShort, toIso, scheduleBetween, noLessonReason, NO_LESSON,
+  fmtDate, fmtShort, toIso, scheduleBetween, noLessonReason, NO_LESSON, DOW, MON, isoParts,
 } from "../lib/domain/dates";
 import { buildEmailText, buildEmailHtml, textToHtml, emailSubject } from "../lib/domain/weeklyEmail";
 import { carryable, carriedRow } from "../lib/domain/carryOver";
@@ -79,7 +79,7 @@ export default function SundayAgenda({ onGo }) {
     }
     setAgenda(row);
 
-    const [its, tl, ev, su] = await Promise.all([
+    const [its, tl, ev, su, ed] = await Promise.all([
       supabase.from("agenda_items").select("*").eq("agenda_id", row.id).order("sort_order"),
       supabase.from("teaching_assignments").select("*").eq("date", date).maybeSingle(),
       // No date filter here on purpose: a repeating activity's stored date is
@@ -95,6 +95,9 @@ export default function SundayAgenda({ onGo }) {
       supabase.from("callings").select("*")
         .in("stage", ["Called", "Need to Release"])
         .order("sort_order"),
+      // Explicit dates for events that have several — temple cleaning across
+      // the autumn isn't a pattern a repeat rule can express.
+      supabase.from("event_dates").select("*").order("event_date"),
     ]);
     let loaded = its.data || [];
 
@@ -113,8 +116,23 @@ export default function SundayAgenda({ onGo }) {
     // repeating event this is its next date on or after that Sunday.
     const cutoff = date;
     const until = toIso(new Date(new Date(`${date}T00:00:00`).getTime() + HORIZON_DAYS * 86400000));
+    const allDates = ed.data || [];
     const upcoming = (ev.data || [])
-      .map((e) => ({ ...e, when: nextOccurrence(e, cutoff) }))
+      .map((e) => {
+        // An event with its own dates uses the first one still ahead of this
+        // Sunday; otherwise fall back to its repeat rule or single date.
+        const own = allDates
+          .filter((d) => d.event_id === e.id && !d.done && d.event_date >= cutoff)
+          .sort((a, b) => a.event_date.localeCompare(b.event_date));
+        const hasOwn = allDates.some((d) => d.event_id === e.id);
+        if (own.length) {
+          return { ...e, when: own[0].event_date, event_time: own[0].event_time || e.event_time,
+                   form_id: own[0].form_id || e.form_id, remaining: own.length };
+        }
+        // Every explicit date is behind us — the series is finished, so don't
+        // fall back to the row's own date and resurrect it.
+        return { ...e, when: hasOwn ? null : nextOccurrence(e, cutoff) };
+      })
       .filter((e) => e.when && e.when <= until && !e.done)
       .sort((a, b) => a.when.localeCompare(b.when));
     setEvents(upcoming);
@@ -437,26 +455,47 @@ export default function SundayAgenda({ onGo }) {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {events.map((e) => (
-                    <div key={e.id} className="eq-agenda-row">
-                      <span style={{ fontSize: 13.5, color: T.sub }}>
-                        {e.when ? fmtShort(e.when) : "Date TBC"}
-                        {e.event_time ? ` · ${e.event_time}` : ""}
-                      </span>
-                      <span style={{ minWidth: 0 }}>
-                        <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>{e.title}</span>
-                        {e.location && (
-                          <span style={{ fontSize: 13.5, color: T.sub }}> · {e.location}</span>
-                        )}
-                        {repeats(e) && (
-                          <span style={{ fontSize: 12.5, color: T.faint }}> · {describeRepeat(e)}</span>
-                        )}
+                    // A date block rather than a grey line of text: the day is
+                    // the thing being scanned for, so it gets its own column
+                    // with the weekday above the number.
+                    <div key={e.id} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      <div style={{
+                        flex: "0 0 auto", width: 52, textAlign: "center",
+                        background: T.inset, borderRadius: 9, padding: "5px 0 6px",
+                      }}>
+                        <div style={{
+                          fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em",
+                          textTransform: "uppercase", color: T.faint, lineHeight: 1.2,
+                        }}>
+                          {e.when ? DOW[isoParts(e.when).getDay()] : "TBC"}
+                        </div>
+                        <div style={{ fontSize: 19.5, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>
+                          {e.when ? isoParts(e.when).getDate() : "—"}
+                        </div>
+                        <div style={{
+                          fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
+                          color: T.faint, lineHeight: 1.2,
+                        }}>
+                          {e.when ? MON[isoParts(e.when).getMonth()] : ""}
+                        </div>
+                      </div>
+
+                      <div style={{ minWidth: 0, flex: 1, paddingTop: 2 }}>
+                        <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink, lineHeight: 1.3 }}>
+                          {e.title}
+                        </div>
+                        <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>
+                          {[e.event_time, e.location].filter(Boolean).join(" · ")}
+                          {repeats(e) && (e.event_time || e.location ? " · " : "") + describeRepeat(e)}
+                          {e.remaining > 1 && `${e.event_time || e.location ? " · " : ""}${e.remaining} dates`}
+                        </div>
                         {e.form_id && (
                           <a href={`?f=${e.form_id}`} target="_blank" rel="noreferrer"
-                            style={{ marginLeft: 8, fontSize: 13, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                            style={{ display: "inline-block", marginTop: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
                             Sign up
                           </a>
                         )}
-                      </span>
+                      </div>
                     </div>
                   ))}
                 </div>

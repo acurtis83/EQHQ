@@ -15,16 +15,21 @@ export const EVENT_KINDS = [
     key: "activity", label: "Activities", one: "Activity",
     hint: "Pickleball, basketball, the quorum BBQ.",
     publishes: true,
+    category: "activity",
   },
   {
     key: "temple", label: "Temple Trips", one: "Temple Trip",
     hint: "Sessions the quorum is going to together.",
     publishes: true,
+    category: "temple",
   },
   {
     key: "assignment", label: "Assignments", one: "Assignment",
     hint: "Temple cleaning, youth camp, the rodeo — jobs the quorum takes on.",
-    publishes: false,
+    // Posts as an announcement rather than an activity: it's a job that needs
+    // people, not something to turn up to. Private notes still stay behind.
+    publishes: true,
+    category: "announcement",
   },
 ];
 
@@ -42,6 +47,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const [rows, setRows] = useState([]);
   const [members, setMembers] = useState([]);
   const [forms, setForms] = useState([]);
+  const [dates, setDates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [ownKind, setOwnKind] = useState("activity");
@@ -53,13 +59,15 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
-    const [e, m, f] = await Promise.all([
+    const [e, m, f, ed] = await Promise.all([
       supabase.from("events").select("*").order("event_date", { ascending: true, nullsFirst: false }),
       supabase.from("members").select("id,name,active").order("name"),
       supabase.from("forms").select("id,title,kind,published").order("created_at", { ascending: false }),
+      supabase.from("event_dates").select("*").order("event_date"),
     ]);
     if (e.error) setErr(e.error.message);
     else setRows(e.data || []);
+    if (!ed.error) setDates(ed.data || []);
     if (!m.error) setMembers(m.data || []);
     if (!f.error) setForms(f.data || []);
     setLoading(false);
@@ -85,6 +93,19 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     return () => { clearTimeout(t); clearTimeout(clear); };
   }, [focus, loading, rows, onFocusHandled]);
 
+  // Explicit dates win; otherwise fall back to the row's own date and rule.
+  // Everything downstream asks this rather than reading event_date directly.
+  const datesFor = useCallback(
+    (row) => dates.filter((d) => d.event_id === row.id).sort((a, b) => a.event_date.localeCompare(b.event_date)),
+    [dates]
+  );
+  const nextFor = useCallback((row, fromIso) => {
+    const own = datesFor(row).filter((d) => !d.done && d.event_date >= fromIso);
+    if (own.length) return own[0].event_date;
+    if (datesFor(row).length) return null;   // has explicit dates, all past
+    return nextOccurrence(row, fromIso);
+  }, [datesFor]);
+
   const meta = kindMeta(kind);
 
   const { upcoming, past } = useMemo(() => {
@@ -95,21 +116,21 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     // event is upcoming as long as its series still has a date to come — the
     // first Thursday is in the past almost immediately, and it shouldn't drop
     // off the list because of that.
-    const up = mine.filter((r) => !r.event_date || !!nextOccurrence(r, today));
-    const old = mine.filter((r) => r.event_date && !nextOccurrence(r, today)).reverse();
+    const up = mine.filter((r) => (!r.event_date && !datesFor(r).length) || !!nextFor(r, today));
+    const old = mine.filter((r) => (r.event_date || datesFor(r).length) && !nextFor(r, today)).reverse();
     return { upcoming: up, past: old };
-  }, [rows, kind]);
+  }, [rows, kind, datesFor, nextFor]);
 
   const counts = useMemo(() => {
     const today = toIso(new Date());
     const out = {};
     for (const k of EVENT_KINDS) {
       out[k.key] = rows.filter(
-        (r) => r.kind === k.key && (!r.event_date || !!nextOccurrence(r, today))
+        (r) => r.kind === k.key && ((!r.event_date && !datesFor(r).length) || !!nextFor(r, today))
       ).length;
     }
     return out;
-  }, [rows]);
+  }, [rows, datesFor, nextFor]);
 
   const addNew = async () => {
     const { data, error } = await supabase
@@ -130,20 +151,48 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const publish = async (row) => {
     setBusyId(row.id);
     setErr("");
-    // A repeating activity announces its next date, not the first one it ever
-    // had — otherwise basketball would advertise a Thursday in August forever.
-    const when = nextOccurrence(row, toIso(new Date())) || row.event_date || null;
-    // A sign-up form is the more useful link when there is one.
-    const signUp = row.form_id ? `${window.location.origin}/?f=${row.form_id}` : null;
+    const today = toIso(new Date());
+    const own = datesFor(row).filter((d) => !d.done && d.event_date >= today);
+
+    // The date to advertise: the first upcoming explicit date, or the next
+    // occurrence of a repeat, or just the one date it has. A repeating
+    // activity must not announce the Thursday it started on.
+    const when = own.length ? own[0].event_date : nextOccurrence(row, today) || row.event_date || null;
+    const time = own.length ? (own[0].event_time || row.event_time) : row.event_time;
+
+    const origin = window.location.origin;
+    const formLink = (id) => `${origin}/?f=${id}`;
+
+    // Body: what's needed, the repeat in words, and one line per date with its
+    // own sign-up link. `notes` is deliberately absent — that's the
+    // presidency's own and never goes to the feed.
+    const lines = [];
+    if (row.details) lines.push(row.details.trim());
+    if (repeats(row) && !own.length) lines.push(describeRepeat(row));
+    if (own.length > 1) {
+      lines.push("");
+      for (const d of own) {
+        const bits = [fmtShort(d.event_date), d.event_time].filter(Boolean).join(" · ");
+        lines.push(d.form_id ? `${bits} — sign up: ${formLink(d.form_id)}` : bits);
+      }
+    }
+
+    // One link on the post itself: the first date's form, or the event's.
+    const single = own.length === 1 && own[0].form_id ? own[0].form_id : (own.length ? null : row.form_id);
+    const signUp = single ? formLink(single) : null;
+
     const payload = {
-      category: row.kind === "temple" ? "temple" : "activity",
+      category: kindMeta(row.kind).category || "activity",
       title: row.title,
-      body: repeats(row) ? describeRepeat(row) : null,
+      body: lines.length ? lines.join("\n") : null,
       link_url: signUp || row.link_url || null,
       link_label: signUp ? "Sign Up" : row.link_url ? "Details" : null,
       event_date: when,
-      event_time: row.event_time || null,
+      event_time: time || null,
       event_location: row.location || null,
+      // "I'm in" instead of a form. Only meaningful for activities, and only
+      // when no form is attached — two ways to respond is one too many.
+      rsvp: !!row.rsvp && !signUp,
     };
 
     if (row.post_id) {
@@ -295,6 +344,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
           row={rows.find((r) => r.id === editing.id) || editing}
           members={members}
           forms={forms}
+          eventDates={datesFor(editing)}
           onClose={() => setEditing(null)}
           onSaved={load}
           onRemove={remove}
@@ -422,7 +472,7 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
   );
 }
 
-function EditSheet({ row, members, forms, onClose, onSaved, onRemove, onAttach, setErr }) {
+function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove, onAttach, setErr }) {
   const [d, setD] = useState({
     kind: row.kind,
     title: row.title || "",
@@ -434,6 +484,8 @@ function EditSheet({ row, members, forms, onClose, onSaved, onRemove, onAttach, 
     repeat_rule: row.repeat_rule || "",
     repeat_until: row.repeat_until || "",
     form_id: row.form_id || "",
+    details: row.details || "",
+    rsvp: !!row.rsvp,
   });
   const meta = kindMeta(d.kind);
 
@@ -450,6 +502,8 @@ function EditSheet({ row, members, forms, onClose, onSaved, onRemove, onAttach, 
       // An end date without a rule would be meaningless, so it's cleared with it.
       repeat_until: d.repeat_rule ? (d.repeat_until || null) : null,
       form_id: d.form_id || null,
+      details: d.details.trim() || null,
+      rsvp: !!d.rsvp,
     }).eq("id", row.id);
     if (error) { setErr(error.message); return; }
     onSaved();
@@ -529,9 +583,28 @@ function EditSheet({ row, members, forms, onClose, onSaved, onRemove, onAttach, 
         </Select>
       </Lbl>
 
-      <Lbl label={meta.publishes ? "Notes (never posted to the feed)" : "Notes"}>
-        <Area value={d.notes} onChange={(v) => setD({ ...d, notes: v })} rows={3} />
+      <Lbl label="What's needed (shown on the feed)">
+        <Area value={d.details} onChange={(v) => setD({ ...d, details: v })} rows={2}
+          placeholder="Eight brethren, 8:00 AM start, bring work gloves." />
       </Lbl>
+
+      <Lbl label="Notes (never posted to the feed)">
+        <Area value={d.notes} onChange={(v) => setD({ ...d, notes: v })} rows={2} />
+      </Lbl>
+
+      {/* Basketball doesn't need a sign-up sheet — one tap is enough. */}
+      {d.kind === "activity" && (
+        <label style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 15, fontWeight: 600, color: T.ink }}>
+          <input type="checkbox" checked={d.rsvp}
+            onChange={(e) => setD({ ...d, rsvp: e.target.checked })} />
+          Ask for “I’m In” instead of a form
+        </label>
+      )}
+
+      {/* Several dates that aren't a pattern — temple cleaning across the
+          autumn. Each carries its own time and its own sign-up sheet. When
+          there are none, the single date above is used instead. */}
+      <EventDates eventId={row.id} rows={eventDates} forms={forms} onChanged={onSaved} setErr={setErr} />
 
       <Btn kind="ghost" onClick={() => { onAttach(row); onClose(); }}>
         <Paperclip size={14} />Link Or File
@@ -540,6 +613,132 @@ function EditSheet({ row, members, forms, onClose, onSaved, onRemove, onAttach, 
       <Btn kind="primary" size="lg" style={{ justifyContent: "center" }} onClick={save}>Save</Btn>
       <Btn kind="plain" onClick={() => onRemove(row)}><Trash2 size={14} />Remove</Btn>
     </Sheet>
+  );
+}
+
+/**
+ * The list of dates belonging to one event.
+ *
+ * Rows are added one at a time on purpose: temple cleaning runs on a handful
+ * of Saturdays that aren't a weekly pattern, so there's nothing to generate
+ * from. Each date can point at its own form, which is what makes "a different
+ * sign-up sheet per shift" work.
+ */
+function EventDates({ eventId, rows, forms, onChanged, setErr }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ event_date: "", event_time: "", form_id: "" });
+
+  const add = async () => {
+    if (!draft.event_date) return;
+    const { error } = await supabase.from("event_dates").insert({
+      event_id: eventId,
+      event_date: draft.event_date,
+      event_time: draft.event_time.trim() || null,
+      form_id: draft.form_id || null,
+      sort_order: rows.length,
+    });
+    if (error) { setErr(error.message); return; }
+    setDraft({ event_date: "", event_time: "", form_id: "" });
+    setAdding(false);
+    onChanged();
+  };
+
+  const patch = async (id, fields) => {
+    const { error } = await supabase.from("event_dates").update(fields).eq("id", id);
+    if (error) setErr(error.message); else onChanged();
+  };
+
+  const remove = async (id) => {
+    await supabase.from("event_dates").delete().eq("id", id);
+    onChanged();
+  };
+
+  return (
+    <div style={{ ...card, background: T.inset, borderColor: "transparent", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: rows.length ? 9 : 0 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+          Dates
+        </span>
+        {rows.length > 0 && <Chip color={T.sub} bg={T.panel}>{rows.length}</Chip>}
+        <Btn size="sm" kind="plain" style={{ marginLeft: "auto" }} onClick={() => setAdding((v) => !v)}>
+          <Plus size={14} />Add Date
+        </Btn>
+      </div>
+
+      {!rows.length && !adding && (
+        <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic", marginTop: 7 }}>
+          None yet — the single date above is used. Add dates here when there are
+          several that don't follow a pattern.
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rows.map((r) => (
+            <div key={r.id} data-event-date={r.id}
+              style={{ background: T.panel, borderRadius: 10, padding: "9px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  onClick={() => patch(r.id, { done: !r.done })}
+                  aria-label={r.done ? "Mark not done" : "Mark done"}
+                  style={{
+                    flex: "0 0 auto", width: 19, height: 19, borderRadius: 6,
+                    border: `1.5px solid ${r.done ? T.green : T.line}`,
+                    background: r.done ? T.green : "transparent", color: "#fff",
+                    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+                  }}
+                >
+                  {r.done && <Check size={11} />}
+                </button>
+                <span style={{
+                  fontSize: 14.5, fontWeight: 700, color: r.done ? T.faint : T.ink,
+                  textDecoration: r.done ? "line-through" : "none",
+                }}>
+                  {fmtShort(r.event_date)}
+                </span>
+                {r.event_time && <span style={{ fontSize: 13.5, color: T.sub }}>{r.event_time}</span>}
+                <Btn size="sm" kind="plain" style={{ marginLeft: "auto" }} onClick={() => remove(r.id)}>
+                  <Trash2 size={13} />
+                </Btn>
+              </div>
+              <Select value={r.form_id || ""} onChange={(v) => patch(r.id, { form_id: v || null })}>
+                <option value="">— no sign-up form —</option>
+                {forms.map((f) => (
+                  <option key={f.id} value={f.id}>{f.title}{f.published ? "" : " (draft)"}</option>
+                ))}
+              </Select>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div style={{ background: T.panel, borderRadius: 10, padding: 10, marginTop: 9, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Lbl label="Date">
+              <Input type="date" value={draft.event_date}
+                onChange={(v) => setDraft({ ...draft, event_date: v })} />
+            </Lbl>
+            <Lbl label="Time">
+              <Input value={draft.event_time} placeholder="8:00 AM"
+                onChange={(v) => setDraft({ ...draft, event_time: v })} />
+            </Lbl>
+          </div>
+          <Lbl label="Sign-up form for this date">
+            <Select value={draft.form_id} onChange={(v) => setDraft({ ...draft, form_id: v })}>
+              <option value="">— none —</option>
+              {forms.map((f) => (
+                <option key={f.id} value={f.id}>{f.title}{f.published ? "" : " (draft)"}</option>
+              ))}
+            </Select>
+          </Lbl>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn kind="primary" size="sm" onClick={add} disabled={!draft.event_date}>Add</Btn>
+            <Btn kind="plain" size="sm" onClick={() => setAdding(false)}>Cancel</Btn>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

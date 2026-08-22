@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Home, ClipboardList, HeartHandshake, LayoutGrid, Settings, LogOut, Lock, LayoutDashboard, CalendarClock,
+  Home, ClipboardList, HeartHandshake, LayoutGrid, Settings, LogOut, Lock, LayoutDashboard, CalendarClock, ChevronLeft,
 } from "lucide-react";
 import { useAuth } from "./lib/useAuth";
 import { T, Btn, Stub } from "./components/ui";
@@ -135,6 +135,15 @@ export default function App() {
                 Elders Quorum
               </div>
             </div>
+          </div>
+          {/* A shared link opens straight into the form with no app around it,
+              which left no way back. Closing drops the ?f= and lands on the
+              feed — history.back() is wrong here because the link is often
+              opened fresh from a message. */}
+          <div style={{ display: "flex", marginBottom: 10 }}>
+            <Btn kind="plain" size="sm" onClick={() => { window.location.href = window.location.pathname; }}>
+              <ChevronLeft size={15} />Back To The Feed
+            </Btn>
           </div>
           <FormFill formId={sharedForm} />
         </div>

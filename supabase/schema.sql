@@ -63,6 +63,10 @@ create table if not exists posts (
   created_by text,
   created_at timestamptz not null default now()
 );
+
+-- Set when the planning row asked for "I'm in" instead of a form. Lives on the
+-- post because the feed is what members read.
+alter table posts add column if not exists rsvp boolean not null default false;
 create index if not exists posts_created_at_idx on posts (created_at desc);
 
 create table if not exists comments (
@@ -285,10 +289,70 @@ alter table events add column if not exists repeat_until date;
 -- A sign-up form attached to this activity, temple trip or assignment.
 alter table events add column if not exists form_id uuid references forms (id) on delete set null;
 
+-- Shown to the quorum when this is posted. Kept apart from `notes`, which is
+-- the presidency's own and must never reach the feed.
+alter table events add column if not exists details text;
+-- Basketball doesn't need a form — just "I'm in".
+alter table events add column if not exists rsvp boolean not null default false;
+
 create index if not exists events_kind_date_idx on events (kind, event_date);
 create index if not exists events_post_idx on events (post_id);
 
 alter table events enable row level security;
+
+
+-- ============================================================
+-- EVENT DATES — several dates for one thing
+-- ============================================================
+-- Temple cleaning runs on a handful of Saturdays that aren't a weekly pattern,
+-- and each one needs its own sign-up. A repeat rule can't express that, so
+-- dates get their own rows.
+--
+-- An event with no rows here still uses its own event_date, so nothing that
+-- already exists has to change.
+create table if not exists event_dates (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references events (id) on delete cascade,
+  event_date date not null,
+  event_time text,
+  -- Each date can point at its own form: a different sign-up sheet per shift.
+  form_id uuid references forms (id) on delete set null,
+  notes text,
+  done boolean not null default false,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists event_dates_event_idx on event_dates (event_id, event_date);
+
+alter table event_dates enable row level security;
+
+-- ============================================================
+-- RSVPS — "I'm in", without a whole form
+-- ============================================================
+-- Attached to the feed post rather than the planning row, because the post is
+-- what members can see. Names are public on purpose — the point is knowing
+-- who's coming.
+create table if not exists rsvps (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references posts (id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists rsvps_post_idx on rsvps (post_id);
+
+alter table rsvps enable row level security;
+
+-- Members read names through this view, which deliberately leaves out `id`.
+-- Taking an RSVP back needs that id, and the only person who has it is whoever
+-- created it — their browser kept it. That's what stops one member deleting
+-- another's without needing an account.
+create or replace view public_rsvps
+with (security_invoker = off) as
+  select post_id, name, created_at from rsvps;
+
+grant select on public_rsvps to anon, authenticated;
 
 -- ============================================================
 -- PRESIDENCY-ONLY (no public read at all)
@@ -562,6 +626,18 @@ create policy "Presidency only" on calling_groups
 drop policy if exists "Presidency only" on events;
 create policy "Presidency only" on events
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on event_dates;
+create policy "Presidency only" on event_dates
+  for all using (is_presidency()) with check (is_presidency());
+
+-- Anyone may say they're coming, and take it back if they still hold the id.
+drop policy if exists "Public can rsvp" on rsvps;
+create policy "Public can rsvp" on rsvps for insert with check (true);
+drop policy if exists "Public can withdraw own rsvp" on rsvps;
+create policy "Public can withdraw own rsvp" on rsvps for delete using (true);
+drop policy if exists "Presidency can read rsvps" on rsvps;
+create policy "Presidency can read rsvps" on rsvps for select using (is_presidency());
+
 drop policy if exists "Presidency only" on callings;
 create policy "Presidency only" on callings
   for all using (is_presidency()) with check (is_presidency());

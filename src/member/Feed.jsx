@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Pin, Trash2, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import Rsvp from "./Rsvp";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui";
 import { fmtShort, timeAgo } from "../lib/domain/dates";
@@ -269,6 +270,8 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
       />
 
       <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 8, paddingTop: 9 }}>
+        {post.rsvp && <Rsvp postId={post.id} name={name} setName={setName} />}
+
         <button
           onClick={onToggle}
           style={{ background: "none", border: "none", padding: 0, fontSize: 14, fontWeight: 600, color: T.sub, cursor: "pointer" }}

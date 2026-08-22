@@ -112,6 +112,52 @@ begin
     end if;
   end if;
 
+  -- ---------- Public details, RSVP flag, multiple dates ----------
+  if to_regclass('public.events') is not null then
+    alter table events add column if not exists details text;
+    alter table events add column if not exists rsvp boolean not null default false;
+  end if;
+  if to_regclass('public.posts') is not null then
+    alter table posts add column if not exists rsvp boolean not null default false;
+  end if;
+
+  if to_regclass('public.event_dates') is null and to_regclass('public.events') is not null then
+    create table event_dates (
+      id uuid primary key default gen_random_uuid(),
+      event_id uuid not null references events (id) on delete cascade,
+      event_date date not null,
+      event_time text,
+      form_id uuid,
+      notes text,
+      done boolean not null default false,
+      sort_order int not null default 0,
+      created_at timestamptz not null default now()
+    );
+    if to_regclass('public.forms') is not null then
+      alter table event_dates
+        add constraint event_dates_form_fk foreign key (form_id)
+        references forms (id) on delete set null;
+    end if;
+    create index if not exists event_dates_event_idx on event_dates (event_id, event_date);
+    alter table event_dates enable row level security;
+    create policy "Presidency only" on event_dates
+      for all using (is_presidency()) with check (is_presidency());
+  end if;
+
+  if to_regclass('public.rsvps') is null and to_regclass('public.posts') is not null then
+    create table rsvps (
+      id uuid primary key default gen_random_uuid(),
+      post_id uuid not null references posts (id) on delete cascade,
+      name text not null,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists rsvps_post_idx on rsvps (post_id);
+    alter table rsvps enable row level security;
+    create policy "Public can rsvp" on rsvps for insert with check (true);
+    create policy "Public can withdraw own rsvp" on rsvps for delete using (true);
+    create policy "Presidency can read rsvps" on rsvps for select using (is_presidency());
+  end if;
+
   -- ---------- Post categories ----------
   -- Old set: announcement, event, lesson, reminder.
   -- New set: announcement, temple, activity — matching the home-screen tiles.
@@ -150,6 +196,21 @@ $$;
 -- This is the step that clears a "schema cache" error. Supabase reaches
 -- Postgres through PostgREST, which caches the table layout; adding a column
 -- doesn't tell it to look again. This does.
+-- Members read RSVP names through this view, which leaves out `id` on purpose:
+-- withdrawing needs the id, and only the person who created it has it.
+do $$
+begin
+  if to_regclass('public.rsvps') is not null then
+    execute $v$
+      create or replace view public_rsvps
+      with (security_invoker = off) as
+        select post_id, name, created_at from rsvps
+    $v$;
+    execute 'grant select on public_rsvps to anon, authenticated';
+  end if;
+end
+$$;
+
 notify pgrst, 'reload schema';
 
 
