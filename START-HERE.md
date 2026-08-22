@@ -119,7 +119,30 @@ iPhone: Share → Add to Home Screen.
 Once it's running, changes are: edit files → commit to GitHub → Netlify
 rebuilds itself in about a minute. You don't repeat any of the above.
 
+## Updating the database later
+
+**Run `supabase/schema.sql` again.** SQL Editor → New query → paste the whole
+file → Run. It is safe to re-run: it creates only what's missing, adds columns
+that newer features need, and never deletes a table or a row.
+
+That one file handles both kinds of gap — tables you don't have yet, and
+columns missing from tables you do have.
+
+`supabase/catch-up.sql` is a shorter alternative that only adds columns. Use it
+if you know your tables are all present; otherwise `schema.sql` is the safer
+choice and does strictly more.
+
 ## If something looks wrong
+
+- **"Could not find the 'X' column of 'Y' in the schema cache"** — your database
+  predates that column. Re-run `supabase/schema.sql`, then reload the app. Its
+  last line also refreshes Supabase's cached copy of the schema, which is the
+  part that makes the error clear immediately rather than minutes later.
+- **`relation "something" does not exist`** — your database predates that whole
+  feature. Same fix: re-run `supabase/schema.sql`, which creates it.
+- **`policy "..." already exists`** — you're on an older copy of `schema.sql`.
+  Grab the current one; it drops each policy before creating it, so it re-runs
+  cleanly.
 
 - **Blank page or "Couldn't load"** — env vars missing or misspelled in Netlify,
   or you haven't rebuilt since adding them.

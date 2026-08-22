@@ -39,6 +39,7 @@ as $$
   );
 $$;
 
+drop policy if exists "Presidency can read the presidency list" on presidency_members;
 create policy "Presidency can read the presidency list" on presidency_members
   for select using (is_presidency());
 
@@ -98,26 +99,37 @@ alter table signup_slots enable row level security;
 alter table signup_claims enable row level security;
 
 -- Anyone may read the feed and sign-ups.
+drop policy if exists "Public can read posts" on posts;
 create policy "Public can read posts" on posts for select using (true);
+drop policy if exists "Public can read comments" on comments;
 create policy "Public can read comments" on comments for select using (true);
+drop policy if exists "Public can read slots" on signup_slots;
 create policy "Public can read slots" on signup_slots for select using (true);
+drop policy if exists "Public can read claims" on signup_claims;
 create policy "Public can read claims" on signup_claims for select using (true);
 
 -- Anyone may comment or claim a sign-up slot (no account needed).
+drop policy if exists "Public can comment" on comments;
 create policy "Public can comment" on comments for insert with check (true);
+drop policy if exists "Public can claim a slot" on signup_claims;
 create policy "Public can claim a slot" on signup_claims for insert with check (true);
 -- Deliberately no public delete: members sign up without an account, so the
 -- database can't tell whose claim is whose. Removing a claim is presidency-only.
 
 -- Only presidency may publish or manage feed content.
+drop policy if exists "Presidency writes posts" on posts;
 create policy "Presidency writes posts" on posts
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency moderates comments" on comments;
 create policy "Presidency moderates comments" on comments
   for delete using (is_presidency());
+drop policy if exists "Presidency manages slots" on signup_slots;
 create policy "Presidency manages slots" on signup_slots
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency manages claims" on signup_claims;
 create policy "Presidency manages claims" on signup_claims
   for delete using (is_presidency());
+drop policy if exists "Presidency edits claims" on signup_claims;
 create policy "Presidency edits claims" on signup_claims
   for update using (is_presidency()) with check (is_presidency());
 
@@ -178,18 +190,22 @@ alter table form_responses enable row level security;
 alter table form_answers enable row level security;
 
 -- Members can see published forms only, and can submit to them.
+drop policy if exists "Public reads published forms" on forms;
 create policy "Public reads published forms" on forms
   for select using (published or is_presidency());
+drop policy if exists "Public reads questions of published forms" on form_questions;
 create policy "Public reads questions of published forms" on form_questions
   for select using (
     is_presidency() or exists (
       select 1 from forms f where f.id = form_id and f.published
     )
   );
+drop policy if exists "Public submits a response" on form_responses;
 create policy "Public submits a response" on form_responses
   for insert with check (
     exists (select 1 from forms f where f.id = form_id and f.published)
   );
+drop policy if exists "Public submits answers" on form_answers;
 create policy "Public submits answers" on form_answers
   for insert with check (
     exists (
@@ -204,17 +220,23 @@ create policy "Public submits answers" on form_answers
 -- but a survey answer must never be readable by whoever has the link, or
 -- "anonymous" would be meaningless. The view below exposes capacity answers
 -- only; everything else stays presidency-only.
+drop policy if exists "Presidency reads responses" on form_responses;
 create policy "Presidency reads responses" on form_responses
   for select using (is_presidency());
+drop policy if exists "Presidency reads answers" on form_answers;
 create policy "Presidency reads answers" on form_answers
   for select using (is_presidency());
 
+drop policy if exists "Presidency manages forms" on forms;
 create policy "Presidency manages forms" on forms
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency manages questions" on form_questions;
 create policy "Presidency manages questions" on form_questions
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency manages responses" on form_responses;
 create policy "Presidency manages responses" on form_responses
   for delete using (is_presidency());
+drop policy if exists "Presidency manages answers" on form_answers;
 create policy "Presidency manages answers" on form_answers
   for delete using (is_presidency());
 
@@ -239,6 +261,12 @@ create table if not exists members (
   notes text,
   created_at timestamptz not null default now()
 );
+
+-- Added after the first release. These run here, immediately after the table,
+-- because indexes and policies further down reference these columns — an
+-- older database would fail on those before ever reaching a migration at the
+-- end of the file. No-ops when the column already exists.
+alter table members add column if not exists address text;
 create index if not exists members_name_idx on members (last_name, name);
 
 create table if not exists teaching_assignments (
@@ -340,6 +368,14 @@ create table if not exists agenda_items (
   attachment_name text,
   sort_order int not null default 0
 );
+
+-- Added after the first release. These run here, immediately after the table,
+-- because indexes and policies further down reference these columns — an
+-- older database would fail on those before ever reaching a migration at the
+-- end of the file. No-ops when the column already exists.
+alter table agenda_items add column if not exists link_url text;
+alter table agenda_items add column if not exists attachment_url text;
+alter table agenda_items add column if not exists attachment_name text;
 create index if not exists agenda_items_agenda_idx on agenda_items (agenda_id);
 
 -- The running list that feeds presidency agendas.
@@ -381,6 +417,14 @@ create table if not exists callings (
   sort_order int not null default 0,
   updated_at timestamptz not null default now()
 );
+
+-- Added after the first release. These run here, immediately after the table,
+-- because indexes and policies further down reference these columns — an
+-- older database would fail on those before ever reaching a migration at the
+-- end of the file. No-ops when the column already exists.
+alter table callings add column if not exists stage_dates jsonb not null default '{}';
+alter table callings add column if not exists set_apart_by text;
+alter table callings add column if not exists group_id uuid references calling_groups (id) on delete set null;
 create index if not exists callings_group_idx on callings (group_id);
 create index if not exists callings_stage_idx on callings (stage);
 
@@ -399,37 +443,71 @@ alter table callings enable row level security;
 
 -- One policy shape for every presidency table: no session, no data.
 -- This is the line that makes ministering notes actually private.
+drop policy if exists "Presidency only" on talks;
 create policy "Presidency only" on talks
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on calendar_exceptions;
 create policy "Presidency only" on calendar_exceptions
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on members;
 create policy "Presidency only" on members
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on teaching_assignments;
 create policy "Presidency only" on teaching_assignments
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on ministering_districts;
 create policy "Presidency only" on ministering_districts
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on ministering_companionships;
 create policy "Presidency only" on ministering_companionships
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on ministering_interviews;
 create policy "Presidency only" on ministering_interviews
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on agendas;
 create policy "Presidency only" on agendas
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on agenda_items;
 create policy "Presidency only" on agenda_items
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on running_items;
 create policy "Presidency only" on running_items
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on calling_groups;
 create policy "Presidency only" on calling_groups
   for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on callings;
 create policy "Presidency only" on callings
   for all using (is_presidency()) with check (is_presidency());
 
 -- ---------- realtime ----------
-alter publication supabase_realtime add table posts;
-alter publication supabase_realtime add table comments;
-alter publication supabase_realtime add table signup_claims;
-alter publication supabase_realtime add table form_responses;
-alter publication supabase_realtime add table form_answers;
+-- Realtime. "alter publication ... add table" errors if the table is already a
+-- member, which is what makes a re-run fail with:
+--   relation "posts" is already member of publication "supabase_realtime"
+-- So each one is added only if it isn't there yet. The publication itself is
+-- created by Supabase; if it's missing, this block does nothing rather than
+-- failing.
+do $$
+declare
+  t text;
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    foreach t in array array['posts','comments','signup_claims','form_responses','form_answers']
+    loop
+      if to_regclass('public.' || t) is not null
+         and not exists (
+           select 1 from pg_publication_tables
+           where pubname = 'supabase_realtime'
+             and schemaname = 'public'
+             and tablename = t
+         )
+      then
+        execute format('alter publication supabase_realtime add table public.%I', t);
+      end if;
+    end loop;
+  end if;
+end
+$$;
 
 -- ============================================================
 -- PUBLIC LESSON VIEWS
@@ -457,19 +535,25 @@ grant select on public_lessons to anon, authenticated;
 grant select on public_calendar_exceptions to anon, authenticated;
 
 -- ============================================================
--- MIGRATION — only if you already ran an earlier version of this file
+-- MIGRATIONS — always run, safe on a brand new project
 -- ============================================================
--- Categories changed from (announcement, event, lesson, reminder) to
--- (announcement, temple, activity). Run this once; skip it on a fresh project.
---
--- alter table posts drop constraint if exists posts_category_check;
--- update posts set category = 'activity'     where category = 'event';
--- update posts set category = 'announcement' where category in ('reminder','lesson');
--- alter table posts add constraint posts_category_check
---   check (category in ('announcement','temple','activity'));
+-- Every table above is created with "if not exists", which means re-running
+-- this file will NOT add a column to a table that already exists. So anything
+-- added after the first release has to be an explicit alter, and those alters
+-- have to actually run — - not sit here commented out. Each statement below is
+-- idempotent: on a fresh database they're harmless no-ops.
 
--- If you already ran an earlier version, drop the old permissive delete policy:
--- drop policy if exists "Public can release own claim" on signup_claims;
+-- Categories changed from (announcement, event, lesson, reminder) to
+-- (announcement, temple, activity). The constraint is dropped first so the
+-- rewrite below can't trip over it.
+alter table posts drop constraint if exists posts_category_check;
+update posts set category = 'activity'     where category = 'event';
+update posts set category = 'announcement' where category in ('reminder','lesson');
+alter table posts add constraint posts_category_check
+  check (category in ('announcement','temple','activity'));
+
+-- An early version let anyone delete any sign-up claim, not just their own.
+drop policy if exists "Public can release own claim" on signup_claims;
 
 -- Capacity answers only — what members need to see remaining spots and who has
 -- signed up. Survey answers are never included: the join requires type='capacity'.
@@ -499,16 +583,54 @@ select * from (values
 ) as v(name, sort_order)
 where not exists (select 1 from calling_groups);
 
--- If you already ran an earlier version of this file:
--- alter table callings add column if not exists group_id uuid references calling_groups (id) on delete set null;
--- alter table callings add column if not exists stage_dates jsonb not null default '{}';
--- alter table callings add column if not exists set_apart_by text;
+-- Columns added after the first release now live directly beneath their table,
+-- because an index or policy further down may reference them. See each table.
 
--- If you already ran an earlier version of this file:
--- alter table agenda_items add column if not exists link_url text;
--- alter table agenda_items add column if not exists attachment_url text;
--- alter table agenda_items add column if not exists attachment_name text;
+-- Supabase talks to Postgres through PostgREST, which keeps its own cached copy
+-- of the schema. Adding a column without refreshing that cache is what produces
+-- "Could not find the 'address' column of 'members' in the schema cache" — the
+-- column exists, but the API layer hasn't noticed yet. This tells it to look
+-- again, so the fix takes effect immediately instead of whenever it next reloads.
+-- ---------- Carry old committee names onto the new groups ----------
+-- The first version of Callings stored the committee as free text in
+-- callings.group_name. It's now a real row in calling_groups, joined by
+-- group_id. Without this, every existing calling would come back ungrouped
+-- and the committee you'd typed would be stranded in a column nothing reads.
+--
+-- Only runs when the old column is actually present, and only fills rows that
+-- aren't linked yet, so it's safe to run repeatedly and does nothing on a new
+-- database.
+do $$
+begin
+  if to_regclass('public.callings') is not null
+     and to_regclass('public.calling_groups') is not null
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'callings'
+         and column_name = 'group_name'
+     )
+  then
+    -- a group row for every committee name in use that doesn't have one
+    insert into calling_groups (name, sort_order)
+    select distinct btrim(c.group_name), 100
+    from callings c
+    where c.group_name is not null
+      and btrim(c.group_name) <> ''
+      and not exists (
+        select 1 from calling_groups g
+        where lower(g.name) = lower(btrim(c.group_name))
+      );
 
--- If you already ran an earlier version of this file:
--- alter table members add column if not exists address text;
+    -- point each calling at its group
+    update callings c
+       set group_id = g.id
+      from calling_groups g
+     where c.group_id is null
+       and c.group_name is not null
+       and lower(g.name) = lower(btrim(c.group_name));
+  end if;
+end
+$$;
+
+notify pgrst, 'reload schema';
 

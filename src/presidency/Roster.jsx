@@ -123,7 +123,7 @@ export default function Roster() {
           <option value="all">All ages ({rows.length})</option>
           {BANDS.map((b) => <option key={b} value={b}>{b} ({counts[b] || 0})</option>)}
         </Select>
-        <Btn kind="soft" onClick={() => setPasteOpen(true)}><Upload size={15} />Paste directory</Btn>
+        <Btn kind="soft" onClick={() => setPasteOpen(true)}><Upload size={15} />Paste Directory</Btn>
         <Btn kind="primary" onClick={() => setEditing({ ...blank })}><Plus size={15} />Add</Btn>
       </div>
 
@@ -215,13 +215,22 @@ export default function Roster() {
         <Sheet title="Paste Ward Directory" onClose={() => setPasteOpen(false)}>
           <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
             Paste straight from an LDS Tools or Ward Directory export. It reads
-            name, age, birth date, phone, email, and priesthood office.
+            name, age, birthdate, address, phone, and email — in whatever order
+            they come, and however many lines each person takes.
           </div>
           <textarea
             value={pasteText}
             onChange={(e) => runPaste(e.target.value)}
             rows={7}
-            placeholder="Curtis, Andrew  M  42  3 Feb 1983  (801) 874-4085  Elder"
+            // Shown as an example, so it has to be the real export shape: one
+            // person spread over several lines, with the city/state/ZIP on its
+            // own row. A test parses this exact string to keep it honest.
+            placeholder={
+              "Adamson, Seth\t36\t5 Jul 1990\n" +
+              "2685 N Drexler Dr\n" +
+              "Lehi UT 84048\n" +
+              "(801) 376-0070\tseth.c.adamson@gmail.com"
+            }
             style={{
               background: T.inset, border: `1px solid ${T.line}`, borderRadius: 10,
               padding: 11, fontSize: 15, color: T.ink, width: "100%",
