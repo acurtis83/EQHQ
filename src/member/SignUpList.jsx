@@ -15,7 +15,13 @@ export default function SignUpList({
   const mySlots = slots.filter((s) => s.post_id === post.id)
     .sort((a, b) => a.sort_order - b.sort_order);
 
+  // A post that already points at a sign-up form doesn't need the inline slot
+  // builder as well — two competing ways to sign up for the same thing is
+  // worse than one. The link on the post is the sign-up.
+  const linksToForm = /[?&]f=/.test(post.link_url || "");
+
   if (!mySlots.length) {
+    if (linksToForm) return null;
     return isPresidency ? (
       <>
         <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 10, paddingTop: 10 }}>

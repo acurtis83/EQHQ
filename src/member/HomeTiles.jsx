@@ -1,14 +1,17 @@
-import { Bell, Star, Calendar, Users } from "lucide-react";
+import { Bell, Star, Calendar, ClipboardList } from "lucide-react";
 import { T } from "../components/ui";
-import { CATEGORIES, GROUPS_TILE } from "./categories";
+import { CATEGORIES } from "./categories";
 
-const ICONS = { bell: Bell, star: Star, calendar: Calendar, users: Users };
+const ICONS = { bell: Bell, star: Star, calendar: Calendar, clipboard: ClipboardList };
 
 // Four shortcuts under the hero. Tapping one filters the feed below rather
 // than navigating away — the point of the home screen is that everything is
 // still visible without leaving it.
-export default function HomeTiles({ counts, active, onPick, onGroups }) {
-  const tiles = [...CATEGORIES, GROUPS_TILE];
+// Four shortcuts, one per category — Groups is out for now, and Assignments
+// takes its place so every tile filters the feed rather than one of them being
+// a door to somewhere else.
+export default function HomeTiles({ counts, active, onPick }) {
+  const tiles = CATEGORIES;
 
   return (
     <div
@@ -23,14 +26,13 @@ export default function HomeTiles({ counts, active, onPick, onGroups }) {
     >
       {tiles.map((t) => {
         const Icon = ICONS[t.icon];
-        const isGroups = t.key === "groups";
-        const on = !isGroups && active === t.key;
-        const count = isGroups ? null : counts?.[t.key] || 0;
+        const on = active === t.key;
+        const count = counts?.[t.key] || 0;
 
         return (
           <button
             key={t.key}
-            onClick={() => (isGroups ? onGroups?.() : onPick(on ? "all" : t.key))}
+            onClick={() => onPick(on ? "all" : t.key)}
             aria-pressed={on}
             style={{
               background: on ? t.soft : T.panel,

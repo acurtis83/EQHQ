@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Select, Chip, Empty, SectionTitle } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
 import { fmtShort, toIso } from "../lib/domain/dates";
-import { REPEAT_RULES, repeats, nextOccurrence, describeRepeat } from "../lib/domain/repeat";
+import { REPEAT_RULES, repeats, nextOccurrence, describeRepeat, slotLabel } from "../lib/domain/repeat";
 
 // The three things the presidency plans. Assignments are deliberately last and
 // deliberately unpublishable — they're coordination, not announcements.
@@ -26,10 +26,10 @@ export const EVENT_KINDS = [
   {
     key: "assignment", label: "Assignments", one: "Assignment",
     hint: "Temple cleaning, youth camp, the rodeo — jobs the quorum takes on.",
-    // Posts as an announcement rather than an activity: it's a job that needs
-    // people, not something to turn up to. Private notes still stay behind.
+    // Carries through as an assignment, matching the tile on the feed — what
+    // you file as an assignment arrives as one. Private notes stay behind.
     publishes: true,
-    category: "announcement",
+    category: "assignment",
   },
 ];
 
@@ -161,25 +161,26 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     const time = own.length ? (own[0].event_time || row.event_time) : row.event_time;
 
     const origin = window.location.origin;
-    const formLink = (id) => `${origin}/?f=${id}`;
 
-    // Body: what's needed, the repeat in words, and one line per date with its
-    // own sign-up link. `notes` is deliberately absent — that's the
+    // One sign-up link for the whole thing. A form on the event covers every
+    // date; a per-date form only applies when there's a single date left.
+    const formId = row.form_id || (own.length === 1 ? own[0].form_id : null);
+    const signUp = formId ? `${origin}/?f=${formId}` : null;
+
+    // Body: what's needed, then the dates as a plain list. No URLs in here —
+    // a wall of links is unreadable, and the post already carries one Sign Up
+    // button that covers them all. `notes` is deliberately absent: that's the
     // presidency's own and never goes to the feed.
     const lines = [];
     if (row.details) lines.push(row.details.trim());
     if (repeats(row) && !own.length) lines.push(describeRepeat(row));
     if (own.length > 1) {
-      lines.push("");
+      if (lines.length) lines.push("");
+      lines.push("Dates:");
       for (const d of own) {
-        const bits = [fmtShort(d.event_date), d.event_time].filter(Boolean).join(" · ");
-        lines.push(d.form_id ? `${bits} — sign up: ${formLink(d.form_id)}` : bits);
+        lines.push(`  • ${[fmtShort(d.event_date), d.event_time].filter(Boolean).join(" · ")}`);
       }
     }
-
-    // One link on the post itself: the first date's form, or the event's.
-    const single = own.length === 1 && own[0].form_id ? own[0].form_id : (own.length ? null : row.form_id);
-    const signUp = single ? formLink(single) : null;
 
     const payload = {
       category: kindMeta(row.kind).category || "activity",
@@ -604,7 +605,7 @@ function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove
       {/* Several dates that aren't a pattern — temple cleaning across the
           autumn. Each carries its own time and its own sign-up sheet. When
           there are none, the single date above is used instead. */}
-      <EventDates eventId={row.id} rows={eventDates} forms={forms} onChanged={onSaved} setErr={setErr} />
+      <EventDates event={row} rows={eventDates} forms={forms} onChanged={onSaved} setErr={setErr} />
 
       <Btn kind="ghost" onClick={() => { onAttach(row); onClose(); }}>
         <Paperclip size={14} />Link Or File
@@ -624,9 +625,62 @@ function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove
  * from. Each date can point at its own form, which is what makes "a different
  * sign-up sheet per shift" work.
  */
-function EventDates({ eventId, rows, forms, onChanged, setErr }) {
+function EventDates({ event, rows, forms, onChanged, setErr }) {
+  const eventId = event.id;
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({ event_date: "", event_time: "", form_id: "" });
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [perDate, setPerDate] = useState(2);
+  const [busy, setBusy] = useState(false);
+
+  /**
+   * One sign-up sheet for the whole assignment: a single capacity question
+   * whose slots are these dates, each with the same number of spots.
+   *
+   * One form rather than one per date, because members should see every date
+   * in one place and pick the one that suits — and the presidency should see
+   * who's covering what on a single page. The form is attached to the event,
+   * so publishing gives the post one Sign Up link.
+   */
+  const buildSheet = async () => {
+    const usable = rows.filter((r) => !r.done);
+    if (!usable.length) return;
+    setBusy(true);
+    setErr("");
+
+    const spots = Math.max(1, Number(perDate) || 1);
+    const options = usable.map((r) => ({
+      label: [slotLabel(r.event_date), r.event_time].filter(Boolean).join(" "),
+      limit: spots,
+    }));
+
+    const { data: form, error } = await supabase.from("forms").insert({
+      title: `${event.title} — Sign-Up`,
+      description: event.details || null,
+      kind: "signup",
+      published: true,
+    }).select().single();
+    if (error) { setBusy(false); setErr(error.message); return; }
+
+    const q = await supabase.from("form_questions").insert({
+      form_id: form.id,
+      type: "capacity",
+      label: "Which date can you take?",
+      required: true,
+      options,
+      sort_order: 0,
+    });
+    if (q.error) { setBusy(false); setErr(q.error.message); return; }
+
+    // Attach it to the event, and clear any per-date forms so there's one
+    // obvious place to sign up rather than several competing links.
+    await supabase.from("events").update({ form_id: form.id }).eq("id", eventId);
+    await supabase.from("event_dates").update({ form_id: null }).eq("event_id", eventId);
+
+    setBusy(false);
+    setSheetOpen(false);
+    onChanged();
+  };
 
   const add = async () => {
     if (!draft.event_date) return;
@@ -660,10 +714,45 @@ function EventDates({ eventId, rows, forms, onChanged, setErr }) {
           Dates
         </span>
         {rows.length > 0 && <Chip color={T.sub} bg={T.panel}>{rows.length}</Chip>}
-        <Btn size="sm" kind="plain" style={{ marginLeft: "auto" }} onClick={() => setAdding((v) => !v)}>
-          <Plus size={14} />Add Date
-        </Btn>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {rows.some((r) => !r.done) && (
+            <Btn size="sm" kind="plain" onClick={() => setSheetOpen((v) => !v)}>
+              <ClipboardList size={14} />Sign-Up Sheet
+            </Btn>
+          )}
+          <Btn size="sm" kind="plain" onClick={() => setAdding((v) => !v)}>
+            <Plus size={14} />Add Date
+          </Btn>
+        </div>
       </div>
+
+      {sheetOpen && (
+        <div style={{ background: T.panel, borderRadius: 10, padding: 11, marginBottom: 9, display: "flex", flexDirection: "column", gap: 9 }}>
+          <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.5 }}>
+            Builds one form with a slot for each date, so members see every date
+            and pick one. Replaces any per-date forms with this single sheet.
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <Lbl label="People needed per date">
+              <Input type="number" value={perDate} onChange={setPerDate} />
+            </Lbl>
+            <Btn kind="primary" size="sm" onClick={buildSheet} disabled={busy}>
+              Create Sheet
+            </Btn>
+            <Btn kind="plain" size="sm" onClick={() => setSheetOpen(false)}>Cancel</Btn>
+          </div>
+          <div style={{ fontSize: 12.5, color: T.faint, fontFamily: "ui-monospace, monospace", lineHeight: 1.6 }}>
+            {rows.filter((r) => !r.done).slice(0, 3).map((r) => (
+              <div key={r.id}>
+                {[slotLabel(r.event_date), r.event_time].filter(Boolean).join(" ")} ×{Math.max(1, Number(perDate) || 1)}
+              </div>
+            ))}
+            {rows.filter((r) => !r.done).length > 3 && (
+              <div>…and {rows.filter((r) => !r.done).length - 3} more</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {!rows.length && !adding && (
         <div style={{ fontSize: 13, color: T.faint, fontStyle: "italic", marginTop: 7 }}>

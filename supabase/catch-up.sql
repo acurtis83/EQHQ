@@ -167,7 +167,7 @@ begin
     update posts set category = 'activity'     where category = 'event';
     update posts set category = 'announcement' where category in ('reminder','lesson');
     alter table posts add constraint posts_category_check
-      check (category in ('announcement','temple','activity'));
+      check (category in ('announcement','activity','assignment','temple'));
   end if;
 
   -- ---------- Sign-up claims ----------

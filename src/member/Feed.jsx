@@ -4,10 +4,10 @@ import { supabase } from "../lib/supabase";
 import Rsvp from "./Rsvp";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui";
-import { fmtShort, timeAgo } from "../lib/domain/dates";
+import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
 import HomeTiles from "./HomeTiles";
-import { CATEGORIES, categoryMeta } from "./categories";
+import { CATEGORIES, categoryMeta, sortForFeed } from "./categories";
 import SignUpList from "./SignUpList";
 
 
@@ -30,7 +30,6 @@ export default function Feed({ focus, onFocusHandled }) {
   const [draft, setDraft] = useState(null);
   const [openComments, setOpenComments] = useState({});
   const [name, setName] = useState(() => localStorage.getItem("eq_member_name") || "");
-  const [showGroups, setShowGroups] = useState(false);
 
   const counts = useMemo(() => {
     const out = {};
@@ -41,7 +40,9 @@ export default function Feed({ focus, onFocusHandled }) {
 
   const load = useCallback(async () => {
     const [p, c, sl, cl] = await Promise.all([
-      supabase.from("posts").select("*").order("pinned", { ascending: false }).order("created_at", { ascending: false }),
+      // Ordered in JS rather than SQL: "soonest first, but undated posts still
+      // near the top" isn't a single ORDER BY.
+      supabase.from("posts").select("*"),
       supabase.from("comments").select("*").order("created_at", { ascending: true }),
       supabase.from("signup_slots").select("*").order("sort_order", { ascending: true }),
       supabase.from("signup_claims").select("*").order("created_at", { ascending: true }),
@@ -80,10 +81,11 @@ export default function Feed({ focus, onFocusHandled }) {
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 
-  const visible = useMemo(
-    () => (filter === "all" ? posts : posts.filter((p) => p.category === filter)),
-    [posts, filter]
-  );
+  const visible = useMemo(() => {
+    const today = toIso(new Date());
+    const list = filter === "all" ? posts : posts.filter((p) => p.category === filter);
+    return sortForFeed(list, today);
+  }, [posts, filter]);
 
   const commentsFor = (id) => comments.filter((c) => c.post_id === id);
 
@@ -121,12 +123,7 @@ export default function Feed({ focus, onFocusHandled }) {
       {/* Always first, driven by the teaching schedule — no weekly posting needed. */}
       <ThisWeeksLesson />
 
-      <HomeTiles
-        counts={counts}
-        active={filter}
-        onPick={setFilter}
-        onGroups={() => setShowGroups(true)}
-      />
+      <HomeTiles counts={counts} active={filter} onPick={setFilter} />
 
       {filter !== "all" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
@@ -151,7 +148,7 @@ export default function Feed({ focus, onFocusHandled }) {
           hint={isPresidency ? "Tap the + button to post the first announcement." : "Check back soon."}
         />
       ) : (
-        <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="eq-feed-grid">
           {visible.map((post) => (
             <PostCard
               key={post.id}
@@ -187,7 +184,6 @@ export default function Feed({ focus, onFocusHandled }) {
         </button>
       )}
 
-      {showGroups && <GroupsSheet onClose={() => setShowGroups(false)} />}
 
       {draft && (
         <Composer
@@ -220,6 +216,7 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
       id={`post-${post.id}`}
       style={{
         ...card, borderLeft: `5px solid ${m.accent}`, padding: 15,
+        height: "100%", display: "flex", flexDirection: "column",
         // Ring when the Home Hub sent you straight to this post.
         boxShadow: highlight ? `0 0 0 3px ${T.primarySoft}` : card.boxShadow,
         borderColor: highlight ? T.primary : card.borderColor,

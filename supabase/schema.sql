@@ -51,7 +51,10 @@ create table if not exists posts (
   id uuid primary key default gen_random_uuid(),
   -- Mirrors the home-screen tiles. 'lesson' isn't here: this Sunday's lesson
   -- comes from the teaching schedule, not from someone remembering to post it.
-  category text not null check (category in ('announcement','temple','activity')),
+  -- Mirrors the home-screen tiles, and the planner's kinds: an assignment
+  -- posted to the feed stays an assignment rather than being folded into
+  -- announcements.
+  category text not null check (category in ('announcement','activity','assignment','temple')),
   title text not null,
   body text,
   link_url text,
@@ -712,7 +715,7 @@ alter table posts drop constraint if exists posts_category_check;
 update posts set category = 'activity'     where category = 'event';
 update posts set category = 'announcement' where category in ('reminder','lesson');
 alter table posts add constraint posts_category_check
-  check (category in ('announcement','temple','activity'));
+  check (category in ('announcement','activity','assignment','temple'));
 
 -- An early version let anyone delete any sign-up claim, not just their own.
 drop policy if exists "Public can release own claim" on signup_claims;
