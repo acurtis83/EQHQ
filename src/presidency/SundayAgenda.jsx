@@ -21,7 +21,7 @@ const readableReason = (r) =>
     ? "Fifth Sunday — bishopric directed, so no quorum lesson."
     : r || "";
 
-export default function SundayAgenda() {
+export default function SundayAgenda({ onGo }) {
   const { presidency } = useAuth();
   const [sundays, setSundays] = useState([]);
   const [date, setDate] = useState("");
@@ -29,6 +29,7 @@ export default function SundayAgenda() {
   const [items, setItems] = useState([]);
   const [lesson, setLesson] = useState(null);
   const [events, setEvents] = useState([]);
+  const [sustainings, setSustainings] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -78,7 +79,7 @@ export default function SundayAgenda() {
     setAgenda(row);
 
     const horizon = toIso(new Date(Date.now() + HORIZON_DAYS * 86400000));
-    const [its, tl, ev] = await Promise.all([
+    const [its, tl, ev, su] = await Promise.all([
       supabase.from("agenda_items").select("*").eq("agenda_id", row.id).order("sort_order"),
       supabase.from("teaching_assignments").select("*").eq("date", date).maybeSingle(),
       supabase.from("events").select("*")
@@ -86,6 +87,12 @@ export default function SundayAgenda() {
         .gte("event_date", toIso(new Date()))
         .lte("event_date", horizon)
         .order("event_date"),
+      // Anything extended but not yet sustained, and anything waiting to be
+      // released. Read straight from the tracker so nobody has to remember to
+      // copy names onto the agenda.
+      supabase.from("callings").select("*")
+        .in("stage", ["Called", "Need to Release"])
+        .order("sort_order"),
     ]);
     let loaded = its.data || [];
 
@@ -99,6 +106,7 @@ export default function SundayAgenda() {
     setItems(loaded);
     setLesson(tl.data || null);
     setEvents(ev.data || []);
+    setSustainings(su.data || []);
   }, [date]);
 
   /**
@@ -200,6 +208,9 @@ export default function SundayAgenda() {
         ? `No lesson — ${reason}`
         : `Lesson: ${lesson?.teacher_name || "unassigned"}${lesson?.talk_title ? ` — "${lesson.talk_title}"` : ""}`,
       lesson?.talk_link || "",
+      sustainings.length ? "Callings & Sustainings:" : "",
+      ...sustainings.map((c) =>
+        `  - ${c.stage === "Need to Release" ? "Release" : "Sustain"}: ${c.candidate_name || "—"}, ${c.position}`),
       announcements.length ? "Announcements:" : "",
       ...announcements.map((a) => `  - ${a.text}`),
       agenda?.closing_prayer ? `Closing prayer: ${agenda.closing_prayer}` : "",
@@ -249,62 +260,110 @@ export default function SundayAgenda() {
         {!agenda ? (
           <div style={{ color: T.sub, fontSize: 15, padding: 20, textAlign: "center" }}>Loading agenda…</div>
         ) : (
-          <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="eq-agenda">
 
-            {/* ---------- Lesson ---------- */}
-            <Card title="Lesson">
+            {/* ---------- who's doing what ----------
+                Conducting and the two prayers share one block with their
+                labels in a single column, so the controls line up instead of
+                each sitting under its own heading at a different width. */}
+            <Section>
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                <AgendaRow label="Conducting">
+                  <PersonPick members={members} value={agenda.conducting || ""}
+                    onChange={(v) => patchAgenda({ conducting: v || null })} />
+                </AgendaRow>
+                <AgendaRow label="Opening Prayer">
+                  <PersonPick members={members} value={agenda.opening_prayer || ""}
+                    onChange={(v) => patchAgenda({ opening_prayer: v || null })} />
+                </AgendaRow>
+                <AgendaRow label="Closing Prayer">
+                  <PersonPick members={members} value={agenda.closing_prayer || ""}
+                    onChange={(v) => patchAgenda({ closing_prayer: v || null })} />
+                </AgendaRow>
+              </div>
+            </Section>
+
+            {/* ---------- lesson ---------- */}
+            <Section title="Lesson" onGo={onGo ? () => onGo("plan") : null} goLabel="Teaching">
               {reason ? (
                 <Chip color={T.gold} bg={T.goldSoft}>{reason}</Chip>
               ) : lesson && (lesson.teacher_name || lesson.talk_title) ? (
-                <>
-                  {lesson.teacher_name && (
-                    <Line label="Teacher" value={lesson.teacher_name} strong />
+                <div className="eq-agenda-row">
+                  <span style={{ fontSize: 13.5, color: T.faint }}>Teacher</span>
+                  <span style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
+                    {lesson.teacher_name || "—"}
+                  </span>
+                  {(lesson.talk_title || lesson.topic) && (
+                    <>
+                      <span style={{ fontSize: 13.5, color: T.faint }}>Talk</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 15.5, color: T.ink }}>
+                          {lesson.talk_title ? `\u201C${lesson.talk_title}\u201D` : lesson.topic}
+                        </span>
+                        {lesson.speaker && (
+                          <span style={{ fontSize: 14, color: T.sub }}> — {lesson.speaker}</span>
+                        )}
+                        {lesson.talk_link && (
+                          <a href={lesson.talk_link} target="_blank" rel="noreferrer"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 9,
+                              fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                            <ExternalLink size={12} />Read
+                          </a>
+                        )}
+                      </span>
+                    </>
                   )}
-                  {lesson.talk_title && (
-                    <Line
-                      label="Talk"
-                      value={`“${lesson.talk_title}”${lesson.speaker ? ` — ${lesson.speaker}` : ""}`}
-                    />
-                  )}
-                  {lesson.topic && !lesson.talk_title && <Line label="Topic" value={lesson.topic} />}
-                  {lesson.talk_link && (
-                    <a href={lesson.talk_link} target="_blank" rel="noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, fontSize: 14, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
-                      <ExternalLink size={13} />Read the talk
-                    </a>
-                  )}
-                </>
+                </div>
               ) : (
-                <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
-                  Nothing assigned for this Sunday yet — set it on the Teaching tab.
+                <Empty2>Nothing assigned yet — set it on Plan → Teaching.</Empty2>
+              )}
+            </Section>
+
+            {/* ---------- callings and sustainings ----------
+                Pulled live from the tracker: anything at "Called" is waiting to
+                be sustained, anything at "Need to Release" is waiting to be
+                released. Nobody has to remember to copy them across. */}
+            <Section
+              title="Callings & Sustainings"
+              count={sustainings.length}
+              onGo={onGo ? () => onGo("callings") : null}
+              goLabel="Tracker"
+            >
+              {!sustainings.length ? (
+                <Empty2>Nothing to present this week.</Empty2>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {sustainings.map((c) => {
+                    const release = c.stage === "Need to Release";
+                    return (
+                      <button
+                        key={c.id}
+                        data-sustain={c.id}
+                        onClick={onGo ? () => onGo("callings", { callingId: c.id }) : undefined}
+                        style={{
+                          display: "flex", alignItems: "baseline", gap: 9, width: "100%",
+                          textAlign: "left", background: "transparent", border: "none",
+                          padding: 0, cursor: onGo ? "pointer" : "default",
+                        }}
+                      >
+                        <Chip color={release ? T.red : T.green} bg={release ? T.redSoft : T.greenSoft}>
+                          {release ? "Release" : "Sustain"}
+                        </Chip>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, minWidth: 0 }}>
+                          {c.candidate_name || "—"}
+                        </span>
+                        <span style={{ fontSize: 14, color: T.sub, minWidth: 0 }}>{c.position}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-            </Card>
+            </Section>
 
-            {/* ---------- Prayers ---------- */}
-            <Card title="Prayers">
-              <PersonPick
-                label="Opening Prayer" members={members}
-                value={agenda.opening_prayer || ""}
-                onChange={(v) => patchAgenda({ opening_prayer: v || null })}
-              />
-              <div style={{ height: 9 }} />
-              <PersonPick
-                label="Closing Prayer" members={members}
-                value={agenda.closing_prayer || ""}
-                onChange={(v) => patchAgenda({ closing_prayer: v || null })}
-              />
-              <div style={{ height: 9 }} />
-              <PersonPick
-                label="Conducting" members={members}
-                value={agenda.conducting || ""}
-                onChange={(v) => patchAgenda({ conducting: v || null })}
-              />
-            </Card>
-
-            {/* ---------- Announcements ---------- */}
-            <Card
+            {/* ---------- announcements ---------- */}
+            <Section
               title="Announcements"
+              count={announcements.length}
               right={
                 <div style={{ display: "flex", gap: 6 }}>
                   <Btn size="sm" kind="plain" onClick={() => setPullOpen(true)}>
@@ -327,11 +386,9 @@ export default function SundayAgenda() {
               )}
 
               {!announcements.length ? (
-                <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
-                  Nothing yet. Pull from a presidency meeting, or add one.
-                </div>
+                <Empty2>Nothing yet. Pull from a presidency meeting, or add one.</Empty2>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                   {announcements.map((a) => (
                     <div key={a.id} data-announcement={a.id}
                       style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -345,43 +402,45 @@ export default function SundayAgenda() {
                       {/* Carries to following Sundays until this date passes,
                           or it's removed, or the presidency item behind it is
                           finished. Blank means it keeps going until removed. */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 20 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 20, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 12.5, color: T.faint, flex: "0 0 auto" }}>Repeat until</span>
                         <Input
                           type="date" value={a.expires_on || ""}
                           onChange={(v) => patchItem(a.id, { expires_on: v || null })}
                           style={{ width: 152, flex: "0 0 auto" }}
                         />
-                        {a.source_item_id && (
-                          <Chip color={T.sub} bg={T.inset}>From a meeting</Chip>
-                        )}
+                        {a.source_item_id && <Chip color={T.sub} bg={T.inset}>From a meeting</Chip>}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </Card>
+            </Section>
 
-            {/* ---------- Upcoming ---------- */}
-            <Card title="Upcoming Events">
+            {/* ---------- what's coming ---------- */}
+            <Section title="Upcoming Events" count={events.length}
+              onGo={onGo ? () => onGo("plan") : null} goLabel="Plan">
               {!events.length ? (
-                <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
-                  Nothing in the next {HORIZON_DAYS} days.
-                </div>
+                <Empty2>Nothing in the next {HORIZON_DAYS} days.</Empty2>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {events.map((e) => (
-                    <div key={e.id}>
-                      <div style={{ fontSize: 14.5, fontWeight: 600, color: T.ink }}>{e.title}</div>
-                      <div style={{ fontSize: 13.5, color: T.sub, marginTop: 1 }}>
-                        {[e.event_date ? fmtShort(e.event_date) : "Date TBC", e.event_time, e.location]
-                          .filter(Boolean).join(" · ")}
-                      </div>
+                    <div key={e.id} className="eq-agenda-row">
+                      <span style={{ fontSize: 13.5, color: T.sub }}>
+                        {e.event_date ? fmtShort(e.event_date) : "Date TBC"}
+                        {e.event_time ? ` · ${e.event_time}` : ""}
+                      </span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>{e.title}</span>
+                        {e.location && (
+                          <span style={{ fontSize: 13.5, color: T.sub }}> · {e.location}</span>
+                        )}
+                      </span>
                     </div>
                   ))}
                 </div>
               )}
-            </Card>
+            </Section>
           </div>
         )}
       </div>
@@ -389,7 +448,7 @@ export default function SundayAgenda() {
       {printing && agenda && (
         <PrintDoc
           date={date} agenda={agenda} lesson={lesson} reason={reason}
-          announcements={announcements} events={events}
+          announcements={announcements} events={events} sustainings={sustainings}
         />
       )}
 
@@ -614,7 +673,7 @@ function PullSheet({ agendaId, startOrder, onClose, onPulled, setErr }) {
 
 /* --------------------------------- print --------------------------------- */
 
-function PrintDoc({ date, agenda, lesson, reason, announcements, events }) {
+function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustainings = [] }) {
   return (
     <div className="eq-print-only">
       {/* Same mechanism as the presidency agenda: hide everything, show this. */}
@@ -653,6 +712,19 @@ function PrintDoc({ date, agenda, lesson, reason, announcements, events }) {
           {lesson?.talk_title && <div>Talk: “{lesson.talk_title}”{lesson.speaker ? ` — ${lesson.speaker}` : ""}</div>}
           {lesson?.talk_link && <div style={{ wordBreak: "break-all" }}>{lesson.talk_link}</div>}
         </div>
+      )}
+
+      {sustainings.length > 0 && (
+        <>
+          <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>Callings &amp; Sustainings</h2>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
+            {sustainings.map((c) => (
+              <li key={c.id}>
+                {c.stage === "Need to Release" ? "Release" : "Sustain"} — {c.candidate_name || "—"}, {c.position}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {announcements.length > 0 && (
@@ -694,6 +766,52 @@ function PrintRow({ label, value }) {
 
 /* -------------------------------- pieces -------------------------------- */
 
+// One agenda section: same padding, same header weight for every one, so the
+// page reads as a running order rather than a scatter of differently sized
+// cards.
+function Section({ title, count, right, onGo, goLabel, children }) {
+  // A section with no title, count or controls skips the header row entirely
+  // rather than leaving an empty strip above its content.
+  const hasHeader = !!(title || count > 0 || right || onGo);
+  return (
+    <div style={{ ...card, padding: "13px 14px" }}>
+      {hasHeader && (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        {title && (
+          <span style={{
+            fontSize: 12.5, fontWeight: 800, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: T.sub,
+          }}>
+            {title}
+          </span>
+        )}
+        {count > 0 && <Chip color={T.sub} bg={T.inset}>{count}</Chip>}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {right}
+          {onGo && <Btn size="sm" kind="plain" onClick={onGo}>{goLabel || "Open"}</Btn>}
+        </div>
+      </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// Label in a fixed column, control in the rest — this is what lines the three
+// selects up with each other and with the rows below.
+function AgendaRow({ label, children }) {
+  return (
+    <div className="eq-agenda-row">
+      <span style={{ fontSize: 13.5, color: T.sub, fontWeight: 600 }}>{label}</span>
+      <div style={{ minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function Empty2({ children }) {
+  return <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>{children}</div>;
+}
+
 function Card({ title, right, children }) {
   return (
     <div style={{ ...card, padding: 13 }}>
@@ -716,10 +834,10 @@ function Line({ label, value, strong }) {
 }
 
 // Pick from the roster, or type a name for someone who isn't on it.
-function PersonPick({ label, members, value, onChange }) {
+function PersonPick({ members, value, onChange }) {
   const known = members.some((m) => m.name === value);
   return (
-    <Lbl label={label}>
+    <>
       <Select value={known || !value ? value : "__other"} onChange={(v) => onChange(v === "__other" ? value : v)}>
         <option value="">— nobody yet —</option>
         {members.filter((m) => m.active !== false).map((m) => (
@@ -727,7 +845,7 @@ function PersonPick({ label, members, value, onChange }) {
         ))}
         {value && !known && <option value="__other">{value}</option>}
       </Select>
-    </Lbl>
+    </>
   );
 }
 

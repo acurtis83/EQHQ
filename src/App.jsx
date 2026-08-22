@@ -192,7 +192,7 @@ export default function App() {
         {tab === "feed" && <Feed focus={focus} onFocusHandled={clearFocus} />}
         {tab === "hub" && <HomeHub onGo={go} />}
         {tab === "settings" && <SettingsTab />}
-        {tab === "meetings" && <Meetings />}
+        {tab === "meetings" && <Meetings onGo={go} />}
         {tab === "plan" && <Plan focus={focus} onFocusHandled={clearFocus} />}
         {tab === "callings" && <Callings focus={focus} onFocusHandled={clearFocus} />}
         {tab === "ministering" && (

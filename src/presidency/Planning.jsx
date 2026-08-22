@@ -29,15 +29,10 @@ export const EVENT_KINDS = [
 
 export const kindMeta = (k) => EVENT_KINDS.find((x) => x.key === k) || EVENT_KINDS[0];
 
-const blank = (kind) => ({
-  kind,
-  title: "",
-  event_date: "",
-  event_time: "",
-  location: "",
-  assigned_to: "",
-  notes: "",
-});
+// Empty strings are fine for text columns but Postgres rejects "" for a date,
+// which is what "invalid input syntax for type date" was. A new row now sends
+// only what it actually has and lets the column defaults cover the rest.
+const newRow = (kind, title, sortOrder) => ({ kind, title, sort_order: sortOrder });
 
 // `kind` and `onKindChange` let the Plan tab own which section is showing.
 // When they're passed, Planning drops its own tab row so there aren't two
@@ -112,7 +107,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const addNew = async () => {
     const { data, error } = await supabase
       .from("events")
-      .insert({ ...blank(kind), title: `New ${meta.one.toLowerCase()}`, sort_order: rows.length })
+      .insert(newRow(kind, `New ${meta.one.toLowerCase()}`, rows.length))
       .select().single();
     if (error) { setErr(error.message); return; }
     await load();

@@ -10,7 +10,7 @@ const SECTIONS = [
   { key: "sunday", label: "Sunday" },
 ];
 
-export default function Meetings({ section, onSection }) {
+export default function Meetings({ section, onSection, onGo }) {
   // Works standalone or driven from outside, so a Home Hub card can land on
   // the right section.
   const [own, setOwn] = useState("presidency");
@@ -20,7 +20,7 @@ export default function Meetings({ section, onSection }) {
   return (
     <div>
       <Segmented value={value} onChange={set} options={SECTIONS} idAttr="data-meeting" />
-      {value === "presidency" ? <Presidency /> : <SundayAgenda />}
+      {value === "presidency" ? <Presidency /> : <SundayAgenda onGo={onGo} />}
     </div>
   );
 }

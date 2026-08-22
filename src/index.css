@@ -182,6 +182,25 @@ html[data-theme="dark"] .eq-logo-dark { display: block; }
 .eq-hub-grid > * { height: 100%; }
 .eq-hub-tiles > * { height: 100%; }
 
+/* ---------- Sunday agenda ----------
+   Laid out as a running order rather than a wall of cards: one column, each
+   section carrying the same weight, so it reads top to bottom the way the
+   meeting actually goes. */
+.eq-agenda { display: flex; flex-direction: column; gap: 10px; }
+
+/* Label and control on one line with the labels sharing a column, which is
+   what makes the three selects line up instead of each sitting under its own
+   heading at a different width. */
+.eq-agenda-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+@media (max-width: 520px) {
+  .eq-agenda-row { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+}
+
 /* ---------- header fit ----------
    The ward name plus the eyebrow plus the sign-in button is a lot to fit
    across a phone. Measured against real font metrics, the eyebrow's wide
