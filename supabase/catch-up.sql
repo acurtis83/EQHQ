@@ -102,6 +102,16 @@ begin
     alter table agendas add column if not exists carried_over boolean not null default false;
   end if;
 
+  -- ---------- Repeating events and attached sign-up forms ----------
+  if to_regclass('public.events') is not null then
+    alter table events add column if not exists repeat_rule text;
+    alter table events add column if not exists repeat_until date;
+    if to_regclass('public.forms') is not null then
+      alter table events add column if not exists form_id uuid
+        references forms (id) on delete set null;
+    end if;
+  end if;
+
   -- ---------- Post categories ----------
   -- Old set: announcement, event, lesson, reminder.
   -- New set: announcement, temple, activity — matching the home-screen tiles.

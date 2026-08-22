@@ -11,6 +11,7 @@ import {
 } from "../lib/domain/dates";
 import { buildEmailText, buildEmailHtml, textToHtml, emailSubject } from "../lib/domain/weeklyEmail";
 import { carryable, carriedRow } from "../lib/domain/carryOver";
+import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 
 const HORIZON_DAYS = 45;
 const SECTION = "announcements";
@@ -78,14 +79,15 @@ export default function SundayAgenda({ onGo }) {
     }
     setAgenda(row);
 
-    const horizon = toIso(new Date(Date.now() + HORIZON_DAYS * 86400000));
     const [its, tl, ev, su] = await Promise.all([
       supabase.from("agenda_items").select("*").eq("agenda_id", row.id).order("sort_order"),
       supabase.from("teaching_assignments").select("*").eq("date", date).maybeSingle(),
+      // No date filter here on purpose: a repeating activity's stored date is
+      // the first one it ever had, which may be months back even though the
+      // series is running. The filtering happens below against the Sunday
+      // being planned.
       supabase.from("events").select("*")
-        .in("kind", ["activity", "temple"])
-        .gte("event_date", toIso(new Date()))
-        .lte("event_date", horizon)
+        .in("kind", ["activity", "temple", "assignment"])
         .order("event_date"),
       // Anything extended but not yet sustained, and anything waiting to be
       // released. Read straight from the tracker so nobody has to remember to
@@ -105,7 +107,17 @@ export default function SundayAgenda({ onGo }) {
 
     setItems(loaded);
     setLesson(tl.data || null);
-    setEvents(ev.data || []);
+
+    // What's still ahead *of this Sunday*, not of today. Planning the 6th of
+    // September shouldn't list basketball from the 27th of August. For a
+    // repeating event this is its next date on or after that Sunday.
+    const cutoff = date;
+    const until = toIso(new Date(new Date(`${date}T00:00:00`).getTime() + HORIZON_DAYS * 86400000));
+    const upcoming = (ev.data || [])
+      .map((e) => ({ ...e, when: nextOccurrence(e, cutoff) }))
+      .filter((e) => e.when && e.when <= until && !e.done)
+      .sort((a, b) => a.when.localeCompare(b.when));
+    setEvents(upcoming);
     setSustainings(su.data || []);
   }, [date]);
 
@@ -427,13 +439,22 @@ export default function SundayAgenda({ onGo }) {
                   {events.map((e) => (
                     <div key={e.id} className="eq-agenda-row">
                       <span style={{ fontSize: 13.5, color: T.sub }}>
-                        {e.event_date ? fmtShort(e.event_date) : "Date TBC"}
+                        {e.when ? fmtShort(e.when) : "Date TBC"}
                         {e.event_time ? ` · ${e.event_time}` : ""}
                       </span>
                       <span style={{ minWidth: 0 }}>
                         <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>{e.title}</span>
                         {e.location && (
                           <span style={{ fontSize: 13.5, color: T.sub }}> · {e.location}</span>
+                        )}
+                        {repeats(e) && (
+                          <span style={{ fontSize: 12.5, color: T.faint }}> · {describeRepeat(e)}</span>
+                        )}
+                        {e.form_id && (
+                          <a href={`?f=${e.form_id}`} target="_blank" rel="noreferrer"
+                            style={{ marginLeft: 8, fontSize: 13, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                            Sign up
+                          </a>
                         )}
                       </span>
                     </div>
@@ -742,7 +763,7 @@ function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustain
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
             {events.map((e) => (
               <li key={e.id}>
-                {e.title} — {[e.event_date ? fmtShort(e.event_date) : "TBC", e.event_time, e.location].filter(Boolean).join(", ")}
+                {e.title} — {[e.when ? fmtShort(e.when) : "TBC", e.event_time, e.location].filter(Boolean).join(", ")}
               </li>
             ))}
           </ul>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Plus, Trash2, Paperclip, Link2, Send, Check, MapPin, Clock, User,
+  Plus, Trash2, Paperclip, Link2, Send, Check, MapPin, Clock, User, ClipboardList, Repeat,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Select, Chip, Empty, SectionTitle } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
 import { fmtShort, toIso } from "../lib/domain/dates";
+import { REPEAT_RULES, repeats, nextOccurrence, describeRepeat } from "../lib/domain/repeat";
 
 // The three things the presidency plans. Assignments are deliberately last and
 // deliberately unpublishable — they're coordination, not announcements.
@@ -40,6 +41,7 @@ const newRow = (kind, title, sortOrder) => ({ kind, title, sort_order: sortOrder
 export default function Planning({ focus, onFocusHandled, kind: kindProp, onKindChange }) {
   const [rows, setRows] = useState([]);
   const [members, setMembers] = useState([]);
+  const [forms, setForms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [ownKind, setOwnKind] = useState("activity");
@@ -51,13 +53,15 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
-    const [e, m] = await Promise.all([
+    const [e, m, f] = await Promise.all([
       supabase.from("events").select("*").order("event_date", { ascending: true, nullsFirst: false }),
       supabase.from("members").select("id,name,active").order("name"),
+      supabase.from("forms").select("id,title,kind,published").order("created_at", { ascending: false }),
     ]);
     if (e.error) setErr(e.error.message);
     else setRows(e.data || []);
     if (!m.error) setMembers(m.data || []);
+    if (!f.error) setForms(f.data || []);
     setLoading(false);
   }, []);
 
@@ -87,9 +91,12 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     const today = toIso(new Date());
     const mine = rows.filter((r) => r.kind === kind);
     // Undated items are still being planned, so they belong at the top with
-    // the upcoming ones rather than being filed away as past.
-    const up = mine.filter((r) => !r.event_date || r.event_date >= today);
-    const old = mine.filter((r) => r.event_date && r.event_date < today).reverse();
+    // the upcoming ones rather than being filed away as past. A repeating
+    // event is upcoming as long as its series still has a date to come — the
+    // first Thursday is in the past almost immediately, and it shouldn't drop
+    // off the list because of that.
+    const up = mine.filter((r) => !r.event_date || !!nextOccurrence(r, today));
+    const old = mine.filter((r) => r.event_date && !nextOccurrence(r, today)).reverse();
     return { upcoming: up, past: old };
   }, [rows, kind]);
 
@@ -98,7 +105,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     const out = {};
     for (const k of EVENT_KINDS) {
       out[k.key] = rows.filter(
-        (r) => r.kind === k.key && (!r.event_date || r.event_date >= today)
+        (r) => r.kind === k.key && (!r.event_date || !!nextOccurrence(r, today))
       ).length;
     }
     return out;
@@ -123,13 +130,18 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const publish = async (row) => {
     setBusyId(row.id);
     setErr("");
+    // A repeating activity announces its next date, not the first one it ever
+    // had — otherwise basketball would advertise a Thursday in August forever.
+    const when = nextOccurrence(row, toIso(new Date())) || row.event_date || null;
+    // A sign-up form is the more useful link when there is one.
+    const signUp = row.form_id ? `${window.location.origin}/?f=${row.form_id}` : null;
     const payload = {
       category: row.kind === "temple" ? "temple" : "activity",
       title: row.title,
-      body: null,
-      link_url: row.link_url || null,
-      link_label: row.link_url ? "Details" : null,
-      event_date: row.event_date || null,
+      body: repeats(row) ? describeRepeat(row) : null,
+      link_url: signUp || row.link_url || null,
+      link_label: signUp ? "Sign Up" : row.link_url ? "Details" : null,
+      event_date: when,
       event_time: row.event_time || null,
       event_location: row.location || null,
     };
@@ -282,6 +294,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
         <EditSheet
           row={rows.find((r) => r.id === editing.id) || editing}
           members={members}
+          forms={forms}
           onClose={() => setEditing(null)}
           onSaved={load}
           onRemove={remove}
@@ -348,9 +361,11 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
             {row.event_date && (
               <Chip color={T.ink} bg={T.inset}>
-                {fmtShort(row.event_date)}{row.event_time ? ` · ${row.event_time}` : ""}
+                {fmtShort(nextOccurrence(row, toIso(new Date())) || row.event_date)}
+                {row.event_time ? ` · ${row.event_time}` : ""}
               </Chip>
             )}
+            {repeats(row) && <Chip color={T.primaryDeep} bg={T.primarySoft}>{describeRepeat(row)}</Chip>}
             {!row.event_date && <Chip color={T.gold} bg={T.goldSoft}>No date yet</Chip>}
             {row.location && (
               <Chip color={T.sub} bg={T.inset}><MapPin size={11} /> {row.location}</Chip>
@@ -371,12 +386,18 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
         </button>
       </div>
 
-      {(row.link_url || row.attachment_url || meta.publishes) && (
+      {(row.link_url || row.attachment_url || row.form_id || meta.publishes) && (
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
           {row.link_url && (
             <a href={row.link_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
               <Link2 size={12} />Link
+            </a>
+          )}
+          {row.form_id && (
+            <a href={`?f=${row.form_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+              <ClipboardList size={12} />Sign-Up Form
             </a>
           )}
           {row.attachment_url && (
@@ -401,7 +422,7 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
   );
 }
 
-function EditSheet({ row, members, onClose, onSaved, onRemove, onAttach, setErr }) {
+function EditSheet({ row, members, forms, onClose, onSaved, onRemove, onAttach, setErr }) {
   const [d, setD] = useState({
     kind: row.kind,
     title: row.title || "",
@@ -410,6 +431,9 @@ function EditSheet({ row, members, onClose, onSaved, onRemove, onAttach, setErr 
     location: row.location || "",
     assigned_to: row.assigned_to || "",
     notes: row.notes || "",
+    repeat_rule: row.repeat_rule || "",
+    repeat_until: row.repeat_until || "",
+    form_id: row.form_id || "",
   });
   const meta = kindMeta(d.kind);
 
@@ -422,6 +446,10 @@ function EditSheet({ row, members, onClose, onSaved, onRemove, onAttach, setErr 
       location: d.location.trim() || null,
       assigned_to: d.assigned_to.trim() || null,
       notes: d.notes.trim() || null,
+      repeat_rule: d.repeat_rule || null,
+      // An end date without a rule would be meaningless, so it's cleared with it.
+      repeat_until: d.repeat_rule ? (d.repeat_until || null) : null,
+      form_id: d.form_id || null,
     }).eq("id", row.id);
     if (error) { setErr(error.message); return; }
     onSaved();
@@ -451,6 +479,40 @@ function EditSheet({ row, members, onClose, onSaved, onRemove, onAttach, setErr 
 
       <Lbl label="Location">
         <Input value={d.location} onChange={(v) => setD({ ...d, location: v })} placeholder="Holbrook Park pavilion" />
+      </Lbl>
+
+      {/* Repeats. The weekday comes from the date above, so "every Thursday"
+          is just that date plus a rule — no second field to keep in step. */}
+      <Lbl label="Repeats">
+        <Select value={d.repeat_rule} onChange={(v) => setD({ ...d, repeat_rule: v })}>
+          {REPEAT_RULES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+        </Select>
+      </Lbl>
+      {d.repeat_rule && (
+        <>
+          <Lbl label="Repeat until (optional)">
+            <Input type="date" value={d.repeat_until}
+              onChange={(v) => setD({ ...d, repeat_until: v })} />
+          </Lbl>
+          <div style={{ fontSize: 13, color: T.sub, marginTop: -4 }}>
+            {d.event_date
+              ? `${describeRepeat({ ...d })}. Next: ${
+                  fmtShort(nextOccurrence({ ...d }, toIso(new Date())) || d.event_date)}`
+              : "Set a date above and this repeats from it."}
+          </div>
+        </>
+      )}
+
+      {/* Sign-ups. A form attached here becomes the link on the feed post. */}
+      <Lbl label="Sign-up form">
+        <Select value={d.form_id} onChange={(v) => setD({ ...d, form_id: v })}>
+          <option value="">— none —</option>
+          {forms.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.title}{f.published ? "" : " (draft)"}
+            </option>
+          ))}
+        </Select>
       </Lbl>
 
       <Lbl label="Assigned to">

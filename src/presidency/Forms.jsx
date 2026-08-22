@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Plus, Trash2, ChevronLeft, Copy, Download, ChevronUp, ChevronDown, X, Eye,
-} from "lucide-react";
+import { Plus, Trash2, ChevronLeft, Copy, Download, ChevronUp, ChevronDown, X, Eye, CalendarPlus } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { REPEAT_RULES, occurrencesBetween, slotLabel } from "../lib/domain/repeat";
+import { toIso } from "../lib/domain/dates";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle, Empty } from "../components/ui";
 import {
@@ -358,6 +358,15 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
                 placeholder={draft.type === "capacity" ? "Saturday 6:00 AM ×4\nSaturday 8:00 AM ×4" : "Truck\nTrailer\nNeither"} />
             </Lbl>
           )}
+
+          {/* Temple cleaning and the like: the same job on a run of dates,
+              each needing its own sign-ups. Rather than typing twelve
+              Saturdays by hand, generate them and let the existing capacity
+              machinery handle the spots and the "full" state. */}
+          {draft.type === "capacity" && (
+            <DateSlots onGenerate={(lines) =>
+              setOptText((prev) => (prev.trim() ? prev.replace(/\s+$/, "") + "\n" : "") + lines)} />
+          )}
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
             <input type="checkbox" checked={draft.required}
               onChange={(e) => setDraft({ ...draft, required: e.target.checked })} />
@@ -584,6 +593,84 @@ function Sheet({ title, children, onClose }) {
           <Btn kind="plain" size="sm" onClick={onClose}><X size={18} /></Btn>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+// Builds "Sat, Sep 12 8:00 AM ×4" lines from a start date and a repeat.
+function DateSlots({ onGenerate }) {
+  const [open, setOpen] = useState(false);
+  const [start, setStart] = useState("");
+  const [rule, setRule] = useState("weekly");
+  const [count, setCount] = useState(6);
+  const [time, setTime] = useState("");
+  const [spots, setSpots] = useState(4);
+
+  const preview = useMemo(() => {
+    if (!start) return [];
+    const n = Math.max(1, Math.min(30, Number(count) || 1));
+    const dates = occurrencesBetween(
+      { event_date: start, repeat_rule: rule },
+      start,
+      // far enough ahead that `count` is what actually limits it
+      toIso(new Date(new Date(`${start}T00:00:00`).getTime() + 400 * 86400000)),
+      n
+    ).slice(0, n);
+    return dates.map((d) =>
+      `${slotLabel(d)}${time.trim() ? ` ${time.trim()}` : ""} ×${Math.max(1, Number(spots) || 1)}`);
+  }, [start, rule, count, time, spots]);
+
+  if (!open) {
+    return (
+      <Btn kind="plain" size="sm" onClick={() => setOpen(true)}>
+        <CalendarPlus size={14} />Generate Dated Slots
+      </Btn>
+    );
+  }
+
+  return (
+    <div style={{ background: T.inset, borderRadius: 10, padding: 11, display: "flex", flexDirection: "column", gap: 9 }}>
+      <div style={{ fontSize: 13, color: T.sub }}>
+        One slot per date — for a job that runs on several dates, like temple cleaning.
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Lbl label="First date">
+          <Input type="date" value={start} onChange={setStart} />
+        </Lbl>
+        <Lbl label="Repeats">
+          <Select value={rule} onChange={setRule}>
+            {REPEAT_RULES.filter((r) => r.key).map((r) => (
+              <option key={r.key} value={r.key}>{r.label}</option>
+            ))}
+          </Select>
+        </Lbl>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Lbl label="How many">
+          <Input type="number" value={count} onChange={setCount} />
+        </Lbl>
+        <Lbl label="Time (optional)">
+          <Input value={time} onChange={setTime} placeholder="8:00 AM" />
+        </Lbl>
+        <Lbl label="Spots each">
+          <Input type="number" value={spots} onChange={setSpots} />
+        </Lbl>
+      </div>
+
+      {preview.length > 0 && (
+        <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.6, fontFamily: "ui-monospace, monospace" }}>
+          {preview.slice(0, 4).map((l) => <div key={l}>{l}</div>)}
+          {preview.length > 4 && <div style={{ color: T.faint }}>…and {preview.length - 4} more</div>}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <Btn kind="primary" size="sm" disabled={!preview.length}
+          onClick={() => { onGenerate(preview.join("\n")); setOpen(false); }}>
+          Add {preview.length || ""} Slots
+        </Btn>
+        <Btn kind="plain" size="sm" onClick={() => setOpen(false)}>Cancel</Btn>
       </div>
     </div>
   );

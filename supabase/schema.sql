@@ -276,6 +276,15 @@ create table if not exists events (
   created_at timestamptz not null default now()
 );
 
+-- Added after the first release. Repeating events are stored as a rule on one
+-- row, not as generated rows: "basketball every Thursday" stays a single thing
+-- to edit, and a series with no end date doesn't need a horizon to fill.
+-- The anchor is this row's own event_date; repeat_until is inclusive.
+alter table events add column if not exists repeat_rule text;
+alter table events add column if not exists repeat_until date;
+-- A sign-up form attached to this activity, temple trip or assignment.
+alter table events add column if not exists form_id uuid references forms (id) on delete set null;
+
 create index if not exists events_kind_date_idx on events (kind, event_date);
 create index if not exists events_post_idx on events (post_id);
 

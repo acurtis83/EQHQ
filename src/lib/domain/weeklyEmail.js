@@ -68,7 +68,10 @@ export function buildEmailText({
     out.push("");
     out.push("COMING UP");
     for (const e of events) {
-      const when = e.event_date ? fmtShort(e.event_date) : "Date to be confirmed";
+      // `when` is the resolved occurrence for a repeating event; a one-off
+      // just has its own date.
+      const on = e.when || e.event_date;
+      const when = on ? fmtShort(on) : "Date to be confirmed";
       const bits = [when, e.event_time, e.location].filter(Boolean).join(", ");
       out.push(`  ${dash} ${e.title}${bits ? ` ${dash} ${bits}` : ""}`);
     }
@@ -129,7 +132,8 @@ export function buildEmailHtml({
     parts.push(`<div style="${H}">Coming Up</div>`);
     parts.push(`<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6;color:#17181c">` +
       events.map((e) => {
-        const when = e.event_date ? fmtShort(e.event_date) : "Date to be confirmed";
+        const on = e.when || e.event_date;
+        const when = on ? fmtShort(on) : "Date to be confirmed";
         const bits = [when, e.event_time, e.location].filter(Boolean).map(esc).join(", ");
         return `<li><strong>${esc(e.title)}</strong>${bits ? ` ${dash} ${bits}` : ""}</li>`;
       }).join("") + `</ul>`);
