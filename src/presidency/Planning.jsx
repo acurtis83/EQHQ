@@ -431,8 +431,37 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
             )}
           </div>
 
+          {/* The description goes to the feed; the note doesn't. Showing both
+              here, clearly marked, is the only way to tell at a glance which
+              is which — the card used to show the private one only, so it
+              looked as though there was no description at all. */}
+          {row.details && (
+            <div style={{ fontSize: 14.5, color: T.ink, marginTop: 7, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>
+              {row.details}
+            </div>
+          )}
+
           {row.notes && (
-            <div style={{ fontSize: 14, color: T.sub, marginTop: 6, lineHeight: 1.5 }}>{row.notes}</div>
+            <div style={{
+              marginTop: 7, paddingLeft: 9,
+              borderLeft: `2px solid ${T.lineSoft}`,
+            }}>
+              <div style={{
+                fontSize: 11, fontWeight: 800, letterSpacing: "0.06em",
+                textTransform: "uppercase", color: T.faint, marginBottom: 2,
+              }}>
+                Presidency note
+              </div>
+              <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                {row.notes}
+              </div>
+            </div>
+          )}
+
+          {!row.details && !row.notes && (
+            <div style={{ fontSize: 13.5, color: T.faint, fontStyle: "italic", marginTop: 7 }}>
+              No description yet — tap to add one.
+            </div>
           )}
         </button>
       </div>
@@ -584,13 +613,28 @@ function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove
         </Select>
       </Lbl>
 
-      <Lbl label="What's needed (shown on the feed)">
-        <Area value={d.details} onChange={(v) => setD({ ...d, details: v })} rows={2}
-          placeholder="Eight brethren, 8:00 AM start, bring work gloves." />
+      {/* Two boxes on purpose, and the labels have to make the difference
+          obvious: one is the announcement, the other never leaves this screen. */}
+      <Lbl label="Description">
+        <Area value={d.details} onChange={(v) => setD({ ...d, details: v })} rows={3}
+          placeholder={
+            d.kind === "assignment"
+              ? "Two brethren per date, 8:00 AM start. Bring work gloves."
+              : d.kind === "temple"
+                ? "Meeting at the church at 6:15 to carpool. Bring a recommend."
+                : "Bring your family. Burgers and dogs are covered."
+          } />
+        <span style={{ fontSize: 12.5, color: T.faint }}>
+          Goes on the feed post when you publish this.
+        </span>
       </Lbl>
 
-      <Lbl label="Notes (never posted to the feed)">
-        <Area value={d.notes} onChange={(v) => setD({ ...d, notes: v })} rows={2} />
+      <Lbl label="Presidency note">
+        <Area value={d.notes} onChange={(v) => setD({ ...d, notes: v })} rows={2}
+          placeholder="Anything the quorum shouldn't see." />
+        <span style={{ fontSize: 12.5, color: T.faint }}>
+          Stays here. Never posted to the feed.
+        </span>
       </Lbl>
 
       {/* Basketball doesn't need a sign-up sheet — one tap is enough. */}

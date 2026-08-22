@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake, ChevronRight, ClipboardCheck } from "lucide-react";
+import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake, ChevronRight, ClipboardCheck, Bell } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Chip, Btn, SectionTitle } from "../components/ui";
@@ -7,6 +7,7 @@ import { BANDS, bandCounts } from "../lib/domain/roster";
 import { CALLING_STAGES } from "../lib/domain/constants";
 import { fmtDate, fmtShort, toIso, scheduleBetween, NO_LESSON } from "../lib/domain/dates";
 import { overdueDays } from "./RunningList";
+import UpcomingList from "../components/UpcomingList";
 
 const HORIZON_DAYS = 45;
 
@@ -30,7 +31,7 @@ export default function HomeHub({ onGo }) {
     const today = toIso(new Date());
     const horizon = toIso(new Date(Date.now() + HORIZON_DAYS * 86400000));
 
-    const [events, members, callings, groups, running, agendaItems, teaching, exceptions, pres] =
+    const [events, members, announcements, callings, groups, running, agendaItems, teaching, exceptions, pres] =
       await Promise.all([
         // Planned items, not feed posts — so the hub shows things that haven't
         // been announced yet, which is exactly what the presidency needs to
@@ -39,6 +40,10 @@ export default function HomeHub({ onGo }) {
           .or(`event_date.is.null,and(event_date.gte.${today},event_date.lte.${horizon})`)
           .order("event_date", { ascending: true, nullsFirst: false }),
         supabase.from("members").select("id,name,age,active"),
+        // Announcements live on posts, not the planning table — they're
+        // written straight to the feed.
+        supabase.from("posts").select("*").eq("category", "announcement")
+          .order("created_at", { ascending: false }),
         supabase.from("callings").select("*"),
         supabase.from("calling_groups").select("*").order("sort_order"),
         supabase.from("running_items").select("*").eq("done", false),
@@ -54,6 +59,7 @@ export default function HomeHub({ onGo }) {
     setD({
       events: events.data || [],
       members: (members.data || []).filter((m) => m.active !== false),
+      announcements: announcements.data || [],
       callings: callings.data || [],
       groups: groups.data || [],
       running: running.data || [],
@@ -111,6 +117,16 @@ export default function HomeHub({ onGo }) {
   const activities = d.events.filter((e) => e.kind === "activity");
   const temple = d.events.filter((e) => e.kind === "temple");
   const assignments = d.events.filter((e) => e.kind === "assignment" && !e.done);
+  // An announcement counts as current until its date passes; undated ones
+  // stand until they're deleted.
+  // Activities and temple trips together, soonest first — one list, because
+  // "what's coming up" isn't two questions.
+  const upcoming = [...activities, ...temple]
+    .filter((e) => e.event_date)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date));
+  const notices = d.announcements.filter(
+    (p) => !p.event_date || p.event_date >= toIso(new Date())
+  );
   const openCallings = d.callings.filter((c) => !["Set Apart", "Released"].includes(c.stage));
 
   return (
@@ -194,25 +210,33 @@ export default function HomeHub({ onGo }) {
             is a lot of screen for an absence. As tiles they read at a glance
             and stay the same height whether empty or full. */}
         <div className="eq-hub-wide eq-hub-tiles">
+          <CountTile icon={Bell} label="Announcements" n={notices.length}
+            onGo={() => onGo?.("feed", { postId: notices[0]?.id })} />
           <CountTile icon={CalendarDays} label="Activities" n={activities.length}
             flag={activities.filter((e) => !e.post_id).length}
             onGo={() => onGo?.("plan", { eventId: activities[0]?.id })} />
+          <CountTile icon={ClipboardCheck} label="Assignments" n={assignments.length}
+            onGo={() => onGo?.("plan", { eventId: assignments[0]?.id })} />
           <CountTile icon={Star} label="Temple Trips" n={temple.length}
             flag={temple.filter((e) => !e.post_id).length}
             onGo={() => onGo?.("plan", { eventId: temple[0]?.id })} />
-          <CountTile icon={ClipboardCheck} label="Assignments" n={assignments.length}
-            onGo={() => onGo?.("plan", { eventId: assignments[0]?.id })} />
         </div>
 
         {/* ---------- what's actually on the calendar ---------- */}
-        <Panel icon={CalendarDays} title="Upcoming" count={activities.length + temple.length}
+        {/* Same list component as the Sunday agenda and the feed — it used to
+            be its own thing here and looked unrelated. */}
+        <Panel icon={CalendarDays} title="Upcoming Events" count={upcoming.length}
           onGo={() => onGo?.("plan")}>
-          {activities.length + temple.length ? (
-            [...activities, ...temple].slice(0, 5).map((e) => (
-              <Row key={e.id} label={e.title} meta={eventMeta(e)} flag={postFlag(e)}
-                onClick={() => onGo?.("plan", { eventId: e.id })} />
-            ))
-          ) : <Muted>Nothing in the next {HORIZON_DAYS} days.</Muted>}
+          <UpcomingList
+            empty={`Nothing in the next ${HORIZON_DAYS} days.`}
+            items={upcoming.slice(0, 5).map((e) => ({
+              id: e.id,
+              when: e.event_date,
+              title: e.title,
+              meta: [e.event_time, e.location, e.assigned_to].filter(Boolean).join(" · "),
+              onClick: () => onGo?.("plan", { eventId: e.id }),
+            }))}
+          />
         </Panel>
 
         <Panel icon={ClipboardCheck} title="Assignments" count={assignments.length}

@@ -11,6 +11,7 @@ import {
 } from "../lib/domain/dates";
 import { buildEmailText, buildEmailHtml, textToHtml, emailSubject } from "../lib/domain/weeklyEmail";
 import { carryable, carriedRow } from "../lib/domain/carryOver";
+import UpcomingList from "../components/UpcomingList";
 import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 
 const HORIZON_DAYS = 45;
@@ -450,56 +451,23 @@ export default function SundayAgenda({ onGo }) {
             {/* ---------- what's coming ---------- */}
             <Section title="Upcoming Events" count={events.length}
               onGo={onGo ? () => onGo("plan") : null} goLabel="Plan">
-              {!events.length ? (
-                <Empty2>Nothing in the next {HORIZON_DAYS} days.</Empty2>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {events.map((e) => (
-                    // A date block rather than a grey line of text: the day is
-                    // the thing being scanned for, so it gets its own column
-                    // with the weekday above the number.
-                    <div key={e.id} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                      <div style={{
-                        flex: "0 0 auto", width: 52, textAlign: "center",
-                        background: T.inset, borderRadius: 9, padding: "5px 0 6px",
-                      }}>
-                        <div style={{
-                          fontSize: 10.5, fontWeight: 800, letterSpacing: "0.06em",
-                          textTransform: "uppercase", color: T.faint, lineHeight: 1.2,
-                        }}>
-                          {e.when ? DOW[isoParts(e.when).getDay()] : "TBC"}
-                        </div>
-                        <div style={{ fontSize: 19.5, fontWeight: 800, color: T.ink, lineHeight: 1.15 }}>
-                          {e.when ? isoParts(e.when).getDate() : "—"}
-                        </div>
-                        <div style={{
-                          fontSize: 10.5, fontWeight: 700, textTransform: "uppercase",
-                          color: T.faint, lineHeight: 1.2,
-                        }}>
-                          {e.when ? MON[isoParts(e.when).getMonth()] : ""}
-                        </div>
-                      </div>
-
-                      <div style={{ minWidth: 0, flex: 1, paddingTop: 2 }}>
-                        <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink, lineHeight: 1.3 }}>
-                          {e.title}
-                        </div>
-                        <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>
-                          {[e.event_time, e.location].filter(Boolean).join(" · ")}
-                          {repeats(e) && (e.event_time || e.location ? " · " : "") + describeRepeat(e)}
-                          {e.remaining > 1 && `${e.event_time || e.location ? " · " : ""}${e.remaining} dates`}
-                        </div>
-                        {e.form_id && (
-                          <a href={`?f=${e.form_id}`} target="_blank" rel="noreferrer"
-                            style={{ display: "inline-block", marginTop: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
-                            Sign up
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Shared with the Presidency Home and the feed, so the same
+                  information looks the same wherever it appears. */}
+              <UpcomingList
+                empty={`Nothing in the next ${HORIZON_DAYS} days.`}
+                items={events.map((e) => ({
+                  id: e.id,
+                  when: e.when,
+                  title: e.title,
+                  meta: [
+                    e.event_time,
+                    e.location,
+                    repeats(e) ? describeRepeat(e) : null,
+                    e.remaining > 1 ? `${e.remaining} dates` : null,
+                  ].filter(Boolean).join(" · "),
+                  signUpHref: e.form_id ? `?f=${e.form_id}` : null,
+                }))}
+              />
             </Section>
           </div>
         )}

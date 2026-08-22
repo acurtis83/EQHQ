@@ -20,8 +20,8 @@ export default function HomeTiles({ counts, active, onPick }) {
         display: "grid",
         gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
         gap: 8,
-        marginBottom: 16,
         alignItems: "stretch",
+        height: "100%",
       }}
     >
       {tiles.map((t) => {

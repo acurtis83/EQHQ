@@ -99,9 +99,24 @@ input[type="date"], input[type="time"] {
 /* The callings board scrolls sideways on purpose — don't collapse it. */
 .eq-callings-board { grid-template-columns: none !important; }
 
-/* The home tiles are meant to stay four across on phones — the mobile rule
-   above would otherwise stack them vertically. */
-.eq-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+/* The home tiles are a 2x2 block, not a row of four: "Announcements" and
+   "Temple Trips" are long labels, and two per line gives them room. The
+   !important is fighting the mobile single-column rule above. */
+.eq-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+/* Tiles on the left, what's coming up on the right. Stacked on a phone, side
+   by side once there's room, and stretched so the two blocks end level. */
+.eq-feed-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+@media (min-width: 760px) {
+  .eq-feed-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+}
+.eq-feed-top > * { min-width: 0; }
 
 /* ---------- widths ----------
    The phone layout is the baseline and deliberately untouched. Above tablet
@@ -170,12 +185,15 @@ html[data-theme="dark"] .eq-logo-dark { display: block; }
 /* Full width inside the grid — the hero and the wide rows. */
 .eq-hub-wide { grid-column: 1 / -1; }
 
-/* The three count tiles stay side by side even on a phone: three short numbers
-   fit across, and stacking them would push everything else off the screen. */
+/* Four count tiles: 2x2 on a phone so the longer labels have room, four across
+   once there's width for them. */
 .eq-hub-tiles {
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   gap: 10px;
+}
+@media (min-width: 620px) {
+  .eq-hub-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 }
 
 /* Cards fill their cell rather than hugging their content. */
