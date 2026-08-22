@@ -274,6 +274,21 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>
         )}
 
+        {/* Offered on the row itself. It used to live only inside edit mode,
+            which made it look like the Planner didn't support attachments. */}
+        {!it.link_url && !it.attachment_url && onAttach && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAttach(it); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
+              background: "none", border: "none", padding: 0, cursor: "pointer",
+              fontSize: 13, fontWeight: 700, color: T.faint,
+            }}
+          >
+            <Paperclip size={12} />Add Link Or File
+          </button>
+        )}
+
         {/* Links and files open straight from the row. stopPropagation keeps a
             tap on the link from also opening the row for editing. */}
         {(it.link_url || it.attachment_url) && (
@@ -289,6 +304,14 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
                 style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
                 <Paperclip size={12} />{it.attachment_name || "Attachment"}
               </a>
+            )}
+            {onAttach && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onAttach(it); }}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, fontWeight: 700, color: T.faint }}
+              >
+                Edit
+              </button>
             )}
           </div>
         )}

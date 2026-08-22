@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake, ChevronRight } from "lucide-react";
+import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake, ChevronRight, ClipboardCheck } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Chip, Btn, SectionTitle } from "../components/ui";
@@ -9,6 +9,15 @@ import { fmtDate, fmtShort, toIso, scheduleBetween, NO_LESSON } from "../lib/dom
 import { overdueDays } from "./RunningList";
 
 const HORIZON_DAYS = 45;
+
+// Date · time · where · who — whichever of those exist.
+const eventMeta = (e) =>
+  [e.event_date ? fmtShort(e.event_date) : "No date yet", e.event_time, e.location, e.assigned_to]
+    .filter(Boolean).join(" · ");
+
+// Activities and temple trips can be announced; showing which ones haven't been
+// is the point of planning them here rather than posting straight to the feed.
+const postFlag = (e) => (e.post_id ? null : "Not posted");
 
 export default function HomeHub({ onGo }) {
   const { presidency } = useAuth();
@@ -21,9 +30,14 @@ export default function HomeHub({ onGo }) {
     const today = toIso(new Date());
     const horizon = toIso(new Date(Date.now() + HORIZON_DAYS * 86400000));
 
-    const [posts, members, callings, groups, running, agendaItems, teaching, exceptions, pres] =
+    const [events, members, callings, groups, running, agendaItems, teaching, exceptions, pres] =
       await Promise.all([
-        supabase.from("posts").select("*").gte("event_date", today).lte("event_date", horizon).order("event_date"),
+        // Planned items, not feed posts — so the hub shows things that haven't
+        // been announced yet, which is exactly what the presidency needs to
+        // see. Undated rows count as upcoming: they're still being planned.
+        supabase.from("events").select("*")
+          .or(`event_date.is.null,and(event_date.gte.${today},event_date.lte.${horizon})`)
+          .order("event_date", { ascending: true, nullsFirst: false }),
         supabase.from("members").select("id,name,age,active"),
         supabase.from("callings").select("*"),
         supabase.from("calling_groups").select("*").order("sort_order"),
@@ -34,11 +48,11 @@ export default function HomeHub({ onGo }) {
         supabase.from("presidency_members").select("name,role"),
       ]);
 
-    const firstError = [posts, members, callings, running].find((r) => r.error);
+    const firstError = [events, members, callings, running].find((r) => r.error);
     if (firstError) setErr(firstError.error.message);
 
     setD({
-      posts: posts.data || [],
+      events: events.data || [],
       members: (members.data || []).filter((m) => m.active !== false),
       callings: callings.data || [],
       groups: groups.data || [],
@@ -94,8 +108,9 @@ export default function HomeHub({ onGo }) {
     return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading…</div>;
   }
 
-  const events = d.posts.filter((p) => p.category === "activity");
-  const temple = d.posts.filter((p) => p.category === "temple");
+  const activities = d.events.filter((e) => e.kind === "activity");
+  const temple = d.events.filter((e) => e.kind === "temple");
+  const assignments = d.events.filter((e) => e.kind === "assignment" && !e.done);
   const openCallings = d.callings.filter((c) => !["Set Apart", "Released"].includes(c.stage));
 
   return (
@@ -110,7 +125,7 @@ export default function HomeHub({ onGo }) {
 
       <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-        <Panel icon={GraduationCap} title="This Sunday" onGo={() => onGo?.("teaching")}>
+        <Panel icon={GraduationCap} title="This Sunday" onGo={() => onGo?.("plan")}>
           {!nextSunday ? (
             <Muted>Nothing scheduled.</Muted>
           ) : (
@@ -131,20 +146,25 @@ export default function HomeHub({ onGo }) {
           )}
         </Panel>
 
-        <Panel icon={CalendarDays} title="Upcoming Activities" count={events.length} onGo={() => onGo?.("feed")}>
-          {events.length ? events.slice(0, 4).map((e) => (
-            <Row key={e.id} label={e.title}
-              meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")}
-              onClick={() => onGo?.("feed", { postId: e.id })} />
+        <Panel icon={CalendarDays} title="Upcoming Activities" count={activities.length} onGo={() => onGo?.("plan")}>
+          {activities.length ? activities.slice(0, 4).map((e) => (
+            <Row key={e.id} label={e.title} meta={eventMeta(e)} flag={postFlag(e)}
+              onClick={() => onGo?.("plan", { eventId: e.id })} />
           )) : <Muted>Nothing in the next {HORIZON_DAYS} days.</Muted>}
         </Panel>
 
-        <Panel icon={Star} title="Temple Trips" count={temple.length} onGo={() => onGo?.("feed")}>
+        <Panel icon={Star} title="Temple Trips" count={temple.length} onGo={() => onGo?.("plan")}>
           {temple.length ? temple.slice(0, 4).map((e) => (
-            <Row key={e.id} label={e.title}
-              meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")}
-              onClick={() => onGo?.("feed", { postId: e.id })} />
+            <Row key={e.id} label={e.title} meta={eventMeta(e)} flag={postFlag(e)}
+              onClick={() => onGo?.("plan", { eventId: e.id })} />
           )) : <Muted>None scheduled.</Muted>}
+        </Panel>
+
+        <Panel icon={ClipboardCheck} title="Assignments" count={assignments.length} onGo={() => onGo?.("plan")}>
+          {assignments.length ? assignments.slice(0, 4).map((e) => (
+            <Row key={e.id} label={e.title} meta={eventMeta(e)}
+              onClick={() => onGo?.("plan", { eventId: e.id })} />
+          )) : <Muted>Nothing outstanding.</Muted>}
         </Panel>
 
         {/* Each stage expands in place to show which callings it's counting,
@@ -212,7 +232,8 @@ export default function HomeHub({ onGo }) {
           ) : <Muted>Nothing in progress.</Muted>}
         </Panel>
 
-        <Panel icon={Users} title="Quorum Stats" onGo={() => onGo?.("roster")}>
+        {/* The roster lives inside Settings now, so that's where this goes. */}
+        <Panel icon={Users} title="Quorum Stats" onGo={() => onGo?.("settings")}>
           <div style={{ fontSize: 30, fontWeight: 800, color: T.ink, lineHeight: 1.1 }}>
             {stats.total}
             <span style={{ fontSize: 14, fontWeight: 700, color: T.sub, marginLeft: 7 }}>members</span>
@@ -317,14 +338,24 @@ function Panel({ icon: Icon, title, count, onGo, children }) {
 // A line in a panel. With onClick it becomes a button that jumps to the record
 // it's summarising; without one it stays a plain div, so a date heading doesn't
 // look tappable when it isn't.
-function Row({ label, meta, strong, onClick }) {
+function Row({ label, meta, strong, onClick, flag }) {
   const body = (
     <>
-      <div style={{
-        fontSize: 15, fontWeight: strong ? 800 : 600, lineHeight: 1.35,
-        color: onClick ? T.primaryDeep : T.ink,
-      }}>
-        {label}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 7 }}>
+        <span style={{
+          fontSize: 15, fontWeight: strong ? 800 : 600, lineHeight: 1.35,
+          color: onClick ? T.primaryDeep : T.ink, minWidth: 0,
+        }}>
+          {label}
+        </span>
+        {flag && (
+          <span style={{
+            flex: "0 0 auto", fontSize: 11, fontWeight: 800, color: T.gold,
+            background: T.goldSoft, padding: "1px 6px", borderRadius: 999,
+          }}>
+            {flag}
+          </span>
+        )}
       </div>
       {meta && <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>{meta}</div>}
     </>

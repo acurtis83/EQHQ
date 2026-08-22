@@ -100,6 +100,9 @@ export function Chip({ children, color = T.primaryDeep, bg = T.primarySoft }) {
     <span style={{
       background: bg, color, fontSize: 13, fontWeight: 700, padding: "3px 9px",
       borderRadius: 999, whiteSpace: "nowrap",
+      // inline-flex so a chip holding an icon plus text lines up on the
+      // baseline instead of the icon sitting low.
+      display: "inline-flex", alignItems: "center", gap: 4,
     }}>
       {children}
     </span>

@@ -55,6 +55,53 @@ begin
     alter table agenda_items add column if not exists attachment_name text;
   end if;
 
+  -- ---------- Planning: activities, temple trips, assignments ----------
+  -- New table, so this only matters on a database that predates it. Created
+  -- here rather than left to schema.sql so catch-up.sql alone is enough.
+  if to_regclass('public.events') is null and to_regclass('public.posts') is not null then
+    create table events (
+      id uuid primary key default gen_random_uuid(),
+      kind text not null check (kind in ('activity','temple','assignment')),
+      title text not null,
+      event_date date,
+      event_time text,
+      location text,
+      assigned_to text,
+      notes text,
+      link_url text,
+      attachment_url text,
+      attachment_name text,
+      post_id uuid references posts (id) on delete set null,
+      done boolean not null default false,
+      sort_order int not null default 0,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists events_kind_date_idx on events (kind, event_date);
+    create index if not exists events_post_idx on events (post_id);
+    alter table events enable row level security;
+    -- Presidency-only: assignments and notes must not be publicly readable.
+    create policy "Presidency only" on events
+      for all using (is_presidency()) with check (is_presidency());
+  end if;
+
+  -- ---------- Sunday agendas: prayers, conducting, weekly email ----------
+  if to_regclass('public.agendas') is not null then
+    alter table agendas add column if not exists opening_prayer text;
+    alter table agendas add column if not exists closing_prayer text;
+    alter table agendas add column if not exists conducting text;
+    alter table agendas add column if not exists email_body text;
+  end if;
+
+  -- ---------- Announcement carry-over ----------
+  if to_regclass('public.agenda_items') is not null then
+    alter table agenda_items add column if not exists source_item_id uuid;
+    alter table agenda_items add column if not exists expires_on date;
+    alter table agenda_items add column if not exists carry_over boolean not null default true;
+  end if;
+  if to_regclass('public.agendas') is not null then
+    alter table agendas add column if not exists carried_over boolean not null default false;
+  end if;
+
   -- ---------- Post categories ----------
   -- Old set: announcement, event, lesson, reminder.
   -- New set: announcement, temple, activity — matching the home-screen tiles.

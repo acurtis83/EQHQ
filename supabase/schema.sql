@@ -240,6 +240,47 @@ drop policy if exists "Presidency manages answers" on form_answers;
 create policy "Presidency manages answers" on form_answers
   for delete using (is_presidency());
 
+
+-- ============================================================
+-- PLANNING — activities, temple trips, assignments
+-- ============================================================
+-- The presidency plans here. A row is private until it's posted to the feed,
+-- and even then the private fields (assigned_to, notes) never leave this table
+-- — publishing copies only the public-facing fields into `posts`.
+--
+-- This is why planning isn't just extra columns on `posts`: posts are readable
+-- by anyone with the site link, so an assignment or a note about a brother
+-- would be public. Keeping them here, behind presidency-only RLS, is the
+-- difference between private and "private-looking".
+create table if not exists events (
+  id uuid primary key default gen_random_uuid(),
+  -- 'assignment' never publishes: service and volunteer jobs are presidency
+  -- coordination, not feed announcements.
+  kind text not null check (kind in ('activity','temple','assignment')),
+  title text not null,
+  event_date date,
+  event_time text,
+  location text,
+  assigned_to text,
+  notes text,
+  link_url text,
+  attachment_url text,
+  attachment_name text,
+  -- The feed post this was published as, if any. Kept so a later edit updates
+  -- that same announcement instead of posting a second one. Nulled by the
+  -- database if the post is deleted from the feed, which puts this row back
+  -- into "not posted" rather than pointing at something gone.
+  post_id uuid references posts (id) on delete set null,
+  done boolean not null default false,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists events_kind_date_idx on events (kind, event_date);
+create index if not exists events_post_idx on events (post_id);
+
+alter table events enable row level security;
+
 -- ============================================================
 -- PRESIDENCY-ONLY (no public read at all)
 -- ============================================================
@@ -350,6 +391,20 @@ create table if not exists agendas (
   notes text,
   created_at timestamptz not null default now()
 );
+-- Set once the previous Sunday's announcements have been rolled forward, so
+-- deleting one doesn't bring it back on the next visit.
+alter table agendas add column if not exists carried_over boolean not null default false;
+
+-- Added after the first release. These run here, immediately after the table,
+-- because policies further down reference it. No-ops when already present.
+-- Sunday agendas carry who prays and who conducts; presidency agendas leave
+-- them null.
+alter table agendas add column if not exists opening_prayer text;
+alter table agendas add column if not exists closing_prayer text;
+alter table agendas add column if not exists conducting text;
+-- The weekly email, once it's been generated and possibly hand-edited. Saved
+-- so reopening Monday's agenda doesn't throw away Karl's wording.
+alter table agendas add column if not exists email_body text;
 create index if not exists agendas_kind_date_idx on agendas (kind, meeting_date desc);
 
 create table if not exists agenda_items (
@@ -368,6 +423,18 @@ create table if not exists agenda_items (
   attachment_name text,
   sort_order int not null default 0
 );
+
+-- Added after the first release. Sunday announcements roll forward week to
+-- week, so each one remembers where it came from and when to stop.
+--
+-- source_item_id is deliberately a plain uuid, not a foreign key: if the
+-- presidency item it came from is deleted, we need to still SEE the id in
+-- order to notice it's gone and stop carrying the announcement. A foreign key
+-- with "on delete set null" would erase exactly the evidence we need.
+alter table agenda_items add column if not exists source_item_id uuid;
+-- Optional last date this is worth repeating. Null means "until removed".
+alter table agenda_items add column if not exists expires_on date;
+alter table agenda_items add column if not exists carry_over boolean not null default true;
 
 -- Added after the first release. These run here, immediately after the table,
 -- because indexes and policies further down reference these columns — an
@@ -482,6 +549,9 @@ create policy "Presidency only" on running_items
   for all using (is_presidency()) with check (is_presidency());
 drop policy if exists "Presidency only" on calling_groups;
 create policy "Presidency only" on calling_groups
+  for all using (is_presidency()) with check (is_presidency());
+drop policy if exists "Presidency only" on events;
+create policy "Presidency only" on events
   for all using (is_presidency()) with check (is_presidency());
 drop policy if exists "Presidency only" on callings;
 create policy "Presidency only" on callings

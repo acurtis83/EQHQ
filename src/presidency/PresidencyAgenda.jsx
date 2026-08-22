@@ -541,6 +541,20 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           )}
         </div>
         {it.notes && <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>}
+        {/* Nothing attached yet — offer it here rather than only inside edit
+            mode, where it was effectively invisible. */}
+        {!it.link_url && !it.attachment_url && onAttach && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAttach(); }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6,
+              background: "none", border: "none", padding: 0, cursor: "pointer",
+              fontSize: 13, fontWeight: 700, color: T.faint,
+            }}
+          >
+            <Paperclip size={12} />Add Link Or File
+          </button>
+        )}
         {(it.link_url || it.attachment_url) && (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
             {it.link_url && (
@@ -554,6 +568,14 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
                 style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
                 <Paperclip size={12} />{it.attachment_name || "Attachment"}
               </a>
+            )}
+            {onAttach && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onAttach(); }}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 13, fontWeight: 700, color: T.faint }}
+              >
+                Edit
+              </button>
             )}
           </div>
         )}

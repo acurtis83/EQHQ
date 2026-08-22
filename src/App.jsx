@@ -1,38 +1,60 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Home, Users, ClipboardList, CalendarDays, GraduationCap,
-  HeartHandshake, LayoutGrid, Settings, LogOut, Lock, FileText, LayoutDashboard,
+  Home, ClipboardList, HeartHandshake, LayoutGrid, Settings, LogOut, Lock, LayoutDashboard, CalendarClock,
 } from "lucide-react";
 import { useAuth } from "./lib/useAuth";
 import { T, Btn, Stub } from "./components/ui";
 import Feed from "./member/Feed";
 import FormFill from "./member/FormFill";
 import Roster from "./presidency/Roster";
-import Presidency from "./presidency/Presidency";
-import Teaching from "./presidency/Teaching";
-import Forms from "./presidency/Forms";
 import Callings from "./presidency/Callings";
+import Plan from "./presidency/Plan";
+import Meetings from "./presidency/Meetings";
 import HomeHub from "./presidency/HomeHub";
 import ImportLegacy from "./presidency/ImportLegacy";
 import TalkLibrary from "./presidency/TalkLibrary";
 import SignIn from "./presidency/SignIn";
 import Splash from "./components/Splash";
+import Segmented from "./components/Segmented";
 
 // Member tabs are always present. Presidency tabs only mount when signed in —
 // and even if someone forced them open, RLS returns nothing without a session.
 const MEMBER_TABS = [{ id: "feed", label: "Feed", icon: Home }];
 
+// Seven buttons, not eleven. Meetings holds the two agendas; Plan holds
+// everything scheduled ahead (activities, temple trips, assignments, the
+// teaching schedule, forms); the roster moved inside Settings, where it's
+// looked at rather than worked in day to day.
 const PRESIDENCY_TABS = [
   { id: "hub", label: "Home", icon: LayoutDashboard },
-  { id: "presagenda", label: "Presidency", icon: ClipboardList },
-  { id: "sunday", label: "Sunday", icon: CalendarDays },
-  { id: "teaching", label: "Teaching", icon: GraduationCap },
-  { id: "forms", label: "Forms", icon: FileText },
-  { id: "ministering", label: "Ministering", icon: HeartHandshake },
+  { id: "meetings", label: "Meetings", icon: ClipboardList },
+  { id: "plan", label: "Plan", icon: CalendarClock },
   { id: "callings", label: "Callings", icon: LayoutGrid },
-  { id: "roster", label: "Roster", icon: Users },
+  { id: "ministering", label: "Ministering", icon: HeartHandshake },
   { id: "settings", label: "Settings", icon: Settings },
 ];
+
+// Settings is the drawer for things you set up once and then mostly read:
+// the roster, the conference talk library, and the one-off import from the old
+// app. The roster used to have its own slot in the bottom bar, which it didn't
+// earn — it's consulted, not worked in.
+const SETTINGS_SECTIONS = [
+  { key: "roster", label: "Roster" },
+  { key: "talks", label: "Conference Talks" },
+  { key: "import", label: "Import" },
+];
+
+function SettingsTab() {
+  const [section, setSection] = useState("roster");
+  return (
+    <div>
+      <Segmented value={section} onChange={setSection} options={SETTINGS_SECTIONS} idAttr="data-settings" />
+      {section === "roster" && <Roster />}
+      {section === "talks" && <TalkLibrary />}
+      {section === "import" && <ImportLegacy />}
+    </div>
+  );
+}
 
 // The ward mark. Both files are transparent; they differ in whether the
 // non-blue artwork is white or ink, so each theme gets the one that shows up.
@@ -134,7 +156,12 @@ export default function App() {
         style={{
           position: "sticky", top: 0, zIndex: 30, background: "var(--chrome)",
           backdropFilter: "saturate(180%) blur(12px)",
-          borderBottom: `1px solid ${T.lineSoft}`, padding: "14px 16px",
+          borderBottom: `1px solid ${T.lineSoft}`,
+          // Installed to the home screen, the web view runs full-bleed under
+          // the status bar — so without this the ward name sits behind the
+          // clock and battery. The bottom nav already did the same for the
+          // home indicator; the top was missed.
+          padding: "calc(14px + env(safe-area-inset-top)) 16px 14px",
         }}
       >
         <div className="eq-shell" style={{ display: "flex", alignItems: "center", gap: 11 }}>
@@ -164,24 +191,13 @@ export default function App() {
       <main className="eq-main eq-shell eq-scale" style={{ padding: "18px 16px" }}>
         {tab === "feed" && <Feed focus={focus} onFocusHandled={clearFocus} />}
         {tab === "hub" && <HomeHub onGo={go} />}
-        {tab === "roster" && <Roster />}
-        {tab === "settings" && (
-          <>
-            <TalkLibrary />
-            <div style={{ height: 28 }} />
-            <ImportLegacy />
-          </>
-        )}
-        {tab === "presagenda" && <Presidency />}
-        {tab === "sunday" && (
-          <Stub title="Sunday Quorum Meeting Agenda" note="The 25-minute block — cadence-aware, with the teaching schedule and talk link pulled in." />
-        )}
-        {tab === "teaching" && <Teaching />}
-        {tab === "forms" && <Forms />}
+        {tab === "settings" && <SettingsTab />}
+        {tab === "meetings" && <Meetings />}
+        {tab === "plan" && <Plan focus={focus} onFocusHandled={clearFocus} />}
+        {tab === "callings" && <Callings focus={focus} onFocusHandled={clearFocus} />}
         {tab === "ministering" && (
           <Stub title="Ministering" note="Districts, companionships, households, and quarterly interviews. Presidency-only, enforced in the database." />
         )}
-        {tab === "callings" && <Callings focus={focus} onFocusHandled={clearFocus} />}
       </main>
 
       {isPresidency && (
