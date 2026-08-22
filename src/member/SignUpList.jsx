@@ -15,13 +15,17 @@ export default function SignUpList({
   const mySlots = slots.filter((s) => s.post_id === post.id)
     .sort((a, b) => a.sort_order - b.sort_order);
 
-  // A post that already points at a sign-up form doesn't need the inline slot
+  // A post that already has a way to respond doesn't need the inline slot
   // builder as well — two competing ways to sign up for the same thing is
-  // worse than one. The link on the post is the sign-up.
+  // worse than one. Either the link on the post is the sign-up, or "I'm in" is.
   const linksToForm = /[?&]f=/.test(post.link_url || "");
+  const hasRsvp = !!post.rsvp;
 
   if (!mySlots.length) {
-    if (linksToForm) return null;
+    // Nothing to show unless this post asked for a sign-up sheet when it was
+    // written. Slots that already exist still render, so turning the flag off
+    // later can't hide people who have signed up.
+    if (linksToForm || hasRsvp || !post.allow_signup) return null;
     return isPresidency ? (
       <>
         <div style={{ borderTop: `1px solid ${T.lineSoft}`, marginTop: 10, paddingTop: 10 }}>

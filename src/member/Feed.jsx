@@ -9,11 +9,13 @@ import ThisWeeksLesson from "./ThisWeeksLesson";
 import HomeTiles from "./HomeTiles";
 import { CATEGORIES, categoryMeta, sortForFeed } from "./categories";
 import SignUpList from "./SignUpList";
+import PostLinks from "./PostLinks";
 
 
 const emptyDraft = {
   category: "announcement", title: "", body: "", link_url: "", link_label: "",
   event_date: "", event_time: "", event_location: "", pinned: false,
+  allow_signup: false,
 };
 
 export default function Feed({ focus, onFocusHandled }) {
@@ -24,6 +26,7 @@ export default function Feed({ focus, onFocusHandled }) {
   const [comments, setComments] = useState([]);
   const [slots, setSlots] = useState([]);
   const [claims, setClaims] = useState([]);
+  const [links, setLinks] = useState([]);
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -39,19 +42,21 @@ export default function Feed({ focus, onFocusHandled }) {
   }, [posts]);
 
   const load = useCallback(async () => {
-    const [p, c, sl, cl] = await Promise.all([
+    const [p, c, sl, cl, lk] = await Promise.all([
       // Ordered in JS rather than SQL: "soonest first, but undated posts still
       // near the top" isn't a single ORDER BY.
       supabase.from("posts").select("*"),
       supabase.from("comments").select("*").order("created_at", { ascending: true }),
       supabase.from("signup_slots").select("*").order("sort_order", { ascending: true }),
       supabase.from("signup_claims").select("*").order("created_at", { ascending: true }),
+      supabase.from("post_links").select("*").order("sort_order", { ascending: true }),
     ]);
     if (p.error) setErr(p.error.message);
     else setPosts(p.data || []);
     if (!c.error) setComments(c.data || []);
     if (!sl.error) setSlots(sl.data || []);
     if (!cl.error) setClaims(cl.data || []);
+    if (!lk.error) setLinks(lk.data || []);
     setLoading(false);
   }, []);
 
@@ -77,6 +82,7 @@ export default function Feed({ focus, onFocusHandled }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "signup_slots" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "signup_claims" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "post_links" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
@@ -101,6 +107,7 @@ export default function Feed({ focus, onFocusHandled }) {
       event_time: draft.event_time.trim() || null,
       event_location: draft.event_location.trim() || null,
       pinned: draft.pinned,
+      allow_signup: !!draft.allow_signup,
       created_by: presidency?.name || "Presidency",
     };
     const { error } = await supabase.from("posts").insert(payload);
@@ -156,6 +163,7 @@ export default function Feed({ focus, onFocusHandled }) {
               comments={commentsFor(post.id)}
               slots={slots}
               claims={claims}
+              links={links}
               open={!!openComments[post.id]}
               onToggle={() => setOpenComments((o) => ({ ...o, [post.id]: !o[post.id] }))}
               name={name}
@@ -197,7 +205,7 @@ export default function Feed({ focus, onFocusHandled }) {
   );
 }
 
-function PostCard({ post, comments, slots, claims, open, onToggle, name, setName, onComment, isPresidency, onReload, highlight }) {
+function PostCard({ post, comments, slots, claims, links, open, onToggle, name, setName, onComment, isPresidency, onReload, highlight }) {
   const m = categoryMeta(post.category);
   const [body, setBody] = useState("");
 
@@ -216,7 +224,6 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
       id={`post-${post.id}`}
       style={{
         ...card, borderLeft: `5px solid ${m.accent}`, padding: 15,
-        height: "100%", display: "flex", flexDirection: "column",
         // Ring when the Home Hub sent you straight to this post.
         boxShadow: highlight ? `0 0 0 3px ${T.primarySoft}` : card.boxShadow,
         borderColor: highlight ? T.primary : card.borderColor,
@@ -247,14 +254,7 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
         </div>
       )}
 
-      {post.link_url && (
-        <a
-          href={post.link_url} target="_blank" rel="noreferrer"
-          style={{ display: "inline-block", fontSize: 15, fontWeight: 700, color: T.primaryDeep, textDecoration: "none", marginBottom: 9 }}
-        >
-          {post.link_label || "Open link"} →
-        </a>
-      )}
+      <PostLinks post={post} links={links} isPresidency={isPresidency} onReload={onReload} />
 
       <SignUpList
         post={post}
@@ -392,6 +392,15 @@ function Composer({ draft, setDraft, onPublish, onClose }) {
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
           <input type="checkbox" checked={draft.pinned} onChange={(e) => setDraft({ ...draft, pinned: e.target.checked })} />
           Pin to top of feed
+        </label>
+
+        {/* Opt-in. This used to appear on every post that didn't already have
+            one, which put a call to action on notices that only needed
+            reading. */}
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
+          <input type="checkbox" checked={!!draft.allow_signup}
+            onChange={(e) => setDraft({ ...draft, allow_signup: e.target.checked })} />
+          Add a sign-up sheet
         </label>
 
         <Btn kind="primary" size="lg" onClick={onPublish} disabled={!draft.title.trim()} style={{ justifyContent: "center" }}>

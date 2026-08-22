@@ -119,6 +119,24 @@ begin
   end if;
   if to_regclass('public.posts') is not null then
     alter table posts add column if not exists rsvp boolean not null default false;
+    alter table posts add column if not exists allow_signup boolean not null default false;
+  end if;
+
+  -- Several links on one card: streaming links, directions, a schedule.
+  if to_regclass('public.post_links') is null and to_regclass('public.posts') is not null then
+    create table post_links (
+      id uuid primary key default gen_random_uuid(),
+      post_id uuid not null references posts (id) on delete cascade,
+      label text not null,
+      url text not null,
+      sort_order int not null default 0,
+      created_at timestamptz not null default now()
+    );
+    create index if not exists post_links_post_idx on post_links (post_id, sort_order);
+    alter table post_links enable row level security;
+    create policy "Public can read post links" on post_links for select using (true);
+    create policy "Presidency manages post links" on post_links
+      for all using (is_presidency()) with check (is_presidency());
   end if;
 
   if to_regclass('public.event_dates') is null and to_regclass('public.events') is not null then

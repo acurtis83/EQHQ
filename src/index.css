@@ -183,19 +183,15 @@ html[data-theme="dark"] .eq-logo-dark { display: block; }
 .eq-hub-tiles > * { height: 100%; }
 
 /* ---------- feed ----------
-   Cards were a wrapping flex column, so each sized to its own content and the
-   two columns drifted apart — a post with six dates left a long gap beside a
-   short one. A grid with stretched rows makes each row finish level. */
+   One column at every width. Two columns meant stretching cards so the rows
+   lined up, which left a short post padded out to match a long one beside it.
+   A single column has no row to align to, so each card is only as tall as
+   what's in it. */
 .eq-feed-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  align-items: stretch;
 }
-@media (min-width: 760px) {
-  .eq-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-.eq-feed-grid > * { height: 100%; }
 
 /* ---------- Sunday agenda ----------
    Laid out as a running order rather than a wall of cards: one column, each

@@ -70,6 +70,10 @@ create table if not exists posts (
 -- Set when the planning row asked for "I'm in" instead of a form. Lives on the
 -- post because the feed is what members read.
 alter table posts add column if not exists rsvp boolean not null default false;
+-- Whether this post offers a sign-up sheet. Opt-in at writing time: the button
+-- used to appear on every post that didn't have one, which put a call to
+-- action on notices that just needed reading.
+alter table posts add column if not exists allow_signup boolean not null default false;
 create index if not exists posts_created_at_idx on posts (created_at desc);
 
 create table if not exists comments (
@@ -329,6 +333,27 @@ create table if not exists event_dates (
 create index if not exists event_dates_event_idx on event_dates (event_id, event_date);
 
 alter table event_dates enable row level security;
+
+-- ============================================================
+-- POST LINKS — more than one link on a card
+-- ============================================================
+-- Stake conference has a streaming link per language; a temple trip might
+-- carry directions and a schedule. `posts.link_url` holds one, which isn't
+-- enough, so extra links get their own rows.
+--
+-- Publicly readable: they're the useful part of the announcement.
+create table if not exists post_links (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references posts (id) on delete cascade,
+  label text not null,
+  url text not null,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists post_links_post_idx on post_links (post_id, sort_order);
+
+alter table post_links enable row level security;
 
 -- ============================================================
 -- RSVPS — "I'm in", without a whole form
@@ -634,6 +659,12 @@ create policy "Presidency only" on event_dates
   for all using (is_presidency()) with check (is_presidency());
 
 -- Anyone may say they're coming, and take it back if they still hold the id.
+drop policy if exists "Public can read post links" on post_links;
+create policy "Public can read post links" on post_links for select using (true);
+drop policy if exists "Presidency manages post links" on post_links;
+create policy "Presidency manages post links" on post_links
+  for all using (is_presidency()) with check (is_presidency());
+
 drop policy if exists "Public can rsvp" on rsvps;
 create policy "Public can rsvp" on rsvps for insert with check (true);
 drop policy if exists "Public can withdraw own rsvp" on rsvps;
