@@ -123,45 +123,101 @@ export default function HomeHub({ onGo }) {
         <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>{err}</div>
       )}
 
-      <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="eq-hub-grid">
 
-        <Panel icon={GraduationCap} title="This Sunday" onGo={() => onGo?.("plan")}>
+        {/* ---------- This Sunday, front and centre ----------
+            It's the one thing everyone opens the app to check, so it gets the
+            full width and the biggest type rather than competing with a stats
+            card for attention. */}
+        <button
+          onClick={() => onGo?.("meetings")}
+          className="eq-hub-wide"
+          style={{
+            ...card, padding: "18px 18px 20px", textAlign: "left", cursor: "pointer",
+            width: "100%", display: "flex", flexDirection: "column", gap: 4,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <GraduationCap size={15} style={{ color: T.primary, flex: "0 0 auto" }} />
+            <span style={{
+              fontSize: 12, fontWeight: 800, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: T.primary,
+            }}>
+              This Sunday
+            </span>
+          </div>
+
           {!nextSunday ? (
-            <Muted>Nothing scheduled.</Muted>
+            <div style={{ fontSize: 20.5, fontWeight: 800, color: T.sub, marginTop: 4 }}>
+              Nothing scheduled
+            </div>
           ) : (
             <>
-              <Row label={fmtDate(nextSunday.date)} strong />
+              <div style={{
+                fontSize: 28, fontWeight: 800, color: T.ink,
+                letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: 4,
+              }}>
+                {fmtDate(nextSunday.date)}
+              </div>
+
               {nextSunday.teaches ? (
                 nextSunday.row?.teacher_name ? (
-                  <Muted>{nextSunday.row.teacher_name}{nextSunday.row.talk_title ? ` — ${nextSunday.row.talk_title}` : ""}</Muted>
+                  <div style={{ marginTop: 7 }}>
+                    <div style={{ fontSize: 17.5, fontWeight: 700, color: T.ink, lineHeight: 1.35 }}>
+                      {nextSunday.row.talk_title || nextSunday.row.topic || "Lesson"}
+                    </div>
+                    <div style={{ fontSize: 14.5, color: T.sub, marginTop: 3 }}>
+                      {nextSunday.row.teacher_name}
+                      {nextSunday.row.speaker ? ` · ${nextSunday.row.speaker}` : ""}
+                    </div>
+                  </div>
                 ) : (
-                  <Chip color={T.gold} bg={T.goldSoft}>No teacher assigned</Chip>
+                  <div style={{ marginTop: 8 }}>
+                    <Chip color={T.gold} bg={T.goldSoft}>No Teacher Assigned</Chip>
+                  </div>
                 )
               ) : (
-                <Chip color={T.sub} bg={T.inset}>
-                  {nextSunday.reason === NO_LESSON.FIFTH_SUNDAY ? "5th Sunday — Bishopric Directed" : nextSunday.reason}
-                </Chip>
+                <div style={{ marginTop: 8 }}>
+                  <Chip color={T.sub} bg={T.inset}>
+                    {nextSunday.reason === NO_LESSON.FIFTH_SUNDAY
+                      ? "5th Sunday — Bishopric Directed"
+                      : nextSunday.reason}
+                  </Chip>
+                </div>
               )}
             </>
           )}
+        </button>
+
+        {/* ---------- three counts, one row ----------
+            These were three tall cards each saying "nothing scheduled", which
+            is a lot of screen for an absence. As tiles they read at a glance
+            and stay the same height whether empty or full. */}
+        <div className="eq-hub-wide eq-hub-tiles">
+          <CountTile icon={CalendarDays} label="Activities" n={activities.length}
+            flag={activities.filter((e) => !e.post_id).length}
+            onGo={() => onGo?.("plan", { eventId: activities[0]?.id })} />
+          <CountTile icon={Star} label="Temple Trips" n={temple.length}
+            flag={temple.filter((e) => !e.post_id).length}
+            onGo={() => onGo?.("plan", { eventId: temple[0]?.id })} />
+          <CountTile icon={ClipboardCheck} label="Assignments" n={assignments.length}
+            onGo={() => onGo?.("plan", { eventId: assignments[0]?.id })} />
+        </div>
+
+        {/* ---------- what's actually on the calendar ---------- */}
+        <Panel icon={CalendarDays} title="Upcoming" count={activities.length + temple.length}
+          onGo={() => onGo?.("plan")}>
+          {activities.length + temple.length ? (
+            [...activities, ...temple].slice(0, 5).map((e) => (
+              <Row key={e.id} label={e.title} meta={eventMeta(e)} flag={postFlag(e)}
+                onClick={() => onGo?.("plan", { eventId: e.id })} />
+            ))
+          ) : <Muted>Nothing in the next {HORIZON_DAYS} days.</Muted>}
         </Panel>
 
-        <Panel icon={CalendarDays} title="Upcoming Activities" count={activities.length} onGo={() => onGo?.("plan")}>
-          {activities.length ? activities.slice(0, 4).map((e) => (
-            <Row key={e.id} label={e.title} meta={eventMeta(e)} flag={postFlag(e)}
-              onClick={() => onGo?.("plan", { eventId: e.id })} />
-          )) : <Muted>Nothing in the next {HORIZON_DAYS} days.</Muted>}
-        </Panel>
-
-        <Panel icon={Star} title="Temple Trips" count={temple.length} onGo={() => onGo?.("plan")}>
-          {temple.length ? temple.slice(0, 4).map((e) => (
-            <Row key={e.id} label={e.title} meta={eventMeta(e)} flag={postFlag(e)}
-              onClick={() => onGo?.("plan", { eventId: e.id })} />
-          )) : <Muted>None scheduled.</Muted>}
-        </Panel>
-
-        <Panel icon={ClipboardCheck} title="Assignments" count={assignments.length} onGo={() => onGo?.("plan")}>
-          {assignments.length ? assignments.slice(0, 4).map((e) => (
+        <Panel icon={ClipboardCheck} title="Assignments" count={assignments.length}
+          onGo={() => onGo?.("plan")}>
+          {assignments.length ? assignments.slice(0, 5).map((e) => (
             <Row key={e.id} label={e.title} meta={eventMeta(e)}
               onClick={() => onGo?.("plan", { eventId: e.id })} />
           )) : <Muted>Nothing outstanding.</Muted>}
@@ -232,7 +288,6 @@ export default function HomeHub({ onGo }) {
           ) : <Muted>Nothing in progress.</Muted>}
         </Panel>
 
-        {/* The roster lives inside Settings now, so that's where this goes. */}
         <Panel icon={Users} title="Quorum Stats" onGo={() => onGo?.("settings")}>
           <div style={{ fontSize: 30, fontWeight: 800, color: T.ink, lineHeight: 1.1 }}>
             {stats.total}
@@ -255,9 +310,18 @@ export default function HomeHub({ onGo }) {
           </div>
         </Panel>
 
-        <Panel icon={HeartHandshake} title="Ministering">
-          <Muted>Reporting stats land here once Ministering is built.</Muted>
-        </Panel>
+        {/* A placeholder shouldn't take a whole card. One quiet line, full
+            width, so it doesn't leave a hole in the grid. */}
+        <div className="eq-hub-wide" style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 14px", borderRadius: 10,
+          background: T.inset, border: `1px dashed ${T.lineSoft}`,
+        }}>
+          <HeartHandshake size={14} style={{ color: T.faint, flex: "0 0 auto" }} />
+          <span style={{ fontSize: 13.5, color: T.faint }}>
+            Ministering — reporting stats land here once it's built.
+          </span>
+        </div>
       </div>
 
       <div style={{ marginTop: 18 }}>
@@ -323,15 +387,53 @@ export default function HomeHub({ onGo }) {
 
 function Panel({ icon: Icon, title, count, onGo, children }) {
   return (
-    <div style={{ ...card, padding: 15 }}>
+    // height:100% + column flex is what makes two cards in a row end level
+    // with each other even when one has far more inside.
+    <div style={{ ...card, padding: 14, height: "100%", display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <Icon size={16} style={{ color: T.sub, flex: "0 0 auto" }} />
-        <span style={{ fontSize: 15.5, fontWeight: 800, color: T.ink, flex: 1, minWidth: 0 }}>{title}</span>
+        <Icon size={15} style={{ color: T.sub, flex: "0 0 auto" }} />
+        <span style={{ fontSize: 16, fontWeight: 800, color: T.ink, flex: 1, minWidth: 0 }}>{title}</span>
         {count > 0 && <Chip color={T.sub} bg={T.inset}>{count}</Chip>}
         {onGo && <Btn size="sm" kind="plain" onClick={onGo}>Open</Btn>}
       </div>
-      {children}
+      <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
     </div>
+  );
+}
+
+// A number and a label. Used for the row of three so an empty section takes a
+// tile rather than a whole card saying "nothing scheduled".
+function CountTile({ icon: Icon, label, n, flag, onGo }) {
+  const empty = !n;
+  return (
+    <button
+      onClick={onGo}
+      disabled={empty}
+      style={{
+        ...card, padding: "12px 12px 13px", textAlign: "left",
+        cursor: empty ? "default" : "pointer", opacity: empty ? 0.65 : 1,
+        display: "flex", flexDirection: "column", gap: 2, height: "100%", width: "100%",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon size={13} style={{ color: T.faint, flex: "0 0 auto" }} />
+        <span style={{
+          fontSize: 11.5, fontWeight: 800, letterSpacing: "0.06em",
+          textTransform: "uppercase", color: T.faint,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {label}
+        </span>
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 800, color: empty ? T.faint : T.ink, lineHeight: 1.1 }}>
+        {n}
+      </div>
+      {flag > 0 && (
+        <div style={{ fontSize: 11.5, fontWeight: 800, color: T.gold }}>
+          {flag} not posted
+        </div>
+      )}
+    </button>
   );
 }
 

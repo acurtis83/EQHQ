@@ -152,6 +152,36 @@ html[data-theme="dark"] .eq-logo-dark { display: block; }
   .eq-logo { height: 32px; }
 }
 
+/* ---------- presidency home ----------
+   The hub was a flex column that wrapped into two, so every card sized to its
+   own content and the two columns drifted out of step. A real grid puts cards
+   in rows, and stretching them makes each row line up along both edges no
+   matter how much is inside. */
+.eq-hub-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+@media (min-width: 760px) {
+  .eq-hub-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Full width inside the grid — the hero and the wide rows. */
+.eq-hub-wide { grid-column: 1 / -1; }
+
+/* The three count tiles stay side by side even on a phone: three short numbers
+   fit across, and stacking them would push everything else off the screen. */
+.eq-hub-tiles {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 10px;
+}
+
+/* Cards fill their cell rather than hugging their content. */
+.eq-hub-grid > * { height: 100%; }
+.eq-hub-tiles > * { height: 100%; }
+
 /* ---------- header fit ----------
    The ward name plus the eyebrow plus the sign-in button is a lot to fit
    across a phone. Measured against real font metrics, the eyebrow's wide
