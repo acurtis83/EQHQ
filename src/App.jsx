@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Home, Users, ClipboardList, CalendarDays, GraduationCap,
   HeartHandshake, LayoutGrid, Settings, LogOut, Lock, FileText, LayoutDashboard,
@@ -60,6 +60,12 @@ export default function App() {
   const [sharedForm] = useState(sharedFormId);
   const [splashDone, setSplashDone] = useState(() => !!sharedFormId());
   const [tab, setTab] = useState("feed");
+  // Where a tab should land when you arrive from a Home Hub card — e.g.
+  // { callingId } or { postId }. Cleared once the destination has used it, so
+  // returning to that tab later doesn't re-scroll to the same row.
+  const [focus, setFocus] = useState(null);
+  const go = (next, where) => { setFocus(where || null); setTab(next); window.scrollTo(0, 0); };
+  const clearFocus = useCallback(() => setFocus(null), []);
   const [showSignIn, setShowSignIn] = useState(false);
 
   // Theme, per device — same behaviour as the old app.
@@ -134,10 +140,10 @@ export default function App() {
         <div className="eq-shell" style={{ display: "flex", alignItems: "center", gap: 11 }}>
           <Logo />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
+            <div className="eq-eyebrow" style={{ fontSize: 11.5, letterSpacing: "0.14em", color: T.faint, fontWeight: 700 }}>
               HOLBROOK FARMS 8TH WARD
             </div>
-            <div style={{ fontSize: 22.5, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em", marginTop: 2 }}>
+            <div className="eq-wordmark" style={{ fontSize: 22.5, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em", marginTop: 2 }}>
               Elders Quorum
             </div>
           </div>
@@ -156,8 +162,8 @@ export default function App() {
       </header>
 
       <main className="eq-main eq-shell eq-scale" style={{ padding: "18px 16px" }}>
-        {tab === "feed" && <Feed />}
-        {tab === "hub" && <HomeHub onGo={setTab} />}
+        {tab === "feed" && <Feed focus={focus} onFocusHandled={clearFocus} />}
+        {tab === "hub" && <HomeHub onGo={go} />}
         {tab === "roster" && <Roster />}
         {tab === "settings" && (
           <>
@@ -175,7 +181,7 @@ export default function App() {
         {tab === "ministering" && (
           <Stub title="Ministering" note="Districts, companionships, households, and quarterly interviews. Presidency-only, enforced in the database." />
         )}
-        {tab === "callings" && <Callings />}
+        {tab === "callings" && <Callings focus={focus} onFocusHandled={clearFocus} />}
       </main>
 
       {isPresidency && (

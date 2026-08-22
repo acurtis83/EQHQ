@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake } from "lucide-react";
+import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake, ChevronRight } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Chip, Btn, SectionTitle } from "../components/ui";
@@ -14,6 +14,8 @@ export default function HomeHub({ onGo }) {
   const { presidency } = useAuth();
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
+  // Which calling stage is expanded in place. Only one at a time.
+  const [openStage, setOpenStage] = useState(null);
 
   const load = useCallback(async () => {
     const today = toIso(new Date());
@@ -131,25 +133,78 @@ export default function HomeHub({ onGo }) {
 
         <Panel icon={CalendarDays} title="Upcoming Activities" count={events.length} onGo={() => onGo?.("feed")}>
           {events.length ? events.slice(0, 4).map((e) => (
-            <Row key={e.id} label={e.title} meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")} />
+            <Row key={e.id} label={e.title}
+              meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")}
+              onClick={() => onGo?.("feed", { postId: e.id })} />
           )) : <Muted>Nothing in the next {HORIZON_DAYS} days.</Muted>}
         </Panel>
 
         <Panel icon={Star} title="Temple Trips" count={temple.length} onGo={() => onGo?.("feed")}>
           {temple.length ? temple.slice(0, 4).map((e) => (
-            <Row key={e.id} label={e.title} meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")} />
+            <Row key={e.id} label={e.title}
+              meta={[fmtShort(e.event_date), e.event_time].filter(Boolean).join(" · ")}
+              onClick={() => onGo?.("feed", { postId: e.id })} />
           )) : <Muted>None scheduled.</Muted>}
         </Panel>
 
+        {/* Each stage expands in place to show which callings it's counting,
+            and each of those jumps to that card on the tracker. The count on
+            its own was a dead end — you knew two were Proposed but not which. */}
         <Panel icon={LayoutGrid} title="Callings" count={openCallings.length} onGo={() => onGo?.("callings")}>
           {openCallings.length ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {CALLING_STAGES.filter((s) => openCallings.some((c) => c.stage === s)).map((s) => {
-                const n = openCallings.filter((c) => c.stage === s).length;
+                const list = openCallings.filter((c) => c.stage === s);
+                const isOpen = openStage === s;
                 return (
-                  <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 14.5, color: T.ink, flex: 1, minWidth: 0 }}>{s}</span>
-                    <span style={{ fontSize: 14.5, fontWeight: 800, color: T.sub }}>{n}</span>
+                  <div key={s}>
+                    <button
+                      onClick={() => setOpenStage(isOpen ? null : s)}
+                      aria-expanded={isOpen}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8, width: "100%",
+                        background: isOpen ? T.inset : "transparent", border: "none",
+                        borderRadius: 8, padding: "5px 7px", cursor: "pointer", textAlign: "left",
+                      }}
+                    >
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          flex: "0 0 auto", color: T.faint,
+                          transform: isOpen ? "rotate(90deg)" : "none",
+                          transition: "transform 150ms ease",
+                        }}
+                      />
+                      <span style={{ fontSize: 14.5, color: T.ink, flex: 1, minWidth: 0 }}>{s}</span>
+                      <span style={{ fontSize: 14.5, fontWeight: 800, color: T.sub }}>{list.length}</span>
+                    </button>
+
+                    {isOpen && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2, margin: "2px 0 6px 21px" }}>
+                        {list.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => onGo?.("callings", { callingId: c.id })}
+                            style={{
+                              display: "flex", alignItems: "baseline", gap: 7, width: "100%",
+                              background: "transparent", border: "none", borderRadius: 7,
+                              padding: "4px 7px", cursor: "pointer", textAlign: "left",
+                            }}
+                          >
+                            <span style={{ fontSize: 14, fontWeight: 600, color: T.primaryDeep, minWidth: 0,
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {c.position}
+                            </span>
+                            {c.candidate_name && (
+                              <span style={{ fontSize: 13, color: T.sub, minWidth: 0,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {c.candidate_name}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -259,12 +314,35 @@ function Panel({ icon: Icon, title, count, onGo, children }) {
   );
 }
 
-function Row({ label, meta, strong }) {
-  return (
-    <div style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: 15, fontWeight: strong ? 800 : 600, color: T.ink, lineHeight: 1.35 }}>{label}</div>
+// A line in a panel. With onClick it becomes a button that jumps to the record
+// it's summarising; without one it stays a plain div, so a date heading doesn't
+// look tappable when it isn't.
+function Row({ label, meta, strong, onClick }) {
+  const body = (
+    <>
+      <div style={{
+        fontSize: 15, fontWeight: strong ? 800 : 600, lineHeight: 1.35,
+        color: onClick ? T.primaryDeep : T.ink,
+      }}>
+        {label}
+      </div>
       {meta && <div style={{ fontSize: 13.5, color: T.sub, marginTop: 2 }}>{meta}</div>}
-    </div>
+    </>
+  );
+
+  if (!onClick) return <div style={{ marginBottom: 6 }}>{body}</div>;
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "block", width: "100%", textAlign: "left", marginBottom: 6,
+        background: "transparent", border: "none", borderRadius: 8,
+        padding: "3px 6px", marginLeft: -6, cursor: "pointer",
+      }}
+    >
+      {body}
+    </button>
   );
 }
 

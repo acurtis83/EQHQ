@@ -15,9 +15,11 @@ const emptyDraft = {
   event_date: "", event_time: "", event_location: "", pinned: false,
 };
 
-export default function Feed() {
+export default function Feed({ focus, onFocusHandled }) {
   const { isPresidency, presidency } = useAuth();
   const [posts, setPosts] = useState([]);
+  // Set when a Home Hub card sent you to a specific post.
+  const [focusId, setFocusId] = useState(null);
   const [comments, setComments] = useState([]);
   const [slots, setSlots] = useState([]);
   const [claims, setClaims] = useState([]);
@@ -50,6 +52,20 @@ export default function Feed() {
     if (!cl.error) setClaims(cl.data || []);
     setLoading(false);
   }, []);
+
+  // Jump to the post the Home Hub pointed at, once it's actually rendered.
+  useEffect(() => {
+    const id = focus?.postId;
+    if (!id || loading) return;
+    if (!posts.some((p) => p.id === id)) { onFocusHandled?.(); return; }
+    setFocusId(id);
+    const t = setTimeout(() => {
+      document.getElementById(`post-${id}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }, 60);
+    const clear = setTimeout(() => setFocusId(null), 2600);
+    onFocusHandled?.();
+    return () => { clearTimeout(t); clearTimeout(clear); };
+  }, [focus, loading, posts, onFocusHandled]);
 
   useEffect(() => {
     load();
@@ -149,6 +165,7 @@ export default function Feed() {
               onComment={addComment}
               isPresidency={isPresidency}
               onReload={load}
+              highlight={focusId === post.id}
             />
           ))}
         </div>
@@ -183,7 +200,7 @@ export default function Feed() {
   );
 }
 
-function PostCard({ post, comments, slots, claims, open, onToggle, name, setName, onComment, isPresidency, onReload }) {
+function PostCard({ post, comments, slots, claims, open, onToggle, name, setName, onComment, isPresidency, onReload, highlight }) {
   const m = categoryMeta(post.category);
   const [body, setBody] = useState("");
 
@@ -198,7 +215,16 @@ function PostCard({ post, comments, slots, claims, open, onToggle, name, setName
   };
 
   return (
-    <div style={{ ...card, borderLeft: `5px solid ${m.accent}`, padding: 15 }}>
+    <div
+      id={`post-${post.id}`}
+      style={{
+        ...card, borderLeft: `5px solid ${m.accent}`, padding: 15,
+        // Ring when the Home Hub sent you straight to this post.
+        boxShadow: highlight ? `0 0 0 3px ${T.primarySoft}` : card.boxShadow,
+        borderColor: highlight ? T.primary : card.borderColor,
+        transition: "box-shadow 200ms ease",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <Chip color={m.accent} bg={m.soft}>{m.label}</Chip>
         {post.pinned && <Chip color={T.sub} bg={T.inset}>Pinned</Chip>}

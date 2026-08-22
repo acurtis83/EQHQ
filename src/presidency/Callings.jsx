@@ -8,7 +8,7 @@ import { toIso, fmtShort } from "../lib/domain/dates";
 const stageColors = (stage) =>
   CALLING_STAGE_COLOR[stage] || [T.sub, T.lineSoft];
 
-export default function Callings() {
+export default function Callings({ focus, onFocusHandled }) {
   const [rows, setRows] = useState([]);
   const [groups, setGroups] = useState([]);
   const [members, setMembers] = useState([]);
@@ -17,6 +17,7 @@ export default function Callings() {
   const [view, setView] = useState("board");
   const [editing, setEditing] = useState(null);
   const [manageGroups, setManageGroups] = useState(false);
+  const [focusId, setFocusId] = useState(null);
 
   const load = useCallback(async () => {
     const [c, g, m] = await Promise.all([
@@ -32,6 +33,25 @@ export default function Callings() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Arriving from the Home Hub with a specific calling in mind: scroll it into
+  // view and ring it. Waits for rows so the element exists, and clears the
+  // request afterwards so switching tabs and coming back doesn't re-scroll.
+  // The highlight fades on its own — it's a pointer, not a selection.
+  useEffect(() => {
+    const id = focus?.callingId;
+    if (!id || loading) return;
+    if (!rows.some((r) => r.id === id)) { onFocusHandled?.(); return; }
+
+    setFocusId(id);
+    const t = setTimeout(() => {
+      const el = document.getElementById(`calling-${id}`);
+      el?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }, 60);
+    const clear = setTimeout(() => setFocusId(null), 2600);
+    onFocusHandled?.();
+    return () => { clearTimeout(t); clearTimeout(clear); };
+  }, [focus, loading, rows, onFocusHandled]);
 
   const byStage = useMemo(() => {
     const out = {};
@@ -112,11 +132,12 @@ export default function Callings() {
       {!rows.length ? (
         <Empty title="No Callings Tracked Yet" hint="Add one and move it along as it progresses — Need, Proposed, Approved, Called, Sustained, Set Apart." />
       ) : view === "board" ? (
-        <Board byStage={byStage} groups={groups} onOpen={setEditing} onStage={setStage} />
+        <Board byStage={byStage} groups={groups} onOpen={setEditing} onStage={setStage} focusId={focusId} />
       ) : (
         <GroupView
           byGroup={byGroup} groups={groups} onOpen={setEditing}
           onManage={() => setManageGroups(true)}
+          focusId={focusId}
         />
       )}
 
@@ -141,7 +162,7 @@ export default function Callings() {
 
 // Horizontal board — the stages are a pipeline, so it scrolls sideways rather
 // than squashing eight columns onto a phone.
-function Board({ byStage, groups, onOpen, onStage }) {
+function Board({ byStage, groups, onOpen, onStage, focusId }) {
   return (
     <div className="eq-callings-board" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
       {CALLING_STAGES.map((stage) => {
@@ -160,7 +181,8 @@ function Board({ byStage, groups, onOpen, onStage }) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {list.map((r) => (
-                <CallingCard key={r.id} row={r} groups={groups} onOpen={onOpen} onStage={onStage} showStageNav />
+                <CallingCard key={r.id} row={r} groups={groups} onOpen={onOpen} onStage={onStage} showStageNav
+                  highlight={focusId === r.id} />
               ))}
               {!list.length && (
                 <div style={{
@@ -178,87 +200,139 @@ function Board({ byStage, groups, onOpen, onStage }) {
   );
 }
 
-function GroupView({ byGroup, groups, onOpen, onManage }) {
+// Condensed group view: each group is one tight block with its callings as
+// single lines, so a committee fits on screen instead of scrolling. Empty
+// groups collapse to a single row rather than a card with a message in it.
+function GroupView({ byGroup, groups, onOpen, onManage, focusId }) {
   const unassigned = byGroup._none || [];
+
+  const Section = ({ name, list, dashed, countColor, countBg }) => (
+    <div style={{ ...card, padding: "10px 12px", borderStyle: dashed ? "dashed" : "solid" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: list.length ? 7 : 0 }}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: dashed ? T.sub : T.ink }}>{name}</span>
+        <Chip color={countColor || T.sub} bg={countBg || T.inset}>{list.length}</Chip>
+      </div>
+      {list.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {list.map((r) => (
+            <GroupRow key={r.id} row={r} onOpen={onOpen} highlight={focusId === r.id} />
+          ))}
+        </div>
+      ) : (
+        <span style={{ fontSize: 13.5, color: T.faint, fontStyle: "italic", marginLeft: "auto" }}>
+          Nobody assigned yet.
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
         <Btn size="sm" kind="plain" onClick={onManage}>Manage Groups</Btn>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {groups.map((g) => {
-          const list = byGroup[g.id] || [];
-          return (
-            <div key={g.id} style={{ ...card, padding: 14 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 16.5, fontWeight: 800, color: T.ink }}>{g.name}</span>
-                <Chip color={T.sub} bg={T.inset}>{list.length}</Chip>
-              </div>
-              {list.length ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {list.map((r) => <CallingCard key={r.id} row={r} groups={groups} onOpen={onOpen} />)}
-                </div>
-              ) : (
-                <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>Nobody assigned yet.</div>
-              )}
-            </div>
-          );
-        })}
-
+      <div className="eq-cols-2" style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+        {groups.map((g) => (
+          <Section key={g.id} name={g.name} list={byGroup[g.id] || []} />
+        ))}
         {unassigned.length > 0 && (
-          <div style={{ ...card, padding: 14, borderStyle: "dashed" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 16.5, fontWeight: 800, color: T.sub }}>No Group</span>
-              <Chip color={T.gold} bg={T.goldSoft}>{unassigned.length}</Chip>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {unassigned.map((r) => <CallingCard key={r.id} row={r} groups={groups} onOpen={onOpen} />)}
-            </div>
-          </div>
+          <Section name="No Group" list={unassigned} dashed countColor={T.gold} countBg={T.goldSoft} />
         )}
       </div>
     </div>
   );
 }
 
-function CallingCard({ row, groups, onOpen, onStage, showStageNav }) {
+// One calling as a single line inside a group: position, who, and the stage dot.
+function GroupRow({ row, onOpen, highlight }) {
+  const [fg, bg] = stageColors(row.stage);
+  return (
+    <button
+      id={`calling-${row.id}`}
+      data-calling-id={row.id}
+      onClick={() => onOpen(row)}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left",
+        background: highlight ? T.primarySoft : "transparent",
+        border: `1px solid ${highlight ? T.primary : "transparent"}`,
+        borderRadius: 8, padding: "5px 7px", cursor: "pointer",
+      }}
+    >
+      <span style={{ fontSize: 14, fontWeight: 600, color: T.ink, flex: "0 1 auto", minWidth: 0,
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {row.position}
+      </span>
+      {row.candidate_name && (
+        <span style={{ fontSize: 13, color: T.sub, flex: "1 1 auto", minWidth: 0,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {row.candidate_name}
+        </span>
+      )}
+      <span style={{ marginLeft: "auto", flex: "0 0 auto", background: bg, color: fg,
+        fontSize: 10.5, fontWeight: 800, padding: "2px 6px", borderRadius: 999 }}>
+        {row.stage}
+      </span>
+    </button>
+  );
+}
+
+// Condensed card. Name and person share a line where they fit; the meta line
+// only appears when there's something to put on it, so a bare calling is two
+// lines rather than four. `highlight` is set when the Home Hub sent you here,
+// so the card you asked for is obvious among its neighbours.
+function CallingCard({ row, groups, onOpen, onStage, showStageNav, highlight }) {
   const [fg, bg] = stageColors(row.stage);
   const idx = CALLING_STAGES.indexOf(row.stage);
   const group = groups.find((g) => g.id === row.group_id);
   const reached = row.stage_dates?.[row.stage];
+  const hasMeta = (!showStageNav && row.stage) || group || reached;
 
   return (
-    <div style={{ background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: 12, padding: 11 }}>
+    <div
+      id={`calling-${row.id}`}
+      data-calling-id={row.id}
+      style={{
+        background: T.panel,
+        border: `1px solid ${highlight ? T.primary : T.lineSoft}`,
+        boxShadow: highlight ? `0 0 0 3px ${T.primarySoft}` : "none",
+        borderRadius: 11, padding: "8px 10px",
+        transition: "box-shadow 200ms ease, border-color 200ms ease",
+      }}
+    >
       <button
         onClick={() => onOpen(row)}
         style={{ background: "none", border: "none", padding: 0, width: "100%", textAlign: "left", cursor: "pointer" }}
       >
-        <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink, lineHeight: 1.3 }}>{row.position}</div>
-        {row.candidate_name && (
-          <div style={{ fontSize: 14, color: T.sub, marginTop: 3 }}>{row.candidate_name}</div>
-        )}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-          {!showStageNav && (
-            <span style={{ background: bg, color: fg, fontSize: 12, fontWeight: 800, padding: "3px 8px", borderRadius: 999 }}>
-              {row.stage}
-            </span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink, lineHeight: 1.25 }}>{row.position}</span>
+          {row.candidate_name && (
+            <span style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.25 }}>{row.candidate_name}</span>
           )}
-          {group && <Chip color={T.sub} bg={T.inset}>{group.name}</Chip>}
-          {reached && <Chip color={T.faint} bg={T.inset}>{fmtShort(reached)}</Chip>}
         </div>
+        {hasMeta && (
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
+            {!showStageNav && (
+              <span style={{ background: bg, color: fg, fontSize: 11, fontWeight: 800, padding: "2px 7px", borderRadius: 999 }}>
+                {row.stage}
+              </span>
+            )}
+            {group && <Chip color={T.sub} bg={T.inset}>{group.name}</Chip>}
+            {reached && <Chip color={T.faint} bg={T.inset}>{fmtShort(reached)}</Chip>}
+          </div>
+        )}
       </button>
 
       {showStageNav && onStage && (
-        <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+        <div style={{ display: "flex", gap: 5, marginTop: 7 }}>
           <Btn size="sm" kind="ghost" disabled={idx <= 0}
             onClick={() => onStage(row, CALLING_STAGES[idx - 1])}
-            style={{ flex: 1, justifyContent: "center" }}>
-            <ChevronLeft size={14} />
+            style={{ flex: 1, justifyContent: "center", padding: "4px 8px" }}>
+            <ChevronLeft size={13} />
           </Btn>
           <Btn size="sm" kind="ghost" disabled={idx >= CALLING_STAGES.length - 1}
             onClick={() => onStage(row, CALLING_STAGES[idx + 1])}
-            style={{ flex: 1, justifyContent: "center" }}>
-            <ChevronRight size={14} />
+            style={{ flex: 1, justifyContent: "center", padding: "4px 8px" }}>
+            <ChevronRight size={13} />
           </Btn>
         </div>
       )}
@@ -274,7 +348,9 @@ function EditSheet({ row, groups, members, onClose, onSaved, onStage, setErr }) 
     group_id: row.group_id || "",
     set_apart_by: row.set_apart_by || "",
     notes: row.notes || "",
+    stage_dates: { ...(row.stage_dates || {}) },
   });
+  const [showAllStages, setShowAllStages] = useState(false);
 
   const save = async () => {
     const { error } = await supabase.from("callings").update({
@@ -284,6 +360,7 @@ function EditSheet({ row, groups, members, onClose, onSaved, onStage, setErr }) 
       group_id: d.group_id || null,
       set_apart_by: d.set_apart_by.trim() || null,
       notes: d.notes.trim() || null,
+      stage_dates: d.stage_dates,
       updated_at: new Date().toISOString(),
     }).eq("id", row.id);
     if (error) { setErr(error.message); return; }
@@ -298,7 +375,18 @@ function EditSheet({ row, groups, members, onClose, onSaved, onStage, setErr }) 
     onClose();
   };
 
-  const dates = row.stage_dates || {};
+  // Changing the stage from in here writes a stamp straight to the database.
+  // The sheet is holding its own copy of stage_dates to make them editable, so
+  // it has to stamp locally too — otherwise saving afterwards would write the
+  // stale copy back over the date that was just recorded.
+  const changeStage = (v) => {
+    setD((prev) => {
+      const next = { ...prev.stage_dates };
+      if (!next[v]) next[v] = toIso(new Date());
+      return { ...prev, stage_dates: next };
+    });
+    onStage(row, v);
+  };
 
   return (
     <Sheet title="Calling" onClose={onClose}>
@@ -329,27 +417,58 @@ function EditSheet({ row, groups, members, onClose, onSaved, onStage, setErr }) 
       </Lbl>
 
       <Lbl label="Stage">
-        <Select value={row.stage} onChange={(v) => onStage(row, v)}>
+        <Select value={row.stage} onChange={changeStage}>
           {CALLING_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}
         </Select>
       </Lbl>
 
+      {/* Stage dates stamp themselves as the stage moves, but the stamp is
+          "when you tapped it", not "when it happened" — a calling extended on
+          Sunday and entered on Tuesday records Tuesday. So every stage is
+          editable, including ones not yet reached, and clearing a field
+          removes it. Saved with the rest of the sheet. */}
       <div style={{ ...card, background: T.inset, borderColor: "transparent", padding: 12 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub, marginBottom: 7 }}>
-          Stage Dates
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.sub }}>
+            Stage Dates
+          </span>
+          <span style={{ fontSize: 12.5, color: T.faint, marginLeft: "auto" }}>
+            {showAllStages ? "" : `${CALLING_STAGES.filter((s) => d.stage_dates[s]).length} set`}
+          </span>
+          <Btn size="sm" kind="plain" onClick={() => setShowAllStages((v) => !v)}>
+            {showAllStages ? "Show Fewer" : "Show All"}
+          </Btn>
         </div>
-        {Object.keys(dates).length ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-            {CALLING_STAGES.filter((s) => dates[s]).map((s) => (
-              <div key={s} style={{ display: "flex", gap: 8, fontSize: 14 }}>
-                <span style={{ width: 120, color: s === row.stage ? T.ink : T.sub, fontWeight: s === row.stage ? 700 : 500 }}>{s}</span>
-                <span style={{ color: T.sub }}>{fmtShort(dates[s])}</span>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {CALLING_STAGES
+            .filter((s) => showAllStages || d.stage_dates[s] || s === row.stage)
+            .map((s) => (
+              <div key={s} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{
+                  flex: 1, minWidth: 0, fontSize: 14,
+                  color: s === row.stage ? T.ink : T.sub,
+                  fontWeight: s === row.stage ? 700 : 500,
+                }}>
+                  {s}
+                </span>
+                <Input
+                  type="date"
+                  value={d.stage_dates[s] || ""}
+                  onChange={(v) => {
+                    const next = { ...d.stage_dates };
+                    if (v) next[s] = v; else delete next[s];
+                    setD({ ...d, stage_dates: next });
+                  }}
+                  style={{ width: 156, flex: "0 0 auto" }}
+                />
               </div>
             ))}
-          </div>
-        ) : (
-          <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
-            Nothing stamped yet — dates record themselves as the stage changes.
+        </div>
+
+        {!Object.keys(d.stage_dates).length && !showAllStages && (
+          <div style={{ fontSize: 13.5, color: T.faint, fontStyle: "italic", marginTop: 7 }}>
+            Nothing stamped yet — dates record themselves as the stage changes, and you can correct them here.
           </div>
         )}
       </div>

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Check, X } from "lucide-react";
+import { Plus, Trash2, Check, X, Paperclip, Link2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
+import AttachSheet from "../components/AttachSheet";
 import { fmtShort, toIso } from "../lib/domain/dates";
 
 export const BUCKETS = [
@@ -27,6 +28,7 @@ export default function RunningList({ onCountChange }) {
   const [draftFor, setDraftFor] = useState(null);
   const [draft, setDraft] = useState({ text: "", who: "", notes: "", due_date: "" });
   const [editing, setEditing] = useState(null);
+  const [attachFor, setAttachFor] = useState(null);
   const [showDone, setShowDone] = useState(false);
 
   const load = useCallback(async () => {
@@ -162,6 +164,7 @@ export default function RunningList({ onCountChange }) {
                       editing={editing === it.id}
                       onEdit={() => setEditing(editing === it.id ? null : it.id)}
                       onPatch={patch} onRemove={remove}
+                      onAttach={setAttachFor}
                     />
                   ))}
                 </div>
@@ -170,6 +173,16 @@ export default function RunningList({ onCountChange }) {
           );
         })}
       </div>
+
+      {attachFor && (
+        <AttachSheet
+          item={attachFor}
+          table="running_items"
+          folder="planner"
+          onClose={() => setAttachFor(null)}
+          onSaved={() => { setAttachFor(null); load(); }}
+        />
+      )}
 
       {!items.length && (
         <div style={{ marginTop: 12 }}>
@@ -183,7 +196,7 @@ export default function RunningList({ onCountChange }) {
   );
 }
 
-function Row({ it, editing, onEdit, onPatch, onRemove }) {
+function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
   const [text, setText] = useState(it.text);
   const [who, setWho] = useState(it.who || "");
   const [notes, setNotes] = useState(it.notes || "");
@@ -209,9 +222,12 @@ function Row({ it, editing, onEdit, onPatch, onRemove }) {
           <Input type="date" value={due} onChange={setDue} />
         </div>
         <Area value={notes} onChange={setNotes} placeholder="Notes" rows={2} />
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn kind="primary" size="sm" onClick={save}>Save</Btn>
           <Btn kind="plain" size="sm" onClick={onEdit}>Cancel</Btn>
+          <Btn kind="plain" size="sm" onClick={() => onAttach?.(it)}>
+            <Paperclip size={14} />Link Or File
+          </Btn>
           <Btn kind="plain" size="sm" style={{ marginLeft: "auto" }} onClick={() => onRemove(it)}>
             <Trash2 size={14} />
           </Btn>
@@ -256,6 +272,25 @@ function Row({ it, editing, onEdit, onPatch, onRemove }) {
         </div>
         {it.notes && (
           <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>
+        )}
+
+        {/* Links and files open straight from the row. stopPropagation keeps a
+            tap on the link from also opening the row for editing. */}
+        {(it.link_url || it.attachment_url) && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+            {it.link_url && (
+              <a href={it.link_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                <Link2 size={12} />Link
+              </a>
+            )}
+            {it.attachment_url && (
+              <a href={it.attachment_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13.5, fontWeight: 700, color: T.primaryDeep, textDecoration: "none" }}>
+                <Paperclip size={12} />{it.attachment_name || "Attachment"}
+              </a>
+            )}
+          </div>
         )}
       </div>
     </div>

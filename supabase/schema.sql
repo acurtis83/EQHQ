@@ -391,6 +391,13 @@ create table if not exists running_items (
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );
+
+-- Added after the first release. These run here, immediately after the table,
+-- because indexes and policies further down reference these columns. No-ops
+-- when the column already exists.
+alter table running_items add column if not exists link_url text;
+alter table running_items add column if not exists attachment_url text;
+alter table running_items add column if not exists attachment_name text;
 create index if not exists running_bucket_idx on running_items (bucket);
 
 -- Committees. Renameable, so they're rows rather than a hardcoded list.

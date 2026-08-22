@@ -41,6 +41,13 @@ begin
     end if;
   end if;
 
+  -- ---------- Planner items: links and attachments ----------
+  if to_regclass('public.running_items') is not null then
+    alter table running_items add column if not exists link_url text;
+    alter table running_items add column if not exists attachment_url text;
+    alter table running_items add column if not exists attachment_name text;
+  end if;
+
   -- ---------- Agenda items: links and attachments ----------
   if to_regclass('public.agenda_items') is not null then
     alter table agenda_items add column if not exists link_url text;
