@@ -78,22 +78,51 @@ const RE_DATE = new RegExp(
 const STREET =
   "N|S|E|W|NE|NW|SE|SW|North|South|East|West|St|Street|Ave|Avenue|Rd|Road|Dr|Drive|" +
   "Ln|Lane|Ct|Court|Cir|Circle|Blvd|Way|Pl|Place|Ter|Terrace|Pkwy|Trail|Trl|Loop|Hwy";
+// What can follow the street: the rest of that line, then any number of
+// comma-separated pieces — a unit ("Box # 212", "Apt 4") and/or the city —
+// then the state and ZIP. The earlier version allowed only ONE comma segment
+// of plain letters, so "4956 West 6200 South, Box # 212, Salt Lake City UT
+// 84118" stopped dead at "Box" and lost the city.
+const TAIL =
+  "[^,\\n]*" +                                                    // rest of the street line
+  "(?:,\\s*[\\w.#'&-]+(?:\\s+[\\w.#'&-]+){0,5})*" +           // , unit and/or city
+  "(?:,?\\s*\\b[A-Z]{2}\\b)?" +                                   // , ST
+  "(?:\\s*\\d{5}(?:-\\d{4})?)?";                              // ZIP
 const RE_ADDRESS = new RegExp(
-  "\\b\\d{1,6}\\s+(?!\\d)" +                    // house number, not followed by another number
-  "(?:[\\w.'-]+\\s+){0,4}" +                       // a few street-name words
-  "(?:" + STREET + ")\\b" +                          // the street word itself
-  "[^,\\n]*" +                                       // rest of line 1
-  "(?:,\\s*[A-Za-z .]+)?" +                          // , City
-  "(?:,?\\s*[A-Z]{2})?" +                            // , ST
-  "(?:\\s*\\d{5}(?:-\\d{4})?)?",                 // ZIP
+  "(?:" +
+    "\\b\\d{1,6}\\s+(?!\\d)" +                  // house number, not followed by another number
+    "(?:[\\w.'-]+\\s+){0,4}" +                     // a few street-name words
+    "(?:" + STREET + ")\\b" +                        // the street word itself
+  "|" +
+    // A PO box is a whole address with no street in it. Without this branch
+    // the address field comes back empty for anyone who has one.
+    "\\bP\\.?\\s*O\\.?\\s*Box\\s+\\d+" +
+  ")" + TAIL,
   "i"
 );
 
-// "Lehi UT 84048", "Lehi, UT 84048" — the second line of an address. Without
-// this it reads as a person's name and splits one member into two records,
-// stranding their phone and email on the phantom second row.
+/* --------------------- lines that CONTINUE a record ---------------------- */
+// An export puts one person across several lines. Deciding where the next
+// person begins is the whole game: guess wrong and one member becomes two,
+// with the second holding the phone and no age. Everything below is a line
+// that looks like a new name but isn't.
+
+// "Lehi UT 84048", "Lehi, UT 84048", "Salt Lake City UT 84118" — and also
+// "Lehi UT" or "Lehi UT UTAH", where the ZIP is missing or someone typed the
+// state name into the ZIP box. Requiring a ZIP here is what split those rows.
 const RE_CITY_STATE_ZIP =
-  /^[A-Za-z][A-Za-z .'-]*,?\s+[A-Z]{2}\.?[,]?\s+\d{5}(?:-\d{4})?\.?$/;
+  /^[A-Za-z][A-Za-z .'-]*,?\s+[A-Z]{2}\.?[,]?(?:\s+(?:\d{5}(?:-\d{4})?|[A-Za-z]{2,}))?\.?$/;
+
+// "PO Box 4943", "P.O. Box 981204"
+const RE_PO_BOX = /^p\.?\s*o\.?\s*box\b/i;
+
+// A second address line: "Box # 212", "Apt 4", "Unit B", "#212", "Ste 300".
+const RE_SECONDARY =
+  /^(?:apt|apartment|unit|ste|suite|bldg|building|box|rm|room|fl|floor|lot|trlr|space|spc|#)\b[\s.#-]*[\w-]*$/i;
+
+// LDS Tools prints membership status under the name.
+const RE_STATUS =
+  /^(?:not\s+baptized|unbaptized|prospective\s+elder|deceased|do\s+not\s+contact|moved\s+out|no\s+longer\s+a\s+member)$/i;
 
 const SKIP =
   /^(ward directory|directory|members?|household|description|edit report|count:|search|your report|preferred name|priesthood|birth ?date|name\b|age\b|address\b|phone\b|e-?mail\b|page \d+|printed)/i;
@@ -188,6 +217,26 @@ export function parseDirectory(text) {
 
   // Group lines into records. A line that starts a new person is one that
   // contains a name and no contact-only content.
+  // A line that looks like a new person but belongs to the one above.
+  // `buf` is the record built so far, which lets us treat a bare status line
+  // ("Not Baptized") as a continuation only when it sits directly under a name
+  // that hasn't got its age or birthdate yet.
+  const continuesRecord = (line, buf) => {
+    const t = line.trim();
+    if (RE_CITY_STATE_ZIP.test(t)) return true;
+    if (RE_PO_BOX.test(t)) return true;
+    if (RE_SECONDARY.test(t)) return true;
+    if (RE_STATUS.test(t)) return true;
+
+    // Catch-all for statuses not in the list above: a short, digit-free line
+    // right after a "Last, First" line, before any date has been seen. A real
+    // next person would carry their own age and birthdate.
+    if (buf.length && !/\d/.test(t) && t.split(/\s+/).length <= 3) {
+      if (buf[0].includes(",") && !RE_DATE.test(buf.join(" "))) return true;
+    }
+    return false;
+  };
+
   const startsRecord = (line) => {
     const t = line.trim();
     if (!t || SKIP.test(t)) return false;
@@ -207,7 +256,8 @@ export function parseDirectory(text) {
     // Put a comma before a city/state/ZIP line so the address reads
     // "2685 N Drexler Dr, Lehi UT 84048" rather than running together.
     const joined = buffer
-      .map((l, i) => (i > 0 && RE_CITY_STATE_ZIP.test(l) ? ", " + l : " " + l))
+      .map((l, i) =>
+        i > 0 && (RE_CITY_STATE_ZIP.test(l) || RE_SECONDARY.test(l)) ? ", " + l : " " + l)
       .join("")
       .replace(/^\s+/, "");
     const rec = parseRecord(joined);
@@ -226,7 +276,7 @@ export function parseDirectory(text) {
     if (!/[A-Za-z]/.test(t) && !RE_PHONE.test(t)) {
       flush(); skipped.push(t.slice(0, 90)); continue;
     }
-    if (startsRecord(t) && buffer.length) flush();
+    if (startsRecord(t) && buffer.length && !continuesRecord(t, buffer)) flush();
     buffer.push(t);
   }
   flush();
