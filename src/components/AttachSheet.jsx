@@ -9,6 +9,28 @@ import { T, Btn, Input } from "./ui";
 export const BUCKET = "agenda-files";
 
 /**
+ * Storage errors, in words that say what to do.
+ *
+ * "new row violates row-level security policy" is the message Supabase gives
+ * when the bucket exists but nothing grants the right to write to it — which
+ * reads like a bug in the app rather than a setting that was never applied.
+ */
+export function storageError(message) {
+  const m = String(message || "");
+  if (/bucket not found/i.test(m)) {
+    return `No storage bucket named "${BUCKET}". Create it in Supabase → Storage, marked public.`;
+  }
+  if (/row-level security|violates row-level/i.test(m)) {
+    return "Uploads aren't allowed yet — the storage bucket has no write policy. " +
+      "Run supabase/storage.sql in the Supabase SQL editor, then try again.";
+  }
+  if (/payload too large|exceeded the maximum/i.test(m)) {
+    return "That file is larger than the bucket's size limit. Raise it in Supabase → Storage, or use a smaller image.";
+  }
+  return m;
+}
+
+/**
  * Attach a web link and/or a file to a row.
  *
  * Used by both the Agenda and the Planner, which are different tables with the
@@ -29,11 +51,7 @@ export default function AttachSheet({ item, table, folder, onClose, onSaved }) {
     const path = `${folder || table}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
     const up = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
     if (up.error) {
-      setErr(
-        up.error.message.includes("Bucket not found")
-          ? `No storage bucket named "${BUCKET}". Create it in Supabase → Storage, marked public.`
-          : up.error.message
-      );
+      setErr(storageError(up.error.message));
       setBusy(false);
       return;
     }

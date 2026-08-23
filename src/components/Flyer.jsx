@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ImagePlus, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, Btn } from "./ui";
-import { BUCKET } from "./AttachSheet";
+import { BUCKET, storageError } from "./AttachSheet";
 
 // Flyers go in the bucket that already exists, under their own prefix, rather
 // than asking for a second bucket to be created in Supabase.
@@ -81,11 +81,7 @@ export function FlyerPicker({ row, table, onSaved, save: saveOverride, label = "
     const path = `${FOLDER}/${table}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
     const up = await supabase.storage.from(BUCKET).upload(path, file, { upsert: false });
     if (up.error) {
-      setErr(
-        up.error.message.includes("Bucket not found")
-          ? `No storage bucket named "${BUCKET}". Create it in Supabase → Storage, marked public.`
-          : up.error.message
-      );
+      setErr(storageError(up.error.message));
       setBusy(false);
       return;
     }
