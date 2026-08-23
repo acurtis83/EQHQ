@@ -102,19 +102,26 @@ input[type="date"], input[type="time"] {
 /* The home tiles are a 2x2 block, not a row of four: "Announcements" and
    "Temple Trips" are long labels, and two per line gives them room. The
    !important is fighting the mobile single-column rule above. */
-.eq-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+/* Rings sit four across at every width — that's the point of them. Two per row
+   on a phone was what pushed the posts below the fold. */
+.eq-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 
-/* Tiles on the left, what's coming up on the right. Stacked on a phone, side
-   by side once there's room, and stretched so the two blocks end level. */
-.eq-feed-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
-  margin-bottom: 16px;
+/* Very narrow phones: the labels are the first thing to run out of room, so
+   let them wrap to two lines rather than shrinking the rings. */
+/* The longest label is one unbreakable word, so it hyphenates rather than
+   breaking mid-syllable. Below ~380px even the first half needs to be smaller. */
+.eq-ring-label { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
+@media (max-width: 380px) {
+  .eq-ring-label { font-size: 10.5px !important; }
 }
-@media (min-width: 760px) {
-  .eq-feed-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+
+/* A row of rings, then what's next on one line. Both full width and stacked —
+   the feed itself should start within the first screenful. */
+.eq-feed-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 .eq-feed-top > * { min-width: 0; }
 

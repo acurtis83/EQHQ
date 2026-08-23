@@ -86,20 +86,23 @@ export default async function sharePreview(request, context) {
   const description = escapeHtml(
     form.description || "Tap to sign up — no account needed."
   );
-  const image = `${url.origin}/icons/icon-512.png`;
 
+  // Deliberately no og:image. An image is what makes Messages draw the big
+  // card with the ward logo filling it; with no image it falls back to the
+  // compact row — just the form's name and the domain, which is all a sign-up
+  // link needs to say. The description tag stays for Slack and email clients,
+  // which show it as a second line rather than a picture.
   const tags = [
     `<title>${title}</title>`,
+    `<meta name="description" content="${description}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
-    `<meta property="og:image" content="${image}" />`,
     `<meta property="og:url" content="${escapeHtml(url.href)}" />`,
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="EQ Hub" />`,
     `<meta name="twitter:card" content="summary" />`,
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
-    `<meta name="twitter:image" content="${image}" />`,
   ].join("\n    ");
 
   let html = await response.text();

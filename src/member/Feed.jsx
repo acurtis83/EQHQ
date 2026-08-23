@@ -7,10 +7,10 @@ import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui
 import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
 import HomeTiles from "./HomeTiles";
+import UpcomingStrip from "../components/UpcomingStrip";
 import { CATEGORIES, categoryMeta, sortForFeed } from "./categories";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
-import UpcomingList from "../components/UpcomingList";
 
 
 const emptyDraft = {
@@ -144,28 +144,18 @@ export default function Feed({ focus, onFocusHandled }) {
           Sunday agenda and the Presidency Home use. */}
       <div className="eq-feed-top">
         <HomeTiles counts={counts} active={filter} onPick={setFilter} />
-        <div style={{ ...card, padding: 14 }}>
-          <div style={{
-            fontSize: 12.5, fontWeight: 800, letterSpacing: "0.08em",
-            textTransform: "uppercase", color: T.sub, marginBottom: 10,
-            display: "flex", alignItems: "center", gap: 8,
-          }}>
-            Upcoming Events
-            {upcoming.length > 0 && <Chip color={T.sub} bg={T.inset}>{upcoming.length}</Chip>}
-          </div>
-          <UpcomingList
-            empty="Nothing on the calendar yet."
-            items={upcoming.slice(0, 4).map((p) => ({
-              id: p.id,
-              when: p.event_date,
-              title: p.title,
-              meta: [p.event_time, p.event_location].filter(Boolean).join(" · "),
-              // Only a form counts as a sign-up here; a plain details link
-              // isn't something to sign up for.
-              signUpHref: /[?&]f=/.test(p.link_url || "") ? p.link_url : null,
-            }))}
-          />
-        </div>
+        <UpcomingStrip
+          empty="Nothing on the calendar yet."
+          items={upcoming.slice(0, 6).map((p) => ({
+            id: p.id,
+            when: p.event_date,
+            title: p.title,
+            meta: [p.event_time, p.event_location].filter(Boolean).join(" · "),
+            // Only a form counts as a sign-up here; a plain details link
+            // isn't something to sign up for.
+            signUpHref: /[?&]f=/.test(p.link_url || "") ? p.link_url : null,
+          }))}
+        />
       </div>
 
       {filter !== "all" && (
