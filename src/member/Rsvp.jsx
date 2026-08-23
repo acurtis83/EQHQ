@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Users } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { newId } from "../lib/newId";
 import { T, Btn, Input } from "../components/ui";
 
 // Which RSVPs this browser created, so "I'm in" can be taken back.
@@ -50,11 +51,15 @@ export default function Rsvp({ postId, name, setName }) {
     const who = (name || "").trim();
     if (!who) { setAsking(true); return; }
     setBusy(true); setErr("");
-    const { data, error } = await supabase
-      .from("rsvps").insert({ post_id: postId, name: who }).select("id").single();
+    // Same reason as the form: rsvps has no public read policy, so asking for
+    // the row back would have the insert refused. The id is made here instead,
+    // which is also what gets kept so this person can take themselves off.
+    const id = newId();
+    const { error } = await supabase
+      .from("rsvps").insert({ id, post_id: postId, name: who });
     setBusy(false);
     if (error) { setErr(error.message); return; }
-    remember(postId, data.id);
+    remember(postId, id);
     setAsking(false);
     load();
   };

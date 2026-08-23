@@ -3,9 +3,27 @@ import { Check, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Chip } from "../components/ui";
 import { FlyerHeader } from "../components/Flyer";
+import { newId } from "../lib/newId";
+
 import {
   capacityState, normalizeOptions, optionLabel, validateResponse,
 } from "../lib/domain/forms";
+
+/**
+ * A blocked submission, in words a member can act on.
+ *
+ * The remaining way to trip the policy is an unpublished form: the check is
+ * "does a published form with this id exist". Members can't tell that from the
+ * raw message, and neither could the presidency.
+ */
+function submitError(message) {
+  const m = String(message || "");
+  if (/row-level security|violates row-level/i.test(m)) {
+    return "This form isn't accepting responses. It may not be published yet — " +
+      "ask the presidency to publish it, then try again.";
+  }
+  return m;
+}
 
 // Renders a published form for a member and takes their submission.
 // Used both inside the app and on the ?f=<id> share route.
@@ -70,19 +88,21 @@ export default function FormFill({ formId, onDone, embedded }) {
     setBusy(true);
     if (!form.anonymous) localStorage.setItem("eq_member_name", name.trim());
 
-    const { data: resp, error: e1 } = await supabase
+    // The id is decided here rather than read back — see lib/newId.js. Asking
+    // Postgres to return the new row runs it past the SELECT policy, and there
+    // isn't one for members by design, so the insert was being rejected.
+    const responseId = newId();
+    const { error: e1 } = await supabase
       .from("form_responses")
-      .insert({ form_id: form.id, respondent_name: form.anonymous ? null : name.trim() })
-      .select()
-      .single();
-    if (e1) { setErr(e1.message); setBusy(false); return; }
+      .insert({ id: responseId, form_id: form.id, respondent_name: form.anonymous ? null : name.trim() });
+    if (e1) { setErr(submitError(e1.message)); setBusy(false); return; }
 
     const rows = questions
       .filter((q) => answers[q.id] !== undefined && answers[q.id] !== "")
-      .map((q) => ({ response_id: resp.id, question_id: q.id, value: answers[q.id] }));
+      .map((q) => ({ response_id: responseId, question_id: q.id, value: answers[q.id] }));
     if (rows.length) {
       const { error: e2 } = await supabase.from("form_answers").insert(rows);
-      if (e2) { setErr(e2.message); setBusy(false); return; }
+      if (e2) { setErr(submitError(e2.message)); setBusy(false); return; }
     }
     setBusy(false);
     setDone(true);
