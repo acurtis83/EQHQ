@@ -39,6 +39,18 @@ export default function FormFill({ formId, onDone, embedded }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Name the browser tab and anything the phone's own share sheet picks up
+  // after the app has loaded. The link preview itself is handled at the edge,
+  // since Messages never gets this far.
+  useEffect(() => {
+    if (!embedded && form?.title) {
+      const was = document.title;
+      document.title = form.title;
+      return () => { document.title = was; };
+    }
+    return undefined;
+  }, [embedded, form?.title]);
+
   const closed = useMemo(() => {
     if (!form?.closes_on) return false;
     return form.closes_on < new Date().toISOString().slice(0, 10);

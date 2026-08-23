@@ -6,6 +6,12 @@
 [functions]
   node_bundler = "esbuild"
 
+# Rewrites the title and preview tags on a shared form link before the HTML
+# goes out. Messages and Slack don't run JavaScript, so the app can't do it.
+[[edge_functions]]
+  path = "/"
+  function = "share-preview"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
