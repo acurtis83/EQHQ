@@ -33,31 +33,37 @@ function Tile({ tile, count, on, onPick }) {
         background: on ? tile.soft : T.panel,
         border: `1px solid ${on ? tile.accent : T.lineSoft}`,
         borderRadius: 14,
-        padding: "11px 5px 9px",
-        minHeight: 88,
+        padding: "13px 6px 11px",
+        minHeight: 112,
+        height: "100%",
         cursor: "pointer",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 5,
+        gap: 6,
         minWidth: 0,
         boxShadow: on ? "none" : "var(--card-shadow)",
       }}
     >
-      <Icon size={22} style={{ color: iconColor, flex: "0 0 auto" }} />
+      <Icon size={30} style={{ color: iconColor, flex: "0 0 auto" }} />
 
       {/* Two lines' worth of height always, so the four tiles sit level
           whether the label wraps or not. */}
       <span
         className="eq-tile-label"
         style={{
-          fontSize: 11.5,
+          // "Announce-" — the widest piece after hyphenation — costs about 6px
+          // of width for every 1px of font size, and a tile has roughly 68px of
+          // room at 375px. So 14px only fits from about 430px up; the
+          // stylesheet steps it down below that rather than letting the word
+          // break onto a third line.
+          fontSize: 14,
           fontWeight: 700,
           color: on ? tile.accent : (empty ? T.faint : T.ink),
           textAlign: "center",
           lineHeight: 1.15,
-          minHeight: 27,
+          minHeight: 33,
           minWidth: 0,
           hyphens: "auto",
           WebkitHyphens: "auto",
@@ -66,7 +72,7 @@ function Tile({ tile, count, on, onPick }) {
         {tile.short}
       </span>
 
-      <span style={{ fontSize: 13.5, fontWeight: 800, color: countColor, lineHeight: 1 }}>
+      <span style={{ fontSize: 18, fontWeight: 800, color: countColor, lineHeight: 1 }}>
         {count}
       </span>
     </button>

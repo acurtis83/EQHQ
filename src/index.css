@@ -99,23 +99,29 @@ input[type="date"], input[type="time"] {
 /* The callings board scrolls sideways on purpose — don't collapse it. */
 .eq-callings-board { grid-template-columns: none !important; }
 
-/* The home tiles are a 2x2 block, not a row of four: "Announcements" and
-   "Temple Trips" are long labels, and two per line gives them room. The
-   !important is fighting the mobile single-column rule above. */
 /* Four across at every width. Two per row on a phone was what pushed the posts
-   below the fold. */
+   below the fold, which is what this row was reshaped to fix. */
 .eq-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 
-/* Very narrow phones: the labels are the first thing to run out of room, so
-   let them wrap to two lines rather than shrinking the rings. */
-/* The longest label is one unbreakable word, so it hyphenates rather than
-   breaking mid-syllable. Below ~380px even the first half needs to be smaller. */
+/* "Announcements" is one unbreakable word, so it hyphenates rather than
+   breaking mid-syllable.
+   Measured against DejaVu Sans Bold, which is wider than the system font:
+   "Announce-" costs about 6px of width per 1px of font size, and a tile has
+   roughly 68px of label room at 375px, 72px at 390px and 78px at 414px. Each
+   step below is the largest size that still keeps the word on two lines at
+   that width — a third line would make the row taller for one long label.
+   Below ~340px it does take three lines; the tiles stretch to match, so the
+   row still ends level. */
 .eq-tile-label { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
-@media (max-width: 380px) {
-  .eq-tile-label { font-size: 10.5px !important; }
-}
+@media (max-width: 430px) { .eq-tile-label { font-size: 13px !important; } }
+@media (max-width: 400px) { .eq-tile-label { font-size: 12px !important; } }
+@media (max-width: 376px) { .eq-tile-label { font-size: 11px !important; } }
+@media (max-width: 364px) { .eq-tile-label { font-size: 10.5px !important; } }
 
-/* A row of rings, then what's next on one line. Both full width and stacked —
+/* Every tile the same box, even when one label wraps further than the rest. */
+.eq-tiles > * { height: 100%; }
+
+/* A row of tiles, then what's next on one line. Both full width and stacked —
    the feed itself should start within the first screenful. */
 .eq-feed-top {
   display: flex;

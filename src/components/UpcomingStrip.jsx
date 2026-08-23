@@ -27,8 +27,14 @@ export default function UpcomingStrip({ items, empty = "Nothing on the calendar 
 
   if (!next) {
     return (
-      <div style={{ ...card, padding: "10px 13px", fontSize: 14, color: T.faint }}>
-        {empty}
+      <div style={{ ...card, padding: "10px 13px", display: "flex", flexDirection: "column", gap: 3 }}>
+        <span style={{
+          fontSize: 12.5, fontWeight: 800, color: T.sub,
+          letterSpacing: "0.08em", textTransform: "uppercase",
+        }}>
+          Upcoming Events
+        </span>
+        <span style={{ fontSize: 14, color: T.faint }}>{empty}</span>
       </div>
     );
   }
@@ -40,38 +46,57 @@ export default function UpcomingStrip({ items, empty = "Nothing on the calendar 
         aria-expanded={open}
         style={{
           width: "100%", background: "transparent", border: "none",
-          padding: "10px 13px", cursor: rest > 0 ? "pointer" : "default",
-          display: "flex", alignItems: "center", gap: 9, textAlign: "left", minWidth: 0,
+          padding: "9px 13px 10px", cursor: rest > 0 ? "pointer" : "default",
+          display: "flex", flexDirection: "column", gap: 4,
+          textAlign: "left", minWidth: 0,
         }}
       >
-        <Calendar size={15} style={{ color: T.sub, flex: "0 0 auto" }} />
-
-        {/* The date is the reason this row exists, so it leads. */}
-        <span style={{
-          fontSize: 12.5, fontWeight: 800, color: T.sub, letterSpacing: "0.04em",
-          textTransform: "uppercase", flex: "0 0 auto",
-        }}>
-          {shortDate(next.when)}
+        {/* Titled, so it's obvious what the row is rather than a stray date.
+            The count and the chevron share this line to keep the strip short. */}
+        <span style={{ display: "flex", alignItems: "center", gap: 7, width: "100%", minWidth: 0 }}>
+          <Calendar size={13} style={{ color: T.sub, flex: "0 0 auto" }} />
+          <span style={{
+            fontSize: 12, fontWeight: 800, color: T.sub,
+            letterSpacing: "0.07em", textTransform: "uppercase", whiteSpace: "nowrap",
+          }}>
+            Upcoming Events
+          </span>
+          {items.length > 0 && (
+            <Chip color={T.sub} bg={T.inset}>{items.length}</Chip>
+          )}
+          {rest > 0 && (
+            <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, flex: "0 0 auto" }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: T.faint }}>
+                {open ? "Hide" : "Show all"}
+              </span>
+              <ChevronDown
+                size={15}
+                style={{
+                  color: T.faint,
+                  transform: open ? "rotate(180deg)" : "none",
+                  transition: "transform 140ms ease",
+                }}
+              />
+            </span>
+          )}
         </span>
 
-        <span style={{
-          fontSize: 14.5, fontWeight: 700, color: T.ink, minWidth: 0,
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {next.title}
-        </span>
-
-        {rest > 0 && (
-          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, flex: "0 0 auto" }}>
-            <Chip color={T.sub} bg={T.inset}>{open ? "Hide" : `+${rest} more`}</Chip>
-            <ChevronDown
-              size={15}
-              style={{
-                color: T.faint,
-                transform: open ? "rotate(180deg)" : "none",
-                transition: "transform 140ms ease",
-              }}
-            />
+        {/* What's actually next. Hidden once the full list is open, since the
+            first row of that list says the same thing. */}
+        {!open && (
+          <span style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+            <span style={{
+              fontSize: 12.5, fontWeight: 800, color: T.sub, letterSpacing: "0.04em",
+              textTransform: "uppercase", flex: "0 0 auto",
+            }}>
+              {shortDate(next.when)}
+            </span>
+            <span style={{
+              fontSize: 14.5, fontWeight: 700, color: T.ink, minWidth: 0,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {next.title}
+            </span>
           </span>
         )}
       </button>

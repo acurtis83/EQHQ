@@ -243,8 +243,18 @@ export function summarize(question, values) {
   const present = values.filter((v) => !isBlank(v));
   if (question.type === "scale" || question.type === "number") {
     const nums = present.map(Number).filter((n) => !isNaN(n));
-    const avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
-    return { kind: "number", count: nums.length, average: avg == null ? null : Math.round(avg * 10) / 10 };
+    const sum = nums.reduce((a, b) => a + b, 0);
+    const avg = nums.length ? sum / nums.length : null;
+    // A total and an average answer different questions. "How many will
+    // attend" wants the total — it's the headcount you cook for. A 1-5 rating
+    // wants the average, where a total means nothing. Both are returned and
+    // the caller leads with whichever fits the question.
+    return {
+      kind: "number",
+      count: nums.length,
+      total: nums.length ? sum : null,
+      average: avg == null ? null : Math.round(avg * 10) / 10,
+    };
   }
   if (["choice", "checkboxes", "capacity", "yesno"].includes(question.type)) {
     const tally = {};
@@ -261,4 +271,54 @@ export function summarize(question, values) {
     };
   }
   return { kind: "text", count: present.length, samples: present.slice(0, 20).map(String) };
+}
+
+
+/**
+ * How full a whole sign-up question is, across every slot.
+ *
+ * capacityState answers this for one slot; this is the line at the top of the
+ * question — 12 of 18 taken, 6 still needed — so you can tell at a glance
+ * whether the assignment is covered without adding the slots up yourself.
+ */
+export function capacityTotals(question, values) {
+  const opts = normalizeOptions(question.type, question.options);
+  let needed = 0;
+  let taken = 0;
+  for (const o of opts) {
+    const st = capacityState(o, values);
+    needed += st.limit;
+    // Capped per slot: three people on a two-person slot is still two filled,
+    // and the overflow shouldn't make the whole question look complete.
+    taken += Math.min(st.taken, st.limit);
+  }
+  return { needed, taken, remaining: Math.max(0, needed - taken), complete: needed > 0 && taken >= needed };
+}
+
+/**
+ * Who picked what.
+ *
+ * Takes { value, name } pairs — one per submitted answer — and groups the
+ * names under each option, so a sign-up reads as "Dessert: Cameron, Karl"
+ * rather than "Dessert: 2".
+ *
+ * An anonymous form has no names to show. Those answers still count toward the
+ * tally; they just come back as an unnamed tally rather than a list, because
+ * inventing "Anonymous" as a person would be worse than saying nothing.
+ */
+export function namesByOption(question, rows) {
+  const out = {};
+  for (const r of rows || []) {
+    if (isBlank(r.value)) continue;
+    for (const one of Array.isArray(r.value) ? r.value : [r.value]) {
+      const k = String(one);
+      (out[k] ||= { names: [], anonymous: 0 });
+      const name = (r.name || "").trim();
+      if (name) out[k].names.push(name);
+      else out[k].anonymous += 1;
+    }
+  }
+  // Stable order so the list doesn't reshuffle between renders.
+  for (const k of Object.keys(out)) out[k].names.sort((a, b) => a.localeCompare(b));
+  return out;
 }

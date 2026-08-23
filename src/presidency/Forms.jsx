@@ -7,7 +7,7 @@ import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle, Empty } from "../components/ui";
 import {
   QUESTION_TYPES, needsOptions, normalizeOptions, optionLabel, capacityState,
-  FORM_TEMPLATES, responsesToCsv, summarize,
+  FORM_TEMPLATES, responsesToCsv, summarize, capacityTotals, namesByOption,
 } from "../lib/domain/forms";
 import FormFill from "../member/FormFill";
 import { FlyerPicker } from "../components/Flyer";
@@ -520,6 +520,96 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
   );
 }
 
+/**
+ * A sign-up question, answered.
+ *
+ * Counts alone don't tell you what you need to know before a barbecue: which
+ * slots are still open, and who said they'd cover the ones that aren't. Both
+ * are here — a filled/needed line at the top, then each option with the names
+ * under it.
+ */
+function TallySummary({ q, summary, values, rows }) {
+  const isCapacity = q.type === "capacity";
+  const totals = isCapacity ? capacityTotals(q, values) : null;
+  const names = namesByOption(q, rows);
+  const options = normalizeOptions(q.type, q.options);
+
+  // Every option, not just the ones somebody picked — an empty slot is the
+  // most important thing on this list.
+  const shown = options.length
+    ? options.map((o) => optionLabel(o))
+    : summary.tally.map(([label]) => label);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {totals && totals.needed > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 15.5, fontWeight: 800, color: T.ink }}>
+            {totals.taken} of {totals.needed} filled
+          </span>
+          <Chip
+            color={totals.complete ? T.green : T.gold}
+            bg={totals.complete ? T.greenSoft : T.goldSoft}
+          >
+            {totals.complete ? "All covered" : `${totals.remaining} still needed`}
+          </Chip>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {shown.map((label) => {
+          const opt = options.find((o) => optionLabel(o) === label);
+          const cap = isCapacity && opt ? capacityState(opt, values) : null;
+          const who = names[label] || { names: [], anonymous: 0 };
+          const n = who.names.length + who.anonymous;
+
+          return (
+            <div
+              key={label}
+              style={{
+                background: cap?.full ? T.greenSoft : T.inset,
+                border: `1px solid ${cap?.full ? T.green : T.lineSoft}`,
+                borderRadius: 10,
+                padding: "8px 10px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: T.ink, flex: 1, minWidth: 0 }}>
+                  {label}
+                </span>
+                <span style={{ fontSize: 14.5, fontWeight: 700, color: cap?.full ? T.green : T.sub }}>
+                  {cap ? `${cap.taken}/${cap.limit}` : n}
+                </span>
+              </div>
+
+              {/* Who took it. An anonymous form has no names to show, so it
+                  falls back to a count rather than inventing people. */}
+              {(who.names.length > 0 || who.anonymous > 0) && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
+                  {who.names.map((nm, i) => (
+                    <Chip key={`${nm}-${i}`} color={T.ink} bg={T.panel}>{nm}</Chip>
+                  ))}
+                  {who.anonymous > 0 && (
+                    <Chip color={T.faint} bg={T.panel}>
+                      {who.anonymous} anonymous
+                    </Chip>
+                  )}
+                </div>
+              )}
+
+              {cap && !cap.full && (
+                <div style={{ fontSize: 13, color: T.gold, fontWeight: 700, marginTop: 6 }}>
+                  {cap.limit - cap.taken} still needed
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Results({ form, questions }) {
   const [responses, setResponses] = useState([]);
   const [answers, setAnswers] = useState([]);
@@ -546,6 +636,18 @@ function Results({ form, questions }) {
   }, [answers]);
 
   const valuesFor = (qid) => answers.filter((a) => a.question_id === qid).map((a) => a.value);
+
+  // Each answer paired with who gave it, so a sign-up can say who is bringing
+  // what rather than just how many.
+  const nameById = useMemo(() => {
+    const out = {};
+    for (const r of responses) out[r.id] = r.respondent_name || "";
+    return out;
+  }, [responses]);
+
+  const rowsFor = (qid) => answers
+    .filter((a) => a.question_id === qid)
+    .map((a) => ({ value: a.value, name: nameById[a.response_id] || "" }));
 
   const download = () => {
     const csv = responsesToCsv(form, questions, responses, byResponse);
@@ -590,26 +692,28 @@ function Results({ form, questions }) {
                   {s.count} answered
                 </div>
                 {s.kind === "number" && (
-                  <div style={{ fontSize: 24, fontWeight: 800, color: T.ink }}>
-                    {s.average == null ? "—" : s.average}
-                    <span style={{ fontSize: 14, fontWeight: 600, color: T.sub, marginLeft: 6 }}>average</span>
+                  /* "How many will attend" wants the total — that's the
+                     headcount. A 1-5 rating wants the average, where adding
+                     the scores up says nothing. Both are shown; which one
+                     leads depends on the question. */
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: T.ink }}>
+                      {q.type === "number"
+                        ? (s.total == null ? "—" : s.total)
+                        : (s.average == null ? "—" : s.average)}
+                      <span style={{ fontSize: 14, fontWeight: 600, color: T.sub, marginLeft: 6 }}>
+                        {q.type === "number" ? "total" : "average"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: T.sub }}>
+                      {q.type === "number"
+                        ? (s.average == null ? "" : `${s.average} average`)
+                        : (s.total == null ? "" : `${s.total} total`)}
+                    </div>
                   </div>
                 )}
                 {s.kind === "tally" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {s.tally.map(([label, n]) => {
-                      const opt = normalizeOptions(q.type, q.options).find((o) => optionLabel(o) === label);
-                      const cap = q.type === "capacity" && opt ? capacityState(opt, valuesFor(q.id)) : null;
-                      return (
-                        <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 15, color: T.ink, flex: 1, minWidth: 0 }}>{label}</span>
-                          <span style={{ fontSize: 14.5, fontWeight: 700, color: cap?.full ? T.green : T.sub }}>
-                            {cap ? `${cap.taken}/${cap.limit}` : n}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <TallySummary q={q} summary={s} values={valuesFor(q.id)} rows={rowsFor(q.id)} />
                 )}
                 {s.kind === "text" && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

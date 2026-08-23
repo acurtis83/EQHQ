@@ -200,6 +200,16 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
       flyer_url: row.flyer_url || null,
     };
 
+    // Publishing the announcement sends members to the sign-up, so the form
+    // has to be live too. A draft would open as "That form isn't available"
+    // for everyone who taps the link, with nothing on this screen saying why.
+    if (row.form_id) {
+      const linked = forms.find((f) => f.id === row.form_id);
+      if (linked && !linked.published) {
+        await supabase.from("forms").update({ published: true }).eq("id", row.form_id);
+      }
+    }
+
     if (row.post_id) {
       const { error } = await supabase.from("posts").update(payload).eq("id", row.post_id);
       setBusyId(null);
