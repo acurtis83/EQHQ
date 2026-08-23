@@ -610,24 +610,71 @@ function TallySummary({ q, summary, values, rows }) {
   );
 }
 
+/**
+ * A refused delete, in words that say what to do.
+ *
+ * Deleting responses needs its own policy — reading them isn't enough — and a
+ * database set up before that rule existed will simply refuse, silently as far
+ * as the message goes.
+ */
+function deleteError(message) {
+  const m = String(message || "");
+  if (/row-level security|violates row-level|permission denied/i.test(m)) {
+    return "Deleting responses isn't allowed yet — run supabase/public-forms.sql " +
+      "in the Supabase SQL editor, then try again.";
+  }
+  return m;
+}
+
 function Results({ form, questions }) {
   const [responses, setResponses] = useState([]);
   const [answers, setAnswers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("summary");
 
-  useEffect(() => {
-    (async () => {
-      const [r, a] = await Promise.all([
-        supabase.from("form_responses").select("*").eq("form_id", form.id).order("created_at", { ascending: false }),
-        supabase.from("form_answers").select("*"),
-      ]);
-      setResponses(r.data || []);
-      const ids = new Set((r.data || []).map((x) => x.id));
-      setAnswers((a.data || []).filter((x) => ids.has(x.response_id)));
-      setLoading(false);
-    })();
+  const [err, setErr] = useState("");
+
+  const load = useCallback(async () => {
+    const [r, a] = await Promise.all([
+      supabase.from("form_responses").select("*").eq("form_id", form.id).order("created_at", { ascending: false }),
+      supabase.from("form_answers").select("*"),
+    ]);
+    setResponses(r.data || []);
+    const ids = new Set((r.data || []).map((x) => x.id));
+    setAnswers((a.data || []).filter((x) => ids.has(x.response_id)));
+    setLoading(false);
   }, [form.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // form_answers.response_id cascades, so deleting the response takes its
+  // answers with it — and the slot it was holding frees up straight away.
+  const removeOne = async (r) => {
+    const who = form.anonymous ? "this response" : `${r.respondent_name || "this response"}`;
+    if (!confirm(`Delete ${who}? This can't be undone.`)) return;
+    const { error } = await supabase.from("form_responses").delete().eq("id", r.id);
+    if (error) setErr(deleteError(error.message));
+    else load();
+  };
+
+  // Testing a form before sending it out leaves rows behind that would
+  // otherwise be counted in the totals and hold slots nobody is actually
+  // filling. Typing the count is the guard — a plain OK is too easy to hit.
+  const clearAll = async () => {
+    const n = responses.length;
+    const typed = prompt(
+      `Delete all ${n} response${n === 1 ? "" : "s"} to "${form.title}"?\n\n` +
+      `This can't be undone. Type ${n} to confirm.`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== String(n)) {
+      setErr("Nothing was deleted — the number didn't match.");
+      return;
+    }
+    const { error } = await supabase.from("form_responses").delete().eq("form_id", form.id);
+    if (error) setErr(deleteError(error.message));
+    else { setErr(""); load(); }
+  };
 
   const byResponse = useMemo(() => {
     const out = {};
@@ -679,7 +726,21 @@ function Results({ form, questions }) {
           {view === "summary" ? "See each one" : "See summary"}
         </Btn>
         <Btn size="sm" kind="soft" onClick={download}><Download size={14} />CSV</Btn>
+        {/* Sits after the export on purpose — taking a copy first is the
+            sensible order, and it reads that way. */}
+        <Btn size="sm" kind="plain" onClick={clearAll}>
+          <Trash2 size={14} />Clear all
+        </Btn>
       </div>
+
+      {err && (
+        <div style={{
+          background: T.redSoft, border: `1px solid ${T.red}`, color: T.red,
+          borderRadius: 10, padding: "9px 12px", fontSize: 14, marginBottom: 12, lineHeight: 1.5,
+        }}>
+          {err}
+        </div>
+      )}
 
       {view === "summary" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -740,6 +801,9 @@ function Results({ form, questions }) {
                 <span style={{ marginLeft: "auto", fontSize: 13, color: T.faint }}>
                   {new Date(r.created_at).toLocaleDateString("en-US")}
                 </span>
+                <Btn size="sm" kind="plain" onClick={() => removeOne(r)} aria-label="Delete this response">
+                  <Trash2 size={14} />
+                </Btn>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {questions.map((q) => {

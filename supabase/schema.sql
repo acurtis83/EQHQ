@@ -244,6 +244,12 @@ drop policy if exists "Presidency reads answers" on form_answers;
 create policy "Presidency reads answers" on form_answers
   for select using (is_presidency());
 
+-- Clearing out test submissions, or removing one that was filed by mistake.
+-- form_answers.response_id cascades, so the answers go with the response.
+drop policy if exists "Presidency deletes responses" on form_responses;
+create policy "Presidency deletes responses" on form_responses
+  for delete using (is_presidency());
+
 drop policy if exists "Presidency manages forms" on forms;
 create policy "Presidency manages forms" on forms
   for all using (is_presidency()) with check (is_presidency());

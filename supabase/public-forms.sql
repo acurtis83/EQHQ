@@ -82,6 +82,13 @@ drop policy if exists "Presidency reads answers" on form_answers;
 create policy "Presidency reads answers" on form_answers
   for select using (is_presidency());
 
+-- Clearing out test submissions. The answers cascade with the response, so
+-- only form_responses needs the rule.
+grant delete on form_responses to authenticated;
+drop policy if exists "Presidency deletes responses" on form_responses;
+create policy "Presidency deletes responses" on form_responses
+  for delete using (is_presidency());
+
 notify pgrst, 'reload schema';
 
 -- ---------- what members can actually see right now ----------
