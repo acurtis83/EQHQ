@@ -4,6 +4,7 @@ import {
   Check, RefreshCw,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import PersonPick from "../components/PersonPick";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle } from "../components/ui";
 import {
@@ -864,21 +865,6 @@ function Line({ label, value, strong }) {
 }
 
 // Pick from the roster, or type a name for someone who isn't on it.
-function PersonPick({ members, value, onChange }) {
-  const known = members.some((m) => m.name === value);
-  return (
-    <>
-      <Select value={known || !value ? value : "__other"} onChange={(v) => onChange(v === "__other" ? value : v)}>
-        <option value="">— nobody yet —</option>
-        {members.filter((m) => m.active !== false).map((m) => (
-          <option key={m.id} value={m.name}>{m.name}</option>
-        ))}
-        {value && !known && <option value="__other">{value}</option>}
-      </Select>
-    </>
-  );
-}
-
 function Sheet({ title, onClose, children }) {
   return (
     <div onClick={onClose}

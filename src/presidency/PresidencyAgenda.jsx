@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, Check, Copy, ChevronLeft, CalendarPlus, ArrowDownToLine, Printer, Paperclip, Link2 } from "lucide-react";
+import { Plus, Trash2, Check, Copy, ChevronLeft, ChevronUp, ChevronDown, CalendarPlus, ArrowDownToLine, Printer, Paperclip, Link2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import PersonPick from "../components/PersonPick";
+import { CategoryChip, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
+import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import { fmtDate, fmtShort, toIso } from "../lib/domain/dates";
 import { BUCKETS, overdueDays } from "./RunningList";
@@ -11,13 +14,17 @@ const SECTIONS = [
   { key: "ministering", label: "Ministering Checks" },
 ];
 
-const blankItem = { text: "", who: "", notes: "", due_date: "", section: "items" };
+const blankItem = { text: "", who: "", notes: "", due_date: "", category: "", section: "items" };
 
 // Files live in a public Supabase Storage bucket named agenda-files.
 // See README — create it once, marked public, before attaching anything.
 // BUCKET now lives with the shared AttachSheet so the Planner uses the same one.
 
-export default function PresidencyAgenda() {
+export default function PresidencyAgenda({ onGo }) {
+  const [members, setMembers] = useState([]);
+  // Tapping an open calling lands on its card in the tracker, the same route
+  // the Home Hub uses.
+  const goCalling = (callingId) => onGo?.("callings", { callingId });
   const [agendas, setAgendas] = useState([]);
   const [selected, setSelected] = useState(null);
   const [items, setItems] = useState([]);
@@ -36,6 +43,10 @@ export default function PresidencyAgenda() {
     if (error) setErr(error.message);
     else setAgendas(data || []);
     setLoading(false);
+
+    // The roster, for the prayer pickers.
+    const r = await supabase.from("members").select("id,name,active").order("name");
+    setMembers(r.data || []);
   }, []);
 
   const loadItems = useCallback(async (agendaId) => {
@@ -75,6 +86,8 @@ export default function PresidencyAgenda() {
         agendas={agendas}
         onBack={() => { setSelected(null); loadAgendas(); }}
         onReloadItems={() => loadItems(selected.id)}
+        members={members}
+        onGoCalling={goCalling}
         onPatchAgenda={async (fields) => {
           const { error } = await supabase.from("agendas").update(fields).eq("id", selected.id);
           if (error) setErr(error.message);
@@ -142,13 +155,47 @@ export default function PresidencyAgenda() {
   );
 }
 
-function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err }) {
+/**
+ * Swap an item with its neighbour.
+ *
+ * The order items are discussed matters — prayers and time-sensitive business
+ * first, standing topics after — and until now it was whatever order they were
+ * added in. Only the two rows involved are written, so reordering a long
+ * agenda doesn't rewrite every row.
+ */
+async function swapOrder(a, b) {
+  await Promise.all([
+    supabase.from("agenda_items").update({ sort_order: b.sort_order }).eq("id", a.id),
+    supabase.from("agenda_items").update({ sort_order: a.sort_order }).eq("id", b.id),
+  ]);
+}
+
+function AgendaDetail({ agenda, items, agendas, members, onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err, onGoCalling }) {
   const [adding, setAdding] = useState(null); // section key
   const [draft, setDraft] = useState(blankItem);
   const [editing, setEditing] = useState(null);
   const [pullOpen, setPullOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [attachFor, setAttachFor] = useState(null);
+
+  const moveItem = async (it, list, dir) => {
+    const i = list.indexOf(it);
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    const other = list[j];
+    // Items added before ordering existed can all share sort_order 0, and
+    // swapping two identical values does nothing. Renumber the section first
+    // so the swap has something to trade.
+    if (it.sort_order === other.sort_order) {
+      await Promise.all(list.map((row, k) =>
+        supabase.from("agenda_items").update({ sort_order: k }).eq("id", row.id)));
+      const fixed = list.map((row, k) => ({ ...row, sort_order: k }));
+      await swapOrder(fixed[i], fixed[j]);
+    } else {
+      await swapOrder(it, other);
+    }
+    onReloadItems();
+  };
 
   const bySection = useMemo(() => {
     const out = {};
@@ -166,6 +213,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
       who: draft.who.trim() || null,
       notes: draft.notes.trim() || null,
       due_date: draft.due_date || null,
+      category: draft.category || null,
       sort_order: items.filter((i) => i.section === section).length,
     });
     if (!error) { setDraft(blankItem); setAdding(null); onReloadItems(); }
@@ -282,6 +330,18 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
             <Input value={agenda.location || ""} onChange={(v) => onPatchAgenda({ location: v })} placeholder="Bishop's office" />
           </Lbl>
         </div>
+        {/* The same two columns the Sunday agenda uses, on the same table —
+            a presidency meeting opens and closes with prayer too. */}
+        <div className="eq-row" style={{ display: "flex", gap: 10, marginTop: 10 }}>
+          <Lbl label="Opening Prayer">
+            <PersonPick members={members} value={agenda.opening_prayer || ""}
+              onChange={(v) => onPatchAgenda({ opening_prayer: v || null })} />
+          </Lbl>
+          <Lbl label="Closing Prayer">
+            <PersonPick members={members} value={agenda.closing_prayer || ""}
+              onChange={(v) => onPatchAgenda({ closing_prayer: v || null })} />
+          </Lbl>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
@@ -320,6 +380,7 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
                   <Input value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} placeholder="Who" />
                   <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
                 </div>
+                <CategoryPicker value={draft.category} onChange={(v) => setDraft({ ...draft, category: v || "" })} />
                 <Area value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} placeholder="Notes (optional)" rows={2} />
                 <div style={{ display: "flex", gap: 8 }}>
                   <Btn kind="primary" onClick={() => addItem(s.key)} disabled={!draft.text.trim()}>Add</Btn>
@@ -341,6 +402,10 @@ function AgendaDetail({ agenda, items, agendas, onBack, onReloadItems, onPatchAg
                     onEdit={() => setEditing(editing === it.id ? null : it.id)}
                     onPatch={patchItem} onRemove={removeItem}
                     onAttach={() => setAttachFor(it)}
+                    onGoCalling={onGoCalling}
+                    onMove={(dir) => moveItem(it, list, dir)}
+                    first={list.indexOf(it) === 0}
+                    last={list.indexOf(it) === list.length - 1}
                   />
                 ))}
               </div>
@@ -475,12 +540,17 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
   );
 }
 
-function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
+function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling, onMove, first, last }) {
   const [text, setText] = useState(it.text);
   const [who, setWho] = useState(it.who || "");
   const [notes, setNotes] = useState(it.notes || "");
   const [due, setDue] = useState(it.due_date || "");
+  const [cat, setCat] = useState(it.category || "");
   const late = overdueDays(it.due_date);
+  // The category tints the card's edge, so the agenda can be scanned by
+  // subject without reading every line.
+  const meta = it.category ? AGENDA_CATEGORIES.find((c) => c.key === it.category) : null;
+  const accent = it.done ? T.lineSoft : (meta ? meta.accent : T.lineSoft);
 
   if (editing) {
     return (
@@ -490,12 +560,14 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           <Input value={who} onChange={setWho} placeholder="Who" />
           <Input type="date" value={due} onChange={setDue} />
         </div>
+        <CategoryPicker value={cat} onChange={setCat} />
         <Area value={notes} onChange={setNotes} placeholder="Notes" rows={2} />
         <div style={{ display: "flex", gap: 8 }}>
           <Btn kind="primary" size="sm" onClick={() => {
             onPatch(it.id, {
               text: text.trim() || it.text, who: who.trim() || null,
               notes: notes.trim() || null, due_date: due || null,
+              category: cat || null,
             });
             onEdit();
           }}>Save</Btn>
@@ -512,7 +584,20 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0" }}>
+    // An outlined card rather than rows separated by nothing — a long agenda
+    // ran together, and it was hard to tell where one item's notes ended and
+    // the next item began.
+    <div
+      style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        background: T.panel,
+        border: `1px solid ${T.lineSoft}`,
+        borderLeft: `4px solid ${accent}`,
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "var(--card-shadow)",
+      }}
+    >
       <button
         onClick={() => onPatch(it.id, { done: !it.done })}
         aria-label={it.done ? "Mark not done" : "Mark done"}
@@ -525,6 +610,22 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
       >
         {it.done && <Check size={13} />}
       </button>
+      {/* Reordering lives on the card rather than in edit mode: setting the
+          order of a meeting means moving several items in a row, and opening
+          an editor for each one would make that tedious. */}
+      {onMove && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: "0 0 auto", order: 2 }}>
+          <Btn size="sm" kind="plain" disabled={first} aria-label="Move up"
+            onClick={(e) => { e.stopPropagation(); onMove(-1); }}>
+            <ChevronUp size={14} />
+          </Btn>
+          <Btn size="sm" kind="plain" disabled={last} aria-label="Move down"
+            onClick={(e) => { e.stopPropagation(); onMove(1); }}>
+            <ChevronDown size={14} />
+          </Btn>
+        </div>
+      )}
+
       <div style={{ flex: 1, minWidth: 0, cursor: "pointer" }} onClick={onEdit}>
         <div style={{
           fontSize: 15.5, color: it.done ? T.faint : T.ink, fontWeight: 500,
@@ -533,6 +634,7 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           {it.text}
         </div>
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 4 }}>
+          <CategoryChip value={it.category} />
           {it.who && <Chip color={T.sub} bg={T.inset}>{it.who}</Chip>}
           {it.due_date && (
             <Chip color={late ? T.red : T.sub} bg={late ? T.redSoft : T.inset}>
@@ -541,6 +643,10 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           )}
         </div>
         {it.notes && <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>}
+
+        {/* A callings item shows what the tracker says is still open, rather
+            than a copy that goes stale the moment a stage changes. */}
+        {it.category === "callings" && <OpenCallings onGo={onGoCalling} />}
         {/* Nothing attached yet — offer it here rather than only inside edit
             mode, where it was effectively invisible. */}
         {!it.link_url && !it.attachment_url && onAttach && (

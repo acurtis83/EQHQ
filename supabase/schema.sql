@@ -604,6 +604,9 @@ alter table running_items add column if not exists link_url text;
 alter table running_items add column if not exists attachment_url text;
 alter table running_items add column if not exists attachment_name text;
 create index if not exists running_bucket_idx on running_items (bucket);
+-- What the item is about — the same set the meeting agenda uses. agenda_items
+-- already had a category column; this brings the planner into line.
+alter table running_items add column if not exists category text;
 
 -- Committees. Renameable, so they're rows rather than a hardcoded list.
 create table if not exists calling_groups (

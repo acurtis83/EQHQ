@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Check, X, Paperclip, Link2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { CategoryChip, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
+import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
 import { fmtShort, toIso } from "../lib/domain/dates";
@@ -21,7 +23,8 @@ export function overdueDays(due) {
   return Math.round((new Date(today) - new Date(due)) / 86400000);
 }
 
-export default function RunningList({ onCountChange }) {
+export default function RunningList({ onCountChange, onGo }) {
+  const goCalling = (callingId) => onGo?.("callings", { callingId });
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -165,6 +168,7 @@ export default function RunningList({ onCountChange }) {
                       onEdit={() => setEditing(editing === it.id ? null : it.id)}
                       onPatch={patch} onRemove={remove}
                       onAttach={setAttachFor}
+                      onGoCalling={goCalling}
                     />
                   ))}
                 </div>
@@ -196,12 +200,16 @@ export default function RunningList({ onCountChange }) {
   );
 }
 
-function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
+function Row({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling }) {
   const [text, setText] = useState(it.text);
   const [who, setWho] = useState(it.who || "");
   const [notes, setNotes] = useState(it.notes || "");
   const [due, setDue] = useState(it.due_date || "");
+  const [cat, setCat] = useState(it.category || "");
   const late = overdueDays(it.due_date);
+  // The category tints the card's edge, so the list can be scanned by subject.
+  const meta = it.category ? AGENDA_CATEGORIES.find((c) => c.key === it.category) : null;
+  const accent = it.done ? T.lineSoft : (meta ? meta.accent : T.lineSoft);
 
   const save = () => {
     onPatch(it.id, {
@@ -209,6 +217,7 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
       who: who.trim() || null,
       notes: notes.trim() || null,
       due_date: due || null,
+      category: cat || null,
     });
     onEdit();
   };
@@ -221,6 +230,7 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           <Input value={who} onChange={setWho} placeholder="Who" />
           <Input type="date" value={due} onChange={setDue} />
         </div>
+        <CategoryPicker value={cat} onChange={setCat} />
         <Area value={notes} onChange={setNotes} placeholder="Notes" rows={2} />
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn kind="primary" size="sm" onClick={save}>Save</Btn>
@@ -237,7 +247,19 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "7px 0" }}>
+    // An outlined card, matching the meeting agenda — a long list ran together
+    // and it was hard to see where one item's notes ended.
+    <div
+      style={{
+        display: "flex", alignItems: "flex-start", gap: 10,
+        background: T.panel,
+        border: `1px solid ${T.lineSoft}`,
+        borderLeft: `4px solid ${accent}`,
+        borderRadius: 12,
+        padding: "10px 12px",
+        boxShadow: "var(--card-shadow)",
+      }}
+    >
       <button
         onClick={() => onPatch(it.id, { done: !it.done })}
         aria-label={it.done ? "Mark not done" : "Mark done"}
@@ -260,6 +282,7 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
           {it.text}
         </div>
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 4 }}>
+          <CategoryChip value={it.category} />
           {it.who && <Chip color={T.sub} bg={T.inset}>{it.who}</Chip>}
           {it.due_date && (
             <Chip
@@ -273,6 +296,9 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach }) {
         {it.notes && (
           <div style={{ fontSize: 14, color: T.sub, marginTop: 5, lineHeight: 1.5 }}>{it.notes}</div>
         )}
+
+        {/* Live from the tracker, not a copy that goes stale. */}
+        {it.category === "callings" && <OpenCallings onGo={onGoCalling} />}
 
         {/* Offered on the row itself. It used to live only inside edit mode,
             which made it look like the Planner didn't support attachments. */}

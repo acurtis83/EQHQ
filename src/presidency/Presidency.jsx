@@ -5,7 +5,7 @@ import PresidencyAgenda from "./PresidencyAgenda";
 
 // Planner is the standing list that feeds agendas; Presidency Meetings are the
 // dated meetings themselves.
-export default function Presidency() {
+export default function Presidency({ onGo }) {
   const [mode, setMode] = useState("agenda");
   const [openCount, setOpenCount] = useState(null);
 
@@ -40,7 +40,9 @@ export default function Presidency() {
         ))}
       </div>
 
-      {mode === "agenda" ? <PresidencyAgenda /> : <RunningList onCountChange={setOpenCount} />}
+      {mode === "agenda"
+        ? <PresidencyAgenda onGo={onGo} />
+        : <RunningList onCountChange={setOpenCount} onGo={onGo} />}
     </div>
   );
 }

@@ -48,6 +48,16 @@ begin
     alter table running_items add column if not exists attachment_name text;
   end if;
 
+  -- ---------- Agenda item categories ----------
+  -- agenda_items has had a category column since the first release; the
+  -- planner's items get one now so both use the same set.
+  if to_regclass('public.running_items') is not null then
+    alter table running_items add column if not exists category text;
+  end if;
+  if to_regclass('public.agenda_items') is not null then
+    alter table agenda_items add column if not exists category text;
+  end if;
+
   -- ---------- Agenda items: links and attachments ----------
   if to_regclass('public.agenda_items') is not null then
     alter table agenda_items add column if not exists link_url text;

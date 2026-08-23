@@ -20,7 +20,7 @@ export default function Meetings({ section, onSection, onGo }) {
   return (
     <div>
       <Segmented value={value} onChange={set} options={SECTIONS} idAttr="data-meeting" />
-      {value === "presidency" ? <Presidency /> : <SundayAgenda onGo={onGo} />}
+      {value === "presidency" ? <Presidency onGo={onGo} /> : <SundayAgenda onGo={onGo} />}
     </div>
   );
 }
