@@ -226,14 +226,32 @@ create policy "Public submits a response" on form_responses
     is_presidency()
     or exists (select 1 from forms f where f.id = form_id and f.published)
   );
+-- Which form does this response belong to?
+--
+-- SECURITY DEFINER on purpose. Row-level security applies inside policy
+-- expressions as well, so the answers policy below cannot simply read
+-- form_responses — members have no read access to that table by design, the
+-- sub-select comes back empty, and every member's answers get rejected no
+-- matter what. Looking the parent up through a definer function sidesteps that
+-- one lookup without opening the table: it returns a form id for a response id
+-- the caller already has, and nothing else.
+create or replace function form_of_response(rid uuid)
+returns uuid
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select form_id from form_responses where id = rid;
+$$;
+
 drop policy if exists "Public submits answers" on form_answers;
 create policy "Public submits answers" on form_answers
   for insert with check (
     is_presidency()
     or exists (
-      select 1 from form_responses r
-      join forms f on f.id = r.form_id
-      where r.id = response_id and f.published
+      select 1 from forms f
+      where f.id = form_of_response(response_id) and f.published
     )
   );
 

@@ -12,19 +12,29 @@ import {
 /**
  * A blocked submission, in words a member can act on.
  *
- * The remaining way to trip the policy is an unpublished form: the check is
- * "does a published form with this id exist". Members can't tell that from the
- * raw message, and neither could the presidency.
+ * Two different things can refuse, and they mean different things, so they say
+ * different things. Claiming "not published" for both sent someone hunting a
+ * publish button on a form that was already live.
+ *
+ * @param {string} message  what Postgres said
+ * @param {"response"|"answers"} stage  which insert was refused
  */
-function submitError(message) {
+function submitError(message, stage) {
   const m = String(message || "");
-  if (/row-level security|violates row-level/i.test(m)) {
-    // With the presidency now able to submit to a draft, a member seeing this
-    // means the form really isn't live — or the database predates that rule.
-    return "This form isn't accepting responses. It may not be published yet — " +
-      "ask the presidency to publish it. (Presidency: run supabase/public-forms.sql.)";
+  if (!/row-level security|violates row-level|permission denied/i.test(m)) return m;
+
+  // The response is checked against forms.published directly, so this really
+  // does mean the form isn't live.
+  if (stage === "response") {
+    return "This form isn't accepting responses — it may not be published yet. " +
+      "Ask the presidency to publish it, then try again.";
   }
-  return m;
+
+  // The answers are checked through a helper function. If that's missing the
+  // form can be perfectly live and still refuse, which is not something a
+  // member can do anything about, so don't send them chasing it.
+  return "Your answers couldn't be saved. The database needs updating — " +
+    "let the presidency know to run supabase/public-forms.sql.";
 }
 
 // Renders a published form for a member and takes their submission.
@@ -97,14 +107,14 @@ export default function FormFill({ formId, onDone, embedded }) {
     const { error: e1 } = await supabase
       .from("form_responses")
       .insert({ id: responseId, form_id: form.id, respondent_name: form.anonymous ? null : name.trim() });
-    if (e1) { setErr(submitError(e1.message)); setBusy(false); return; }
+    if (e1) { setErr(submitError(e1.message, "response")); setBusy(false); return; }
 
     const rows = questions
       .filter((q) => answers[q.id] !== undefined && answers[q.id] !== "")
       .map((q) => ({ response_id: responseId, question_id: q.id, value: answers[q.id] }));
     if (rows.length) {
       const { error: e2 } = await supabase.from("form_answers").insert(rows);
-      if (e2) { setErr(submitError(e2.message)); setBusy(false); return; }
+      if (e2) { setErr(submitError(e2.message, "answers")); setBusy(false); return; }
     }
     setBusy(false);
     setDone(true);
