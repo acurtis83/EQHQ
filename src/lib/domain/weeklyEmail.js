@@ -29,8 +29,49 @@ export function emailSubject({ sundayIso }) {
  * @param {object[]} a.events         upcoming activities and temple trips
  * @param {string} a.senderName
  */
+
+/**
+ * Where an event sends people, and what to call it.
+ *
+ * An event points somewhere in one of two ways: a sign-up form attached in the
+ * planner (form_id, or the form on the specific date being shown), or a plain
+ * link someone pasted on. They read differently in an email — "Sign up" is an
+ * instruction, "Details" is an offer — so they get different labels.
+ *
+ * A pasted link that already points at a form counts as a sign-up: that's how
+ * a form gets attached when it was made before the event.
+ *
+ * @param {object} e        the resolved event, as upcomingForSunday returns it
+ * @param {string} siteUrl  where the app is served from; without it a form_id
+ *                          can't be turned into a link, so it's skipped rather
+ *                          than guessed at
+ */
+export function eventLink(e, siteUrl) {
+  if (e?.form_id && siteUrl) {
+    return { label: "Sign up", href: `${String(siteUrl).replace(/\/+$/, "")}/?f=${e.form_id}` };
+  }
+  const url = (e?.link_url || "").trim();
+  if (!url) return null;
+  return { label: /[?&]f=/.test(url) ? "Sign up" : "Details", href: url };
+}
+
+/**
+ * An announcement, however it was passed.
+ *
+ * Callers used to hand over plain strings. Agenda items carry a link and an
+ * attachment too, so they can hand over the row instead — both shapes work so
+ * an older caller doesn't break.
+ */
+function asNote(a) {
+  if (typeof a === "string") return { text: a.trim(), link: null };
+  const text = String(a?.text || "").trim();
+  const link = (a?.link_url || a?.attachment_url || "").trim() || null;
+  return { text, link };
+}
+
 export function buildEmailText({
   sundayIso, lesson, noLessonReason, announcements = [], events = [], senderName = "",
+  siteUrl = "",
 }) {
   const out = [];
   out.push(`Brethren,`);
@@ -56,11 +97,15 @@ export function buildEmailText({
   }
 
   // --- announcements ---
-  const notes = announcements.filter((t) => (t || "").trim());
+  const notes = announcements.map(asNote).filter((n) => n.text);
   if (notes.length) {
     out.push("");
     out.push("ANNOUNCEMENTS");
-    for (const n of notes) out.push(`  ${dash} ${n.trim()}`);
+    for (const n of notes) {
+      out.push(`  ${dash} ${n.text}`);
+      // On its own line so it stays clickable when a mail client wraps text.
+      if (n.link) out.push(`    ${n.link}`);
+    }
   }
 
   // --- what's coming ---
@@ -74,6 +119,9 @@ export function buildEmailText({
       const when = on ? fmtShort(on) : "Date to be confirmed";
       const bits = [when, e.event_time, e.location].filter(Boolean).join(", ");
       out.push(`  ${dash} ${e.title}${bits ? ` ${dash} ${bits}` : ""}`);
+      // The sign-up link is the reason most people open the email at all.
+      const link = eventLink(e, siteUrl);
+      if (link) out.push(`    ${link.label}: ${link.href}`);
     }
   }
 
@@ -83,7 +131,9 @@ export function buildEmailText({
   return out.join("\n");
 }
 
-const esc = (s) =>
+// Named escHtml, not esc: the standalone preview inlines this file verbatim
+// and already has an `esc` of its own.
+const escHtml = (s) =>
   String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
@@ -94,6 +144,7 @@ const esc = (s) =>
  */
 export function buildEmailHtml({
   sundayIso, lesson, noLessonReason, announcements = [], events = [], senderName = "",
+  siteUrl = "",
 }) {
   const P = 'margin:0 0 12px;font-size:15px;line-height:1.55;color:#17181c';
   const H = 'margin:20px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
@@ -101,31 +152,33 @@ export function buildEmailHtml({
   parts.push(`<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:560px">`);
   parts.push(`<p style="${P}">Brethren,</p>`);
 
-  parts.push(`<div style="${H}">This Sunday ${dash} ${esc(fmtDate(sundayIso))}</div>`);
+  parts.push(`<div style="${H}">This Sunday ${dash} ${escHtml(fmtDate(sundayIso))}</div>`);
   if (noLessonReason) {
-    parts.push(`<p style="${P}">${esc(noLessonReason)}</p>`);
+    parts.push(`<p style="${P}">${escHtml(noLessonReason)}</p>`);
   } else if (lesson && (lesson.teacher_name || lesson.talk_title)) {
     const rows = [];
-    if (lesson.teacher_name) rows.push(`<strong>Teacher:</strong> ${esc(lesson.teacher_name)}`);
+    if (lesson.teacher_name) rows.push(`<strong>Teacher:</strong> ${escHtml(lesson.teacher_name)}`);
     if (lesson.talk_title) {
-      rows.push(`<strong>Lesson:</strong> &ldquo;${esc(lesson.talk_title)}&rdquo;` +
-        (lesson.speaker ? ` by ${esc(lesson.speaker)}` : ""));
+      rows.push(`<strong>Lesson:</strong> &ldquo;${escHtml(lesson.talk_title)}&rdquo;` +
+        (lesson.speaker ? ` by ${escHtml(lesson.speaker)}` : ""));
     }
-    if (lesson.topic && !lesson.talk_title) rows.push(`<strong>Topic:</strong> ${esc(lesson.topic)}`);
+    if (lesson.topic && !lesson.talk_title) rows.push(`<strong>Topic:</strong> ${escHtml(lesson.topic)}`);
     parts.push(`<p style="${P}">${rows.join("<br>")}</p>`);
     if (lesson.talk_link) {
-      parts.push(`<p style="${P}"><a href="${esc(lesson.talk_link)}" style="color:#0063d6">Read the talk</a></p>`);
+      parts.push(`<p style="${P}"><a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a></p>`);
     }
     parts.push(`<p style="${P}">Please read the talk before Sunday.</p>`);
   } else {
     parts.push(`<p style="${P}">Lesson details to follow.</p>`);
   }
 
-  const notes = announcements.filter((t) => (t || "").trim());
+  const notes = announcements.map(asNote).filter((n) => n.text);
   if (notes.length) {
     parts.push(`<div style="${H}">Announcements</div>`);
     parts.push(`<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6;color:#17181c">` +
-      notes.map((n) => `<li>${esc(n.trim())}</li>`).join("") + `</ul>`);
+      notes.map((n) => `<li>${escHtml(n.text)}` +
+        (n.link ? ` <a href="${escHtml(n.link)}" style="color:#0063d6">Open</a>` : "") +
+        `</li>`).join("") + `</ul>`);
   }
 
   if (events.length) {
@@ -134,13 +187,16 @@ export function buildEmailHtml({
       events.map((e) => {
         const on = e.when || e.event_date;
         const when = on ? fmtShort(on) : "Date to be confirmed";
-        const bits = [when, e.event_time, e.location].filter(Boolean).map(esc).join(", ");
-        return `<li><strong>${esc(e.title)}</strong>${bits ? ` ${dash} ${bits}` : ""}</li>`;
+        const bits = [when, e.event_time, e.location].filter(Boolean).map(escHtml).join(", ");
+        const link = eventLink(e, siteUrl);
+        return `<li><strong>${escHtml(e.title)}</strong>${bits ? ` ${dash} ${bits}` : ""}` +
+          (link ? ` &mdash; <a href="${escHtml(link.href)}" style="color:#0063d6">${escHtml(link.label)}</a>` : "") +
+          `</li>`;
       }).join("") + `</ul>`);
   }
 
   parts.push(`<p style="${P};margin-top:20px;color:#626974">` +
-    `${esc(senderName || "Elders Quorum Presidency")}<br>Holbrook Farms 8th Ward</p>`);
+    `${escHtml(senderName || "Elders Quorum Presidency")}<br>Holbrook Farms 8th Ward</p>`);
   parts.push(`</div>`);
   return parts.join("");
 }
@@ -160,7 +216,7 @@ export function textToHtml(text) {
   const flush = () => {
     if (!bullets.length) return;
     out.push(`<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6;color:#17181c">` +
-      bullets.map((b) => `<li>${linkify(esc(b))}</li>`).join("") + `</ul>`);
+      bullets.map((b) => `<li>${linkify(escHtml(b))}</li>`).join("") + `</ul>`);
     bullets = [];
   };
 
@@ -172,9 +228,9 @@ export function textToHtml(text) {
     // A heading is a short line in capitals, optionally with a date after a dash.
     const head = line.split("—")[0].trim();
     if (head.length > 1 && head === head.toUpperCase() && /[A-Z]/.test(head)) {
-      out.push(`<div style="${H}">${esc(line)}</div>`);
+      out.push(`<div style="${H}">${escHtml(line)}</div>`);
     } else {
-      out.push(`<p style="${P}">${linkify(esc(line))}</p>`);
+      out.push(`<p style="${P}">${linkify(escHtml(line))}</p>`);
     }
   }
   flush();

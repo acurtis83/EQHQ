@@ -4,6 +4,10 @@ import {
   Check, RefreshCw,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import Sheet from "../components/Sheet";
+import EmailSheet from "../components/EmailSheet";
+import SecretaryEmail from "./SecretaryEmail";
+import { upcomingForSunday } from "../lib/domain/upcoming";
 import PersonPick from "../components/PersonPick";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle } from "../components/ui";
@@ -115,30 +119,14 @@ export default function SundayAgenda({ onGo }) {
     setItems(loaded);
     setLesson(tl.data || null);
 
-    // What's still ahead *of this Sunday*, not of today. Planning the 6th of
-    // September shouldn't list basketball from the 27th of August. For a
-    // repeating event this is its next date on or after that Sunday.
-    const cutoff = date;
-    const allDates = ed.data || [];
-    const upcoming = (ev.data || [])
-      .map((e) => {
-        // An event with its own dates uses the first one still ahead of this
-        // Sunday; otherwise fall back to its repeat rule or single date.
-        const own = allDates
-          .filter((d) => d.event_id === e.id && !d.done && d.event_date >= cutoff)
-          .sort((a, b) => a.event_date.localeCompare(b.event_date));
-        const hasOwn = allDates.some((d) => d.event_id === e.id);
-        if (own.length) {
-          return { ...e, when: own[0].event_date, event_time: own[0].event_time || e.event_time,
-                   form_id: own[0].form_id || e.form_id, remaining: own.length };
-        }
-        // Every explicit date is behind us — the series is finished, so don't
-        // fall back to the row's own date and resurrect it.
-        return { ...e, when: hasOwn ? null : nextOccurrence(e, cutoff) };
-      })
-      .filter((e) => e.when && !e.done)
-      .sort((a, b) => a.when.localeCompare(b.when))
-      .slice(0, UPCOMING_SHOWN);
+    // Shared with the secretary's email builder, so the two can't disagree
+    // about what counts as upcoming.
+    const upcoming = upcomingForSunday({
+      events: ev.data || [],
+      eventDates: ed.data || [],
+      sundayIso: date,
+      limit: UPCOMING_SHOWN,
+    });
     setEvents(upcoming);
     setSustainings(su.data || []);
   }, [date]);
@@ -452,6 +440,10 @@ export default function SundayAgenda({ onGo }) {
             </Section>
 
             {/* ---------- what's coming ---------- */}
+            {/* The same secretary card as the Presidency Home. Either place works;
+                they write the same rows. */}
+            <div style={{ marginBottom: 12 }}><SecretaryEmail compact /></div>
+
             <Section title="Upcoming Events" count={events.length}
               onGo={onGo ? () => onGo("plan") : null} goLabel="Plan">
               {/* Shared with the Presidency Home and the feed, so the same
@@ -499,7 +491,9 @@ export default function SundayAgenda({ onGo }) {
           sundayIso={date}
           lesson={lesson}
           noLessonReason={reason}
-          announcements={announcements.map((a) => a.text)}
+          // The whole row, so a link or attachment on an announcement
+          // reaches the email rather than being dropped on the way.
+          announcements={announcements}
           events={events}
           senderName={presidency?.name || ""}
           onSave={(body) => patchAgenda({ email_body: body })}
@@ -512,102 +506,85 @@ export default function SundayAgenda({ onGo }) {
 
 /* ------------------------------- the email ------------------------------- */
 
-function EmailSheet({
-  agenda, sundayIso, lesson, noLessonReason, announcements, events, senderName, onSave, onClose,
-}) {
-  const generate = useCallback(
-    () => buildEmailText({ sundayIso, lesson, noLessonReason, announcements, events, senderName }),
-    [sundayIso, lesson, noLessonReason, announcements, events, senderName]
-  );
 
-  // A saved body wins, so an edit survives reopening. "Regenerate" is how you
-  // get back to the freshly built version after the lesson or events change.
-  const [text, setText] = useState(agenda.email_body || generate);
-  const [copied, setCopied] = useState("");
-  const subject = emailSubject({ sundayIso });
-
-  const edited = !!agenda.email_body && agenda.email_body !== generate();
-
-  const copy = async (kind) => {
-    // Copy the version on screen, not the generated one — otherwise Karl's
-    // edits would silently not make it into the email.
-    const plain = text;
-    const html = agenda.email_body === text && !edited
-      ? buildEmailHtml({ sundayIso, lesson, noLessonReason, announcements, events, senderName })
-      : textToHtml(text);
-    try {
-      if (kind === "html" && window.ClipboardItem && navigator.clipboard?.write) {
-        await navigator.clipboard.write([
-          new window.ClipboardItem({
-            "text/html": new Blob([html], { type: "text/html" }),
-            "text/plain": new Blob([plain], { type: "text/plain" }),
-          }),
-        ]);
-      } else {
-        await navigator.clipboard.writeText(kind === "html" ? html : plain);
-      }
-      setCopied(kind);
-      setTimeout(() => setCopied(""), 1800);
-    } catch {
-      setCopied("failed");
-      setTimeout(() => setCopied(""), 2400);
-    }
-  };
-
-  const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
-
+function PrintRow({ label, value }) {
   return (
-    <Sheet title="Weekly Email" onClose={onClose}>
-      <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.55 }}>
-        For the Monday note — this Sunday's lesson, announcements, and what's coming up.
-        Edit anything below, then copy it into your mail app.
-      </div>
-
-      <Lbl label="Subject">
-        <Input value={subject} onChange={() => {}} readOnly />
-      </Lbl>
-
-      <Lbl label="Body">
-        <Area value={text} onChange={setText} rows={16} />
-      </Lbl>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <Btn kind="primary" onClick={() => copy("html")}>
-          {copied === "html" ? <Check size={14} /> : <Copy size={14} />}
-          {copied === "html" ? "Copied" : "Copy Formatted"}
-        </Btn>
-        <Btn kind="ghost" onClick={() => copy("plain")}>
-          {copied === "plain" ? <Check size={14} /> : <Copy size={14} />}
-          {copied === "plain" ? "Copied" : "Copy Plain Text"}
-        </Btn>
-        <Btn kind="plain" onClick={() => { window.location.href = mailto; }}>
-          <Mail size={14} />Open In Mail
-        </Btn>
-      </div>
-
-      {copied === "failed" && (
-        <div style={{ fontSize: 13.5, color: T.red }}>
-          The browser blocked the clipboard — select the text above and copy it manually.
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: `1px solid ${T.lineSoft}`, paddingTop: 11 }}>
-        <Btn kind="soft" size="sm" onClick={() => { onSave(text); onClose(); }}>Save Draft</Btn>
-        <Btn kind="plain" size="sm" onClick={() => setText(generate())}>
-          <RefreshCw size={13} />Regenerate
-        </Btn>
-      </div>
-
-      <div style={{ fontSize: 12.5, color: T.faint, lineHeight: 1.5 }}>
-        “Copy Formatted” keeps the headings and makes the talk link clickable in Gmail.
-        Plain text is safer if the formatting comes through oddly.
-      </div>
-    </Sheet>
+    <div style={{ fontSize: 13, lineHeight: 1.7 }}>
+      <strong>{label}:</strong> {value}
+    </div>
   );
 }
 
-/* ---------------------- pull announcements from a meeting ---------------------- */
+/* -------------------------------- pieces -------------------------------- */
 
+// One agenda section: same padding, same header weight for every one, so the
+// page reads as a running order rather than a scatter of differently sized
+// cards.
+function Section({ title, count, right, onGo, goLabel, children }) {
+  // A section with no title, count or controls skips the header row entirely
+  // rather than leaving an empty strip above its content.
+  const hasHeader = !!(title || count > 0 || right || onGo);
+  return (
+    <div style={{ ...card, padding: "13px 14px" }}>
+      {hasHeader && (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        {title && (
+          <span style={{
+            fontSize: 12.5, fontWeight: 800, letterSpacing: "0.08em",
+            textTransform: "uppercase", color: T.sub,
+          }}>
+            {title}
+          </span>
+        )}
+        {count > 0 && <Chip color={T.sub} bg={T.inset}>{count}</Chip>}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {right}
+          {onGo && <Btn size="sm" kind="plain" onClick={onGo}>{goLabel || "Open"}</Btn>}
+        </div>
+      </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// Label in a fixed column, control in the rest — this is what lines the three
+// selects up with each other and with the rows below.
+function AgendaRow({ label, children }) {
+  return (
+    <div className="eq-agenda-row">
+      <span style={{ fontSize: 13.5, color: T.sub, fontWeight: 600 }}>{label}</span>
+      <div style={{ minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function Empty2({ children }) {
+  return <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>{children}</div>;
+}
+
+function Card({ title, right, children }) {
+  return (
+    <div style={{ ...card, padding: 13 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
+        <span style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>{title}</span>
+        {right && <div style={{ marginLeft: "auto" }}>{right}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Line({ label, value, strong }) {
+  return (
+    <div style={{ display: "flex", gap: 8, fontSize: 14.5, lineHeight: 1.5, marginBottom: 2 }}>
+      <span style={{ color: T.faint, flex: "0 0 auto", minWidth: 58 }}>{label}</span>
+      <span style={{ color: T.ink, fontWeight: strong ? 700 : 500, minWidth: 0 }}>{value}</span>
+    </div>
+  );
+}
+
+// Pick from the roster, or type a name for someone who isn't on it.
 function PullSheet({ agendaId, startOrder, onClose, onPulled, setErr }) {
   const [rows, setRows] = useState([]);
   const [picked, setPicked] = useState({});
@@ -782,107 +759,6 @@ function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustain
 
       <div style={{ marginTop: 14 }}>
         <PrintRow label="Closing Prayer" value={agenda.closing_prayer || "—"} />
-      </div>
-    </div>
-  );
-}
-
-function PrintRow({ label, value }) {
-  return (
-    <div style={{ fontSize: 13, lineHeight: 1.7 }}>
-      <strong>{label}:</strong> {value}
-    </div>
-  );
-}
-
-/* -------------------------------- pieces -------------------------------- */
-
-// One agenda section: same padding, same header weight for every one, so the
-// page reads as a running order rather than a scatter of differently sized
-// cards.
-function Section({ title, count, right, onGo, goLabel, children }) {
-  // A section with no title, count or controls skips the header row entirely
-  // rather than leaving an empty strip above its content.
-  const hasHeader = !!(title || count > 0 || right || onGo);
-  return (
-    <div style={{ ...card, padding: "13px 14px" }}>
-      {hasHeader && (
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        {title && (
-          <span style={{
-            fontSize: 12.5, fontWeight: 800, letterSpacing: "0.08em",
-            textTransform: "uppercase", color: T.sub,
-          }}>
-            {title}
-          </span>
-        )}
-        {count > 0 && <Chip color={T.sub} bg={T.inset}>{count}</Chip>}
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {right}
-          {onGo && <Btn size="sm" kind="plain" onClick={onGo}>{goLabel || "Open"}</Btn>}
-        </div>
-      </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
-// Label in a fixed column, control in the rest — this is what lines the three
-// selects up with each other and with the rows below.
-function AgendaRow({ label, children }) {
-  return (
-    <div className="eq-agenda-row">
-      <span style={{ fontSize: 13.5, color: T.sub, fontWeight: 600 }}>{label}</span>
-      <div style={{ minWidth: 0 }}>{children}</div>
-    </div>
-  );
-}
-
-function Empty2({ children }) {
-  return <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>{children}</div>;
-}
-
-function Card({ title, right, children }) {
-  return (
-    <div style={{ ...card, padding: 13 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
-        <span style={{ fontSize: 16, fontWeight: 800, color: T.ink }}>{title}</span>
-        {right && <div style={{ marginLeft: "auto" }}>{right}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Line({ label, value, strong }) {
-  return (
-    <div style={{ display: "flex", gap: 8, fontSize: 14.5, lineHeight: 1.5, marginBottom: 2 }}>
-      <span style={{ color: T.faint, flex: "0 0 auto", minWidth: 58 }}>{label}</span>
-      <span style={{ color: T.ink, fontWeight: strong ? 700 : 500, minWidth: 0 }}>{value}</span>
-    </div>
-  );
-}
-
-// Pick from the roster, or type a name for someone who isn't on it.
-function Sheet({ title, onClose, children }) {
-  return (
-    <div onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, background: "rgba(10,12,16,.5)",
-        display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 60,
-      }}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{
-          background: T.bg, width: "100%", maxWidth: 560, borderRadius: "18px 18px 0 0",
-          padding: 18, display: "flex", flexDirection: "column", gap: 11,
-          maxHeight: "90vh", overflowY: "auto",
-        }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 18.5, fontWeight: 800, color: T.ink }}>{title}</div>
-          <Btn kind="plain" size="sm" onClick={onClose}>Close</Btn>
-        </div>
-        {children}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, Star, GraduationCap, LayoutGrid, Users, HeartHandshake, ChevronRight, ClipboardCheck, Bell } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import SecretaryEmail from "./SecretaryEmail";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Chip, Btn, SectionTitle } from "../components/ui";
 import { BANDS, bandCounts } from "../lib/domain/roster";
@@ -337,6 +338,14 @@ export default function HomeHub({ onGo }) {
             })}
           </div>
         </Panel>
+
+        {/* The secretary's corner, full width: announcements in, weekly email
+            out, without going through the Sunday meeting agenda for it. The
+            same card is on that screen too — it writes the same rows either
+            way, so it doesn't matter which one Karl opens. */}
+        <div className="eq-hub-wide">
+          <SecretaryEmail onGo={onGo} />
+        </div>
 
         {/* A placeholder shouldn't take a whole card. One quiet line, full
             width, so it doesn't leave a hole in the grid. */}
