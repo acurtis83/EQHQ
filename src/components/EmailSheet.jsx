@@ -1,9 +1,25 @@
-import { useCallback, useMemo, useState } from "react";
-import { T, Btn, Area } from "./ui";
+import { useCallback, useState } from "react";
+import { Check, Copy, Mail, RefreshCw } from "lucide-react";
+import { T, Btn, Area, Input } from "./ui";
 import Sheet from "./Sheet";
 import {
   buildEmailText, buildEmailHtml, textToHtml, emailSubject,
 } from "../lib/domain/weeklyEmail";
+
+/** A label above a field. Small enough to live here rather than be imported. */
+function Lbl({ label, children }) {
+  return (
+    <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0 }}>
+      <span style={{
+        fontSize: 12.5, fontWeight: 700, color: T.sub,
+        letterSpacing: "0.04em", textTransform: "uppercase",
+      }}>
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
 
 /**
  * The weekly email, ready to send.
@@ -109,5 +125,3 @@ export default function EmailSheet({
     </Sheet>
   );
 }
-
-/* ---------------------- pull announcements from a meeting ---------------------- */
