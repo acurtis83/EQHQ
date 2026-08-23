@@ -19,8 +19,10 @@ import {
 function submitError(message) {
   const m = String(message || "");
   if (/row-level security|violates row-level/i.test(m)) {
+    // With the presidency now able to submit to a draft, a member seeing this
+    // means the form really isn't live — or the database predates that rule.
     return "This form isn't accepting responses. It may not be published yet — " +
-      "ask the presidency to publish it, then try again.";
+      "ask the presidency to publish it. (Presidency: run supabase/public-forms.sql.)";
   }
   return m;
 }
@@ -137,6 +139,22 @@ export default function FormFill({ formId, onDone, embedded }) {
       {form.description && (
         <div style={{ fontSize: 15, color: T.sub, marginTop: 5, lineHeight: 1.55 }}>{form.description}</div>
       )}
+      {/* Only the presidency can load an unpublished form at all — members
+          get "That form isn't available" — so reaching this means you're
+          looking at your own draft. Say so at the top, where it's useful,
+          rather than letting you fill the whole thing in and find out at the
+          Submit button. */}
+      {!form.published && (
+        <div style={{
+          background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
+          borderRadius: 10, padding: "9px 12px", fontSize: 14,
+          marginTop: 10, lineHeight: 1.5, fontWeight: 600,
+        }}>
+          Draft — members can't open this link yet. Publish it on the Share tab.
+          You can still submit a test response.
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 9 }}>
         {form.anonymous && <Chip color={T.primaryDeep} bg={T.primarySoft}>Anonymous</Chip>}
         {form.closes_on && (

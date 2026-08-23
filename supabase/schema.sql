@@ -220,12 +220,17 @@ create policy "Public reads questions of published forms" on form_questions
 drop policy if exists "Public submits a response" on form_responses;
 create policy "Public submits a response" on form_responses
   for insert with check (
-    exists (select 1 from forms f where f.id = form_id and f.published)
+    -- The presidency can submit to their own draft. Testing a form before
+    -- sending it out is the normal way to use it, and refusing that made the
+    -- app look broken at the moment you were checking it worked.
+    is_presidency()
+    or exists (select 1 from forms f where f.id = form_id and f.published)
   );
 drop policy if exists "Public submits answers" on form_answers;
 create policy "Public submits answers" on form_answers
   for insert with check (
-    exists (
+    is_presidency()
+    or exists (
       select 1 from form_responses r
       join forms f on f.id = r.form_id
       where r.id = response_id and f.published
