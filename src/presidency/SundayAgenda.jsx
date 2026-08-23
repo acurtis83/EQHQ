@@ -14,7 +14,9 @@ import { carryable, carriedRow } from "../lib/domain/carryOver";
 import UpcomingList from "../components/UpcomingList";
 import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 
-const HORIZON_DAYS = 45;
+// The agenda lists the next few things rather than everything inside an
+// arbitrary window — a date cut-off hides items with nothing to explain why.
+const UPCOMING_SHOWN = 6;
 const SECTION = "announcements";
 
 // Reason text the email can use as-is.
@@ -116,7 +118,6 @@ export default function SundayAgenda({ onGo }) {
     // September shouldn't list basketball from the 27th of August. For a
     // repeating event this is its next date on or after that Sunday.
     const cutoff = date;
-    const until = toIso(new Date(new Date(`${date}T00:00:00`).getTime() + HORIZON_DAYS * 86400000));
     const allDates = ed.data || [];
     const upcoming = (ev.data || [])
       .map((e) => {
@@ -134,8 +135,9 @@ export default function SundayAgenda({ onGo }) {
         // fall back to the row's own date and resurrect it.
         return { ...e, when: hasOwn ? null : nextOccurrence(e, cutoff) };
       })
-      .filter((e) => e.when && e.when <= until && !e.done)
-      .sort((a, b) => a.when.localeCompare(b.when));
+      .filter((e) => e.when && !e.done)
+      .sort((a, b) => a.when.localeCompare(b.when))
+      .slice(0, UPCOMING_SHOWN);
     setEvents(upcoming);
     setSustainings(su.data || []);
   }, [date]);
@@ -454,7 +456,7 @@ export default function SundayAgenda({ onGo }) {
               {/* Shared with the Presidency Home and the feed, so the same
                   information looks the same wherever it appears. */}
               <UpcomingList
-                empty={`Nothing in the next ${HORIZON_DAYS} days.`}
+                empty="Nothing coming up."
                 items={events.map((e) => ({
                   id: e.id,
                   when: e.when,

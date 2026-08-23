@@ -156,6 +156,56 @@ export default function SignUpList({
   );
 }
 
+/**
+ * One slot, editable in place.
+ *
+ * The name and the number needed both change after the fact — someone brings a
+ * second salad, or the count was a guess. Deleting and re-adding was the only
+ * way before, which threw away everyone who had already signed up.
+ */
+function SlotRow({ slot, taken, onSave, onRemove }) {
+  const [label, setLabel] = useState(slot.label);
+  const [qty, setQty] = useState(String(slot.quantity_needed));
+  const dirty = label.trim() !== slot.label || Number(qty) !== slot.quantity_needed;
+
+  // Can't need fewer than have already signed up — that would leave someone on
+  // a slot that no longer has room for them.
+  const floor = Math.max(1, taken);
+  const tooLow = Number(qty) < floor;
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Input value={label} onChange={setLabel} style={{ fontSize: 14.5 }} />
+        <Input
+          type="number" value={qty} onChange={setQty}
+          style={{ width: 68, flex: "0 0 auto", fontSize: 14.5, textAlign: "center" }}
+        />
+        <span style={{ fontSize: 13, color: T.faint, flex: "0 0 auto" }}>{taken} in</span>
+        <Btn size="sm" kind="plain" onClick={onRemove}><Trash2 size={14} /></Btn>
+      </div>
+
+      {dirty && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+          <Btn size="sm" kind="primary" disabled={!label.trim() || tooLow}
+            onClick={() => onSave(slot, { label: label.trim(), quantity_needed: Number(qty) })}>
+            Save
+          </Btn>
+          <Btn size="sm" kind="plain"
+            onClick={() => { setLabel(slot.label); setQty(String(slot.quantity_needed)); }}>
+            Cancel
+          </Btn>
+          {tooLow && (
+            <span style={{ fontSize: 13, color: T.red }}>
+              {taken} already signed up — can't go below {floor}.
+            </span>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 function SlotBuilder({ post, slots, claims, onClose, onReload }) {
   const [label, setLabel] = useState("");
   const [qty, setQty] = useState("1");
@@ -185,6 +235,14 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
       sort_order: slots.length + i,
     }));
     const { error } = await supabase.from("signup_slots").insert(rows);
+    setBusy(false);
+    if (error) setErr(error.message);
+    else onReload();
+  };
+
+  const patchSlot = async (slot, fields) => {
+    setBusy(true);
+    const { error } = await supabase.from("signup_slots").update(fields).eq("id", slot.id);
     setBusy(false);
     if (error) setErr(error.message);
     else onReload();
@@ -253,12 +311,9 @@ function SlotBuilder({ post, slots, claims, onClose, onReload }) {
               const st = slotStatus(s, claims);
               const mine = claims.filter((c) => c.slot_id === s.id);
               return (
-                <div key={s.id} style={{ background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: 12, padding: 11 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: T.ink, flex: 1, minWidth: 0 }}>{s.label}</span>
-                    <span style={{ fontSize: 13.5, color: T.sub }}>{st.taken}/{st.needed}</span>
-                    <Btn size="sm" kind="plain" onClick={() => removeSlot(s)}><Trash2 size={14} /></Btn>
-                  </div>
+                <div key={s.id} data-slot={s.id}
+                  style={{ background: T.panel, border: `1px solid ${T.lineSoft}`, borderRadius: 12, padding: 11 }}>
+                  <SlotRow slot={s} taken={st.taken} onSave={patchSlot} onRemove={() => removeSlot(s)} />
                   {mine.length > 0 && (
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7 }}>
                       {mine.map((c) => (

@@ -35,7 +35,7 @@ export const CATEGORIES = [
     key: "temple",
     label: "Temple Trips",
     short: "Temple Trips",
-    icon: "star",
+    icon: "temple",
     accent: "var(--gold)",
     soft: "var(--gold-soft)",
   },

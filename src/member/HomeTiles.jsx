@@ -1,8 +1,10 @@
-import { Bell, Star, Calendar, ClipboardList } from "lucide-react";
+import { Bell, Calendar, ClipboardList } from "lucide-react";
+import TempleIcon from "../components/TempleIcon";
 import { T } from "../components/ui";
 import { CATEGORIES } from "./categories";
 
-const ICONS = { bell: Bell, star: Star, calendar: Calendar, clipboard: ClipboardList };
+// The temple is drawn to match the ward mark; lucide has no equivalent.
+const ICONS = { bell: Bell, temple: TempleIcon, calendar: Calendar, clipboard: ClipboardList };
 
 // Four shortcuts under the hero. Tapping one filters the feed below rather
 // than navigating away — the point of the home screen is that everything is
@@ -38,27 +40,31 @@ export default function HomeTiles({ counts, active, onPick }) {
               background: on ? t.soft : T.panel,
               border: `1px solid ${on ? t.accent : T.lineSoft}`,
               borderRadius: 14,
-              padding: "11px 4px 9px",
+              // Centred both ways: the tiles stretch to fill the row beside
+              // Upcoming Events, and content pinned to the top left a lot of
+              // empty space underneath.
+              padding: "16px 8px",
+              minHeight: 104,
               cursor: "pointer",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "flex-start",
-              gap: 4,
+              justifyContent: "center",
+              gap: 7,
               minWidth: 0,
               boxShadow: on ? "none" : "var(--card-shadow)",
             }}
           >
-            <Icon size={19} style={{ color: t.accent, flex: "0 0 auto" }} />
+            <Icon size={26} style={{ color: t.accent, flex: "0 0 auto" }} />
             <span
               style={{
-                // "Announcements" is long for a quarter-width tile — small and
-                // allowed to wrap so it can never spill outside the tile.
-                fontSize: 10.5,
+                // Two per row now, so there's room for a readable label; it
+                // still wraps rather than spilling out of the tile.
+                fontSize: 13.5,
                 fontWeight: 700,
                 color: on ? t.accent : T.ink,
                 textAlign: "center",
-                lineHeight: 1.15,
+                lineHeight: 1.2,
                 minWidth: 0,
                 overflowWrap: "anywhere",
               }}
@@ -66,7 +72,9 @@ export default function HomeTiles({ counts, active, onPick }) {
               {t.short}
             </span>
             {count > 0 && (
-              <span style={{ fontSize: 10.5, color: T.faint, fontWeight: 600 }}>{count}</span>
+              <span style={{ fontSize: 15.5, color: T.sub, fontWeight: 800, lineHeight: 1 }}>
+                {count}
+              </span>
             )}
           </button>
         );

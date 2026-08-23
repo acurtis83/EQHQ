@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, ChevronLeft, Copy, Download, ChevronUp, ChevronDown, X, Eye, CalendarPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronLeft, Copy, Download, ChevronUp, ChevronDown, X, Eye, CalendarPlus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { REPEAT_RULES, occurrencesBetween, slotLabel } from "../lib/domain/repeat";
 import { toIso } from "../lib/domain/dates";
@@ -240,19 +240,110 @@ function FormDetail({ form, onBack, onChanged, onDeleted }) {
   );
 }
 
+// The options textarea and the stored option rows, both directions. Editing a
+// question needs to go backwards — turn saved slots into the text you typed —
+// which adding never did.
+function optionsToText(type, options) {
+  return normalizeOptions(type, options)
+    .map((o) => (type === "capacity" ? `${optionLabel(o)} ×${o.limit}` : optionLabel(o)))
+    .join("\n");
+}
+
+function textToOptions(type, text) {
+  if (!needsOptions(type)) return [];
+  return normalizeOptions(type, text.split("\n").map((l) => l.trim()).filter(Boolean)
+    .map((line) => {
+      const m = line.match(/^(.*?)\s*[x×]\s*(\d+)$/i);
+      return m ? { label: m[1].trim(), limit: Number(m[2]) } : { label: line, limit: 1 };
+    }));
+}
+
+/**
+ * The question editor, used for both adding and changing.
+ *
+ * It was inline in the add path only, which is why a typo in a question meant
+ * deleting it and starting again — and deleting a question takes its answers
+ * with it.
+ */
+function QuestionForm({ draft, setDraft, optText, setOptText, onSave, onCancel, saveLabel, existing }) {
+  return (
+    <div style={{ ...card, marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+      <Lbl label="Question">
+        <Input value={draft.label} onChange={(v) => setDraft({ ...draft, label: v })}
+          placeholder="Which shift can you take?" />
+      </Lbl>
+      <Lbl label="Type">
+        <Select value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })}>
+          {QUESTION_TYPES.map((t) => <option key={t.type} value={t.type}>{t.label}</option>)}
+        </Select>
+      </Lbl>
+      {needsOptions(draft.type) && (
+        <Lbl label={draft.type === "capacity" ? "Slots — one per line, add ×N for spots" : "Options — one per line"}>
+          <Area value={optText} onChange={setOptText} rows={4}
+            placeholder={draft.type === "capacity" ? "Saturday 6:00 AM ×4\nSaturday 8:00 AM ×4" : "Truck\nTrailer\nNeither"} />
+        </Lbl>
+      )}
+
+      {/* Sign-ups are recorded against the slot's name, so a rename leaves
+          them behind. Changing the ×N is safe; changing the words is not. */}
+      {existing && needsOptions(draft.type) && (
+        <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.55 }}>
+          Changing a number is safe. Renaming a slot won't move anyone already
+          signed up under the old name.
+        </div>
+      )}
+
+      {/* Temple cleaning and the like: the same job on a run of dates,
+          each needing its own sign-ups. Rather than typing twelve
+          Saturdays by hand, generate them and let the existing capacity
+          machinery handle the spots and the "full" state. */}
+      {draft.type === "capacity" && (
+        <DateSlots onGenerate={(lines) =>
+          setOptText((prev) => (prev.trim() ? prev.replace(/\s+$/, "") + "\n" : "") + lines)} />
+      )}
+      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
+        <input type="checkbox" checked={draft.required}
+          onChange={(e) => setDraft({ ...draft, required: e.target.checked })} />
+        Required
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <Btn kind="primary" onClick={onSave} disabled={!draft.label.trim()}>{saveLabel}</Btn>
+        <Btn kind="plain" onClick={onCancel}>Cancel</Btn>
+      </div>
+    </div>
+  );
+}
+
 function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr }) {
   const [draft, setDraft] = useState({ type: "short", label: "", required: false, options: [] });
   const [optText, setOptText] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [eDraft, setEDraft] = useState(null);
+  const [eOptText, setEOptText] = useState("");
+
+  const startEdit = (q) => {
+    setAdding(false);
+    setEditing(q.id);
+    setEDraft({ type: q.type, label: q.label, required: !!q.required });
+    setEOptText(optionsToText(q.type, q.options));
+  };
+
+  const saveEdit = async (q) => {
+    if (!eDraft?.label.trim()) return;
+    const { error } = await supabase.from("form_questions").update({
+      type: eDraft.type,
+      label: eDraft.label.trim(),
+      required: eDraft.required,
+      options: textToOptions(eDraft.type, eOptText),
+    }).eq("id", q.id);
+    if (error) { setErr(error.message); return; }
+    setEditing(null);
+    reload();
+  };
 
   const addQuestion = async () => {
     if (!draft.label.trim()) return;
-    const opts = needsOptions(draft.type)
-      ? normalizeOptions(draft.type, optText.split("\n").map((l) => l.trim()).filter(Boolean)
-          .map((line) => {
-            const m = line.match(/^(.*?)\s*[x×]\s*(\d+)$/i);
-            return m ? { label: m[1].trim(), limit: Number(m[2]) } : { label: line, limit: 1 };
-          }))
-      : [];
+    const opts = textToOptions(draft.type, optText);
     const { error } = await supabase.from("form_questions").insert({
       form_id: form.id, type: draft.type, label: draft.label.trim(),
       required: draft.required, options: opts, sort_order: questions.length,
@@ -309,7 +400,16 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {questions.map((q, i) => (
-          <div key={q.id} style={{ ...card, padding: 13 }}>
+          editing === q.id ? (
+            <QuestionForm
+              key={q.id}
+              draft={eDraft} setDraft={setEDraft}
+              optText={eOptText} setOptText={setEOptText}
+              onSave={() => saveEdit(q)} onCancel={() => setEditing(null)}
+              saveLabel="Save changes" existing
+            />
+          ) : (
+          <div key={q.id} data-question={q.id} style={{ ...card, padding: 13 }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>
@@ -332,51 +432,26 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
                 <Btn size="sm" kind="plain" onClick={() => move(q, -1)} disabled={i === 0}><ChevronUp size={14} /></Btn>
                 <Btn size="sm" kind="plain" onClick={() => move(q, 1)} disabled={i === questions.length - 1}><ChevronDown size={14} /></Btn>
               </div>
-              <Btn size="sm" kind="plain" onClick={async () => {
-                await supabase.from("form_questions").delete().eq("id", q.id);
-                reload();
-              }}><Trash2 size={14} /></Btn>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Btn size="sm" kind="plain" onClick={() => startEdit(q)}><Pencil size={14} /></Btn>
+                <Btn size="sm" kind="plain" onClick={async () => {
+                  await supabase.from("form_questions").delete().eq("id", q.id);
+                  reload();
+                }}><Trash2 size={14} /></Btn>
+              </div>
             </div>
           </div>
+          )
         ))}
       </div>
 
       {adding ? (
-        <div style={{ ...card, marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Lbl label="Question">
-            <Input value={draft.label} onChange={(v) => setDraft({ ...draft, label: v })}
-              placeholder="Which shift can you take?" />
-          </Lbl>
-          <Lbl label="Type">
-            <Select value={draft.type} onChange={(v) => setDraft({ ...draft, type: v })}>
-              {QUESTION_TYPES.map((t) => <option key={t.type} value={t.type}>{t.label}</option>)}
-            </Select>
-          </Lbl>
-          {needsOptions(draft.type) && (
-            <Lbl label={draft.type === "capacity" ? "Slots — one per line, add ×N for spots" : "Options — one per line"}>
-              <Area value={optText} onChange={setOptText} rows={4}
-                placeholder={draft.type === "capacity" ? "Saturday 6:00 AM ×4\nSaturday 8:00 AM ×4" : "Truck\nTrailer\nNeither"} />
-            </Lbl>
-          )}
-
-          {/* Temple cleaning and the like: the same job on a run of dates,
-              each needing its own sign-ups. Rather than typing twelve
-              Saturdays by hand, generate them and let the existing capacity
-              machinery handle the spots and the "full" state. */}
-          {draft.type === "capacity" && (
-            <DateSlots onGenerate={(lines) =>
-              setOptText((prev) => (prev.trim() ? prev.replace(/\s+$/, "") + "\n" : "") + lines)} />
-          )}
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
-            <input type="checkbox" checked={draft.required}
-              onChange={(e) => setDraft({ ...draft, required: e.target.checked })} />
-            Required
-          </label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn kind="primary" onClick={addQuestion} disabled={!draft.label.trim()}>Add question</Btn>
-            <Btn kind="plain" onClick={() => setAdding(false)}>Cancel</Btn>
-          </div>
-        </div>
+        <QuestionForm
+          draft={draft} setDraft={setDraft}
+          optText={optText} setOptText={setOptText}
+          onSave={addQuestion} onCancel={() => setAdding(false)}
+          saveLabel="Add question"
+        />
       ) : (
         <Btn kind="soft" style={{ marginTop: 10 }} onClick={() => setAdding(true)}>
           <Plus size={15} />Add question

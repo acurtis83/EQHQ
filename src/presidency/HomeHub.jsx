@@ -9,7 +9,10 @@ import { fmtDate, fmtShort, toIso, scheduleBetween, NO_LESSON } from "../lib/dom
 import { overdueDays } from "./RunningList";
 import UpcomingList from "../components/UpcomingList";
 
-const HORIZON_DAYS = 45;
+// How many upcoming items the Upcoming panel lists. Capping by count rather
+// than by a date window: a 45-day horizon silently hid an assignment five days
+// past the edge, and there was nothing on screen to explain the absence.
+const UPCOMING_SHOWN = 5;
 
 // Date · time · where · who — whichever of those exist.
 const eventMeta = (e) =>
@@ -29,15 +32,16 @@ export default function HomeHub({ onGo }) {
 
   const load = useCallback(async () => {
     const today = toIso(new Date());
-    const horizon = toIso(new Date(Date.now() + HORIZON_DAYS * 86400000));
 
     const [events, members, announcements, callings, groups, running, agendaItems, teaching, exceptions, pres] =
       await Promise.all([
         // Planned items, not feed posts — so the hub shows things that haven't
         // been announced yet, which is exactly what the presidency needs to
         // see. Undated rows count as upcoming: they're still being planned.
+        // Everything still ahead, with no upper bound — temple cleaning is
+        // scheduled months out and belongs in the count.
         supabase.from("events").select("*")
-          .or(`event_date.is.null,and(event_date.gte.${today},event_date.lte.${horizon})`)
+          .or(`event_date.is.null,event_date.gte.${today}`)
           .order("event_date", { ascending: true, nullsFirst: false }),
         supabase.from("members").select("id,name,age,active"),
         // Announcements live on posts, not the planning table — they're
@@ -48,7 +52,7 @@ export default function HomeHub({ onGo }) {
         supabase.from("calling_groups").select("*").order("sort_order"),
         supabase.from("running_items").select("*").eq("done", false),
         supabase.from("agenda_items").select("*").eq("done", false),
-        supabase.from("teaching_assignments").select("*").gte("date", today).lte("date", horizon).order("date"),
+        supabase.from("teaching_assignments").select("*").gte("date", today).order("date"),
         supabase.from("calendar_exceptions").select("date"),
         supabase.from("presidency_members").select("name,role"),
       ]);
@@ -228,8 +232,8 @@ export default function HomeHub({ onGo }) {
         <Panel icon={CalendarDays} title="Upcoming Events" count={upcoming.length}
           onGo={() => onGo?.("plan")}>
           <UpcomingList
-            empty={`Nothing in the next ${HORIZON_DAYS} days.`}
-            items={upcoming.slice(0, 5).map((e) => ({
+            empty="Nothing on the calendar yet."
+            items={upcoming.slice(0, UPCOMING_SHOWN).map((e) => ({
               id: e.id,
               when: e.event_date,
               title: e.title,
