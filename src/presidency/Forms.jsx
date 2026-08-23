@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, ChevronLeft, Copy, Download, ChevronUp, ChevronDown, X, Eye, CalendarPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronLeft, Copy, Download, Mail, ChevronUp, ChevronDown, X, Eye, CalendarPlus } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { REPEAT_RULES, occurrencesBetween, slotLabel } from "../lib/domain/repeat";
 import { toIso } from "../lib/domain/dates";
+import { buildSummaryText, summarySubject } from "../lib/domain/formSummary";
+import { textToHtml } from "../lib/domain/weeklyEmail";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle, Empty } from "../components/ui";
 import {
@@ -528,6 +530,80 @@ function ShareTab({ form, shareUrl, patchForm, copyLink, postToFeed, questionCou
  * are here — a filled/needed line at the top, then each option with the names
  * under it.
  */
+/**
+ * The results, as an email.
+ *
+ * Editable before sending: the generated text is a good start, not the final
+ * word, and someone will always want to add a sentence about the venue. Copy
+ * Formatted keeps the headings; plain text is there for anything that mangles
+ * HTML.
+ */
+function SummarySheet({ form, questions, responses, byResponse, onClose }) {
+  const today = toIso(new Date());
+  const generated = useMemo(
+    () => buildSummaryText({ form, questions, responses, byResponse, todayIso: today }),
+    [form, questions, responses, byResponse, today]
+  );
+  const [text, setText] = useState(generated);
+  const [copied, setCopied] = useState("");
+  const subject = summarySubject(form);
+
+  const copy = async (kind) => {
+    // Copy what's on screen, not what was generated — otherwise an edit would
+    // silently not make it into the email.
+    const html = textToHtml(text);
+    try {
+      if (kind === "html" && window.ClipboardItem && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new window.ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(kind === "html" ? html : text);
+      }
+      setCopied(kind);
+      setTimeout(() => setCopied(""), 1800);
+    } catch {
+      setCopied("failed");
+      setTimeout(() => setCopied(""), 2400);
+    }
+  };
+
+  return (
+    <Sheet title="Email Summary" onClose={onClose}>
+      <div style={{ fontSize: 13.5, color: T.sub }}>{subject}</div>
+      <Area value={text} onChange={setText} rows={16} style={{ fontSize: 14.5, lineHeight: 1.5 }} />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Btn kind="primary" onClick={() => copy("html")}>
+          {copied === "html" ? "Copied" : "Copy Formatted"}
+        </Btn>
+        <Btn kind="soft" onClick={() => copy("text")}>
+          {copied === "text" ? "Copied" : "Copy Plain Text"}
+        </Btn>
+        <a
+          href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`}
+          style={{ textDecoration: "none" }}
+        >
+          <Btn kind="soft">Open in Mail</Btn>
+        </a>
+        <Btn kind="plain" style={{ marginLeft: "auto" }} onClick={() => setText(generated)}>
+          Regenerate
+        </Btn>
+      </div>
+      {copied === "failed" && (
+        <div style={{ fontSize: 13.5, color: T.red }}>
+          Couldn't reach the clipboard — select the text above and copy it.
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: T.faint, lineHeight: 1.55 }}>
+        Regenerate rebuilds it from the current responses and discards any edits.
+      </div>
+    </Sheet>
+  );
+}
+
 function TallySummary({ q, summary, values, rows }) {
   const isCapacity = q.type === "capacity";
   const totals = isCapacity ? capacityTotals(q, values) : null;
@@ -633,6 +709,7 @@ function Results({ form, questions }) {
   const [view, setView] = useState("summary");
 
   const [err, setErr] = useState("");
+  const [summary, setSummary] = useState(false);
 
   const load = useCallback(async () => {
     const [r, a] = await Promise.all([
@@ -725,6 +802,7 @@ function Results({ form, questions }) {
           onClick={() => setView(view === "summary" ? "individual" : "summary")}>
           {view === "summary" ? "See each one" : "See summary"}
         </Btn>
+        <Btn size="sm" kind="soft" onClick={() => setSummary(true)}><Mail size={14} />Summary</Btn>
         <Btn size="sm" kind="soft" onClick={download}><Download size={14} />CSV</Btn>
         {/* Sits after the export on purpose — taking a copy first is the
             sensible order, and it reads that way. */}
@@ -740,6 +818,13 @@ function Results({ form, questions }) {
         }}>
           {err}
         </div>
+      )}
+
+      {summary && (
+        <SummarySheet
+          form={form} questions={questions} responses={responses} byResponse={byResponse}
+          onClose={() => setSummary(false)}
+        />
       )}
 
       {view === "summary" ? (
