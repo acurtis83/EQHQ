@@ -438,6 +438,22 @@ function AgendaDetail({ agenda, items, agendas, members, onBack, onReloadItems, 
   );
 }
 
+/**
+ * A planner bucket, as an agenda category.
+ *
+ * Only a fallback: an item that was given a category on the Planner keeps it.
+ * This is for older rows written before categories existed, so they arrive
+ * tagged with something sensible rather than nothing.
+ */
+function bucketCategory(bucket) {
+  return {
+    watch: "ministering",
+    moves: "moves",
+    service: "service",
+    missionary: "missionary",
+  }[bucket] || null;
+}
+
 function PullSheet({ agenda, existing, onClose, onPulled }) {
   const [rows, setRows] = useState([]);
   const [picked, setPicked] = useState({});
@@ -461,7 +477,17 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
       agenda_id: agenda.id,
       section: r.bucket === "watch" ? "ministering" : "items",
       text: r.text, who: r.who, notes: r.notes, due_date: r.due_date,
-      category: r.bucket,
+      // The item's own category, not its planner bucket. Buckets are a
+      // different vocabulary — "topics", "actions", "watch" aren't categories,
+      // so pulling one across used to leave an item tagged with a key nothing
+      // recognises, showing no chip at all.
+      category: r.category || bucketCategory(r.bucket),
+      // A link or a file attached on the Planner belongs to the item, so it
+      // travels with it. Re-finding and re-attaching it on the agenda was
+      // work the app had already been given once.
+      link_url: r.link_url || null,
+      attachment_url: r.attachment_url || null,
+      attachment_name: r.attachment_name || null,
       sort_order: existing.length + i,
     }));
     await supabase.from("agenda_items").insert(insert);
@@ -487,7 +513,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
       >
         <div style={{ fontSize: 19.5, fontWeight: 700, color: T.ink }}>Pull From Planner</div>
         <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
-          Open items only. Watch-list entries land under Ministering Checks.
+          Open items only. Ministering Checks entries land in the same section here.
         </div>
 
         {loading ? (

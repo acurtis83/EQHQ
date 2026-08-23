@@ -58,6 +58,23 @@ begin
     alter table agenda_items add column if not exists category text;
   end if;
 
+  -- ---------- Custom agenda categories ----------
+  -- The eight built-in categories live in the app; this holds only the extras.
+  if to_regclass('public.agenda_categories') is null then
+    create table agenda_categories (
+      id uuid primary key default gen_random_uuid(),
+      key text not null unique,
+      label text not null,
+      accent text not null default 'var(--sub)',
+      soft text not null default 'var(--inset)',
+      sort_order int not null default 0,
+      created_at timestamptz not null default now()
+    );
+    alter table agenda_categories enable row level security;
+    create policy "Presidency manages agenda categories" on agenda_categories
+      for all using (is_presidency()) with check (is_presidency());
+  end if;
+
   -- ---------- Agenda items: links and attachments ----------
   if to_regclass('public.agenda_items') is not null then
     alter table agenda_items add column if not exists link_url text;

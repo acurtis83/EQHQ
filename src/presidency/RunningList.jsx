@@ -10,7 +10,7 @@ import { fmtShort, toIso } from "../lib/domain/dates";
 export const BUCKETS = [
   { key: "topics", label: "Topics", hint: "Things to talk through together" },
   { key: "actions", label: "Action Items", hint: "Someone owes something" },
-  { key: "watch", label: "Watch List", hint: "Brethren to check on" },
+  { key: "watch", label: "Ministering Checks", hint: "Brethren to check on" },
   { key: "moves", label: "Move-Ins / Outs", hint: "New faces and departures" },
   { key: "service", label: "Service", hint: "Needs and opportunities" },
   { key: "missionary", label: "Missionary", hint: "Referrals and returning members" },

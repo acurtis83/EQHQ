@@ -608,6 +608,26 @@ create index if not exists running_bucket_idx on running_items (bucket);
 -- already had a category column; this brings the planner into line.
 alter table running_items add column if not exists category text;
 
+-- Categories the presidency adds themselves.
+--
+-- The eight built-in ones live in the app rather than here, so a fresh
+-- database has them without a seed and they can never be deleted out from
+-- under existing items. This table holds only the extras, and the two lists
+-- are merged when a picker is drawn.
+create table if not exists agenda_categories (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  label text not null,
+  accent text not null default 'var(--sub)',
+  soft text not null default 'var(--inset)',
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table agenda_categories enable row level security;
+drop policy if exists "Presidency manages agenda categories" on agenda_categories;
+create policy "Presidency manages agenda categories" on agenda_categories
+  for all using (is_presidency()) with check (is_presidency());
+
 -- Committees. Renameable, so they're rows rather than a hardcoded list.
 create table if not exists calling_groups (
   id uuid primary key default gen_random_uuid(),

@@ -20,8 +20,37 @@ export const AGENDA_CATEGORIES = [
   { key: "need",       label: "Member in Need",          accent: "var(--red)",          soft: "var(--red-soft)" },
 ];
 
-export function agendaCategory(key) {
-  return AGENDA_CATEGORIES.find((c) => c.key === key) || null;
+export function agendaCategory(key, extra) {
+  if (!key) return null;
+  return [...AGENDA_CATEGORIES, ...(extra || [])].find((c) => c.key === key) || null;
+}
+
+/**
+ * A key for a category the presidency typed.
+ *
+ * Slugged rather than stored verbatim because the key is what lands on every
+ * item that uses it — renaming the label later must not orphan them. A name
+ * with nothing sluggable in it (say, only punctuation) still gets a key, so
+ * adding one can't silently do nothing.
+ */
+export function categoryKey(label, taken) {
+  const base = String(label || "").toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "category";
+  const used = new Set(
+    [...AGENDA_CATEGORIES.map((c) => c.key), ...(taken || [])]
+  );
+  if (!used.has(base)) return base;
+  for (let i = 2; i < 500; i++) {
+    if (!used.has(`${base}-${i}`)) return `${base}-${i}`;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+/** Built-in first, then whatever was added, in the order they were added. */
+export function allCategories(extra) {
+  return [...AGENDA_CATEGORIES, ...(extra || [])];
 }
 
 /**
