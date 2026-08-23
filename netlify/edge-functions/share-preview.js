@@ -39,6 +39,40 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Only an https image URL, and only one we serve.
+ *
+ * flyer_url comes out of the database, and this value gets written straight
+ * into a meta tag that other people's clients will fetch. Restricting it to
+ * the Supabase storage host means a bad row can't turn a shared quorum link
+ * into a request to somewhere else.
+ */
+function safeImage(raw, origin) {
+  if (!raw) return null;
+
+  // Parsed with no base on purpose. Resolving against the origin would turn
+  // any junk string — "not a url at all" — into a same-origin path that passes
+  // the check below and then 404s in the preview. A flyer_url is always an
+  // absolute storage URL, so anything that isn't one is wrong.
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "https:") return null;
+
+  const base = env("VITE_SUPABASE_URL");
+  let host = null;
+  try {
+    host = base ? new URL(base).host : null;
+  } catch { /* no host to compare against */ }
+
+  const sameOrigin = parsed.origin === origin;
+  const fromStorage = host && parsed.host === host;
+  return sameOrigin || fromStorage ? parsed.href : null;
+}
+
 async function lookupForm(id) {
   const base = env("VITE_SUPABASE_URL");
   const key = env("VITE_SUPABASE_ANON_KEY");
@@ -47,7 +81,7 @@ async function lookupForm(id) {
   const url = `${base}/rest/v1/forms` +
     `?id=eq.${encodeURIComponent(id)}` +
     `&published=is.true` +
-    `&select=title,description&limit=1`;
+    `&select=title,description,flyer_url&limit=1`;
 
   // A crawler that waits gives up and shows nothing, so cap the wait and let
   // the generic preview through rather than holding the page.
@@ -87,11 +121,13 @@ export default async function sharePreview(request, context) {
     form.description || "Tap to sign up — no account needed."
   );
 
-  // Deliberately no og:image. An image is what makes Messages draw the big
-  // card with the ward logo filling it; with no image it falls back to the
-  // compact row — just the form's name and the domain, which is all a sign-up
-  // link needs to say. The description tag stays for Slack and email clients,
-  // which show it as a second line rather than a picture.
+  // An og:image is what makes Messages draw the big card. The ward logo didn't
+  // earn that space — it's the same mark on every link. A flyer does: it's the
+  // actual poster for this event, and seeing it is the point of sending it.
+  // So the image tag appears only when there's a flyer, and a form without one
+  // still falls back to the compact row.
+  const flyer = safeImage(form.flyer_url, url.origin);
+
   const tags = [
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
@@ -100,7 +136,14 @@ export default async function sharePreview(request, context) {
     `<meta property="og:url" content="${escapeHtml(url.href)}" />`,
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="EQ Hub" />`,
-    `<meta name="twitter:card" content="summary" />`,
+    ...(flyer
+      ? [
+          `<meta property="og:image" content="${escapeHtml(flyer)}" />`,
+          `<meta property="og:image:alt" content="${title}" />`,
+          `<meta name="twitter:card" content="summary_large_image" />`,
+          `<meta name="twitter:image" content="${escapeHtml(flyer)}" />`,
+        ]
+      : [`<meta name="twitter:card" content="summary" />`]),
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
   ].join("\n    ");

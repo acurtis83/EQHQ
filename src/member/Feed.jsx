@@ -8,6 +8,7 @@ import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
 import HomeTiles from "./HomeTiles";
 import UpcomingStrip from "../components/UpcomingStrip";
+import { FlyerHeader, FlyerPicker } from "../components/Flyer";
 import { CATEGORIES, categoryMeta, sortForFeed } from "./categories";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
@@ -256,6 +257,10 @@ function PostCard({ post, comments, slots, claims, links, open, onToggle, name, 
         transition: "box-shadow 200ms ease",
       }}
     >
+      {/* The flyer heads the post — above the category chip, so it reads as
+          the poster it is rather than an attachment hung off the bottom. */}
+      <FlyerHeader url={post.flyer_url} alt={post.title} rounded={10} />
+
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
         <Chip color={m.accent} bg={m.soft}>{m.label}</Chip>
         {post.pinned && <Chip color={T.sub} bg={T.inset}>Pinned</Chip>}
@@ -340,8 +345,14 @@ function PostCard({ post, comments, slots, claims, links, open, onToggle, name, 
       </div>
 
       {isPresidency && (
-        <div style={{ display: "flex", gap: 8, marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.lineSoft}` }}>
+        <div style={{
+          display: "flex", gap: 8, marginTop: 11, paddingTop: 11,
+          borderTop: `1px solid ${T.lineSoft}`, alignItems: "center", flexWrap: "wrap",
+        }}>
           <Btn size="sm" kind="plain" onClick={togglePin}><Pin size={14} />{post.pinned ? "Unpin" : "Pin"}</Btn>
+          {/* A post written straight into the feed has no row until it's saved,
+              so the flyer gets attached here rather than in the composer. */}
+          <FlyerPicker row={post} table="posts" onSaved={onReload} compact />
           <Btn size="sm" kind="plain" onClick={remove}><Trash2 size={14} /></Btn>
         </div>
       )}

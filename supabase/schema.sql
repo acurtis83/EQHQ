@@ -74,6 +74,9 @@ alter table posts add column if not exists rsvp boolean not null default false;
 -- used to appear on every post that didn't have one, which put a call to
 -- action on notices that just needed reading.
 alter table posts add column if not exists allow_signup boolean not null default false;
+-- A flyer across the top of the post. Public by design: the whole point is
+-- that a member with no account sees it.
+alter table posts add column if not exists flyer_url text;
 create index if not exists posts_created_at_idx on posts (created_at desc);
 
 create table if not exists comments (
@@ -162,6 +165,9 @@ create table if not exists forms (
   created_at timestamptz not null default now()
 );
 create index if not exists forms_published_idx on forms (published, created_at desc);
+-- Heads the form when a member opens it, and becomes the link preview image
+-- when the form is shared.
+alter table forms add column if not exists flyer_url text;
 
 create table if not exists form_questions (
   id uuid primary key default gen_random_uuid(),
@@ -301,6 +307,8 @@ alter table events add column if not exists form_id uuid references forms (id) o
 alter table events add column if not exists details text;
 -- Basketball doesn't need a form — just "I'm in".
 alter table events add column if not exists rsvp boolean not null default false;
+-- The flyer travels with the event to the feed post when it's published.
+alter table events add column if not exists flyer_url text;
 
 create index if not exists events_kind_date_idx on events (kind, event_date);
 create index if not exists events_post_idx on events (post_id);
@@ -830,3 +838,10 @@ $$;
 
 notify pgrst, 'reload schema';
 
+
+
+-- ---------- Flyers ----------
+-- Uploads land in the existing agenda-files bucket under a flyers/ prefix
+-- rather than needing a second bucket. That bucket must be marked public in
+-- Supabase → Storage, which it already is for agenda attachments.
+notify pgrst, 'reload schema';

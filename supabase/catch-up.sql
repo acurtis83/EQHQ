@@ -176,6 +176,19 @@ begin
     create policy "Presidency can read rsvps" on rsvps for select using (is_presidency());
   end if;
 
+  -- ---------- Flyers ----------
+  -- A flyer image across the top of a form, an event, and the feed post it
+  -- publishes to. Stored in the existing agenda-files bucket under flyers/.
+  if to_regclass('public.forms') is not null then
+    alter table forms add column if not exists flyer_url text;
+  end if;
+  if to_regclass('public.events') is not null then
+    alter table events add column if not exists flyer_url text;
+  end if;
+  if to_regclass('public.posts') is not null then
+    alter table posts add column if not exists flyer_url text;
+  end if;
+
   -- ---------- Post categories ----------
   -- Old set: announcement, event, lesson, reminder.
   -- New set: announcement, temple, activity — matching the home-screen tiles.

@@ -5,6 +5,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Select, Chip, Empty, SectionTitle } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
+import { FlyerHeader, FlyerPicker } from "../components/Flyer";
 import { fmtShort, toIso } from "../lib/domain/dates";
 import { REPEAT_RULES, repeats, nextOccurrence, describeRepeat, slotLabel } from "../lib/domain/repeat";
 
@@ -194,6 +195,9 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
       // "I'm in" instead of a form. Only meaningful for activities, and only
       // when no form is attached — two ways to respond is one too many.
       rsvp: !!row.rsvp && !signUp,
+      // The flyer travels with the event, so republishing after swapping the
+      // image updates the post rather than leaving the old one on the feed.
+      flyer_url: row.flyer_url || null,
     };
 
     if (row.post_id) {
@@ -431,6 +435,9 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
             )}
           </div>
 
+          {/* The flyer heads the card, same as it will head the feed post. */}
+          <FlyerHeader url={row.flyer_url} alt={row.title} rounded={12} />
+
           {/* The description goes to the feed; the note doesn't. Showing both
               here, clearly marked, is the only way to tell at a glance which
               is which — the card used to show the private one only, so it
@@ -612,6 +619,10 @@ function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove
           )}
         </Select>
       </Lbl>
+
+      {/* Whatever poster was already made for this. It heads the card here,
+          the feed post, and the sign-up form if one is attached. */}
+      <FlyerPicker row={row} table="events" onSaved={onSaved} />
 
       {/* Two boxes on purpose, and the labels have to make the difference
           obvious: one is the announcement, the other never leaves this screen. */}

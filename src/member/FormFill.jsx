@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Chip } from "../components/ui";
+import { FlyerHeader } from "../components/Flyer";
 import {
   capacityState, normalizeOptions, optionLabel, validateResponse,
 } from "../lib/domain/forms";
@@ -111,6 +112,7 @@ export default function FormFill({ formId, onDone, embedded }) {
 
   return (
     <div style={{ ...card, padding: 17 }}>
+      <FlyerHeader url={form.flyer_url} alt={form.title} />
       <div style={{ fontSize: 19.5, fontWeight: 800, color: T.ink }}>{form.title}</div>
       {form.description && (
         <div style={{ fontSize: 15, color: T.sub, marginTop: 5, lineHeight: 1.55 }}>{form.description}</div>

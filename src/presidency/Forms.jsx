@@ -10,6 +10,7 @@ import {
   FORM_TEMPLATES, responsesToCsv, summarize,
 } from "../lib/domain/forms";
 import FormFill from "../member/FormFill";
+import { FlyerPicker } from "../components/Flyer";
 
 export default function Forms() {
   const { presidency } = useAuth();
@@ -386,6 +387,13 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
             <Input type="date" value={form.closes_on || ""} onChange={(v) => patchForm({ closes_on: v || null })} />
           </Lbl>
         </div>
+        {/* Bishop's poster, the activity flyer — whatever was already made
+            for the event. It heads the form and the shared link. */}
+        <FlyerPicker
+          row={form}
+          table="forms"
+          save={(url) => patchForm({ flyer_url: url })}
+        />
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 600, color: T.ink }}>
           <input type="checkbox" checked={form.anonymous}
             onChange={(e) => patchForm({ anonymous: e.target.checked })} />
