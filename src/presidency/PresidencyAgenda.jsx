@@ -4,10 +4,14 @@ import { supabase } from "../lib/supabase";
 import PersonPick from "../components/PersonPick";
 import { CategoryChip, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
 import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
+import { useAgendaCategories } from "../lib/useAgendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import { fmtDate, fmtShort, toIso } from "../lib/domain/dates";
 import { BUCKETS, overdueDays } from "./RunningList";
 import AttachSheet from "../components/AttachSheet";
+import AgendaPrint from "../components/AgendaPrint";
+import { choosePrintPlan, groupByCategory } from "../lib/domain/printPlan";
+import { upcomingForSunday } from "../lib/domain/upcoming";
 
 const SECTIONS = [
   { key: "items", label: "Agenda Items" },
@@ -22,6 +26,7 @@ const blankItem = { text: "", who: "", notes: "", due_date: "", category: "", se
 
 export default function PresidencyAgenda({ onGo }) {
   const [members, setMembers] = useState([]);
+  const [events, setEvents] = useState([]);
   // Tapping an open calling lands on its card in the tracker, the same route
   // the Home Hub uses.
   const goCalling = (callingId) => onGo?.("callings", { callingId });
@@ -47,6 +52,19 @@ export default function PresidencyAgenda({ onGo }) {
     // The roster, for the prayer pickers.
     const r = await supabase.from("members").select("id,name,active").order("name");
     setMembers(r.data || []);
+
+    // What's coming up, for the printed copy. Resolved the same way the Sunday
+    // agenda resolves it, so a repeating activity and a multi-date assignment
+    // both land on their next real date.
+    const [ev, ed] = await Promise.all([
+      supabase.from("events").select("*")
+        .in("kind", ["activity", "temple", "assignment"]).order("event_date"),
+      supabase.from("event_dates").select("*").order("event_date"),
+    ]);
+    setEvents(upcomingForSunday({
+      events: ev.data || [], eventDates: ed.data || [],
+      sundayIso: toIso(new Date()), limit: 10,
+    }));
   }, []);
 
   const loadItems = useCallback(async (agendaId) => {
@@ -87,6 +105,7 @@ export default function PresidencyAgenda({ onGo }) {
         onBack={() => { setSelected(null); loadAgendas(); }}
         onReloadItems={() => loadItems(selected.id)}
         members={members}
+        events={events}
         onGoCalling={goCalling}
         onPatchAgenda={async (fields) => {
           const { error } = await supabase.from("agendas").update(fields).eq("id", selected.id);
@@ -121,6 +140,17 @@ export default function PresidencyAgenda({ onGo }) {
           <CalendarPlus size={15} />New
         </Btn>
       </div>
+
+      {!printFits && (
+        <div style={{
+          background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
+          borderRadius: 10, padding: "9px 12px", fontSize: 13.5,
+          marginBottom: 12, lineHeight: 1.5, fontWeight: 600,
+        }}>
+          This agenda is long enough to run onto a second page. Nothing is left
+          out — shorten a note or move an item to next week to bring it back to one.
+        </div>
+      )}
 
       {err && (
         <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
@@ -170,13 +200,17 @@ async function swapOrder(a, b) {
   ]);
 }
 
-function AgendaDetail({ agenda, items, agendas, members, onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err, onGoCalling }) {
+function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err, onGoCalling }) {
   const [adding, setAdding] = useState(null); // section key
   const [draft, setDraft] = useState(blankItem);
   const [editing, setEditing] = useState(null);
   const [pullOpen, setPullOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [attachFor, setAttachFor] = useState(null);
+  // Built-in categories plus any the presidency added, for the printed copy.
+  const { extra: customCategories } = useAgendaCategories();
+  const printCategories = [...AGENDA_CATEGORIES, ...customCategories];
+
 
   const moveItem = async (it, list, dir) => {
     const i = list.indexOf(it);
@@ -203,6 +237,17 @@ function AgendaDetail({ agenda, items, agendas, members, onBack, onReloadItems, 
     for (const it of items) (out[it.section] ||= []).push(it);
     return out;
   }, [items]);
+
+  // Whether the printed copy will hold. Notes are never dropped to make room,
+  // so a very long agenda runs to a second page — better to say so here than
+  // to let the printer be the one to break the news.
+  const printFits = choosePrintPlan({
+    sections: groupByCategory(
+      SECTIONS.map((sec) => ({ ...sec, items: bySection[sec.key] || [] })).filter((sec) => sec.items.length),
+      printCategories
+    ),
+    events,
+  }).fits;
 
   const addItem = async (section) => {
     if (!draft.text.trim()) return;
@@ -310,6 +355,17 @@ function AgendaDetail({ agenda, items, agendas, members, onBack, onReloadItems, 
         <Btn kind="plain" size="sm" onClick={onDelete}><Trash2 size={14} /></Btn>
       </div>
 
+      {!printFits && (
+        <div style={{
+          background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
+          borderRadius: 10, padding: "9px 12px", fontSize: 13.5,
+          marginBottom: 12, lineHeight: 1.5, fontWeight: 600,
+        }}>
+          This agenda is long enough to run onto a second page. Nothing is left
+          out — shorten a note or move an item to next week to bring it back to one.
+        </div>
+      )}
+
       {err && (
         <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
@@ -414,7 +470,12 @@ function AgendaDetail({ agenda, items, agendas, members, onBack, onReloadItems, 
         );
       })}
 
-      {printing && <PrintDoc agenda={agenda} bySection={bySection} />}
+      {printing && (
+        <AgendaPrint
+          agenda={agenda} sections={SECTIONS} bySection={bySection}
+          events={events} categories={printCategories}
+        />
+      )}
 
       {attachFor && (
         <AttachSheet
@@ -718,84 +779,6 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling
 
 // Print-only rendering. Hidden on screen; the print stylesheet hides everything
 // else and shows this, so "Save as PDF" produces a clean one-page document.
-function PrintDoc({ agenda, bySection }) {
-  return (
-    <div className="eq-print-only">
-      <style>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          .eq-print-only, .eq-print-only * { visibility: visible !important; }
-          .eq-print-only {
-            position: absolute !important; left: 0; top: 0; width: 100%;
-            padding: 0 !important; background: #fff !important; color: #111 !important;
-          }
-          @page { margin: 18mm 16mm; }
-        }
-        .eq-print-only { display: none; }
-        @media print { .eq-print-only { display: block; } }
-      `}</style>
-
-      <div style={{ fontFamily: "system-ui, sans-serif", color: "#111" }}>
-        <div style={{ fontSize: 12, letterSpacing: "0.14em", color: "#666", fontWeight: 700 }}>
-          HOLBROOK FARMS 8TH WARD
-        </div>
-        <h1 style={{ fontSize: 24, margin: "4px 0 2px", fontWeight: 800 }}>
-          Elders Quorum Presidency Meeting
-        </h1>
-        <div style={{ fontSize: 14, color: "#444" }}>
-          {[agenda.meeting_date ? fmtDate(agenda.meeting_date) : "", agenda.meeting_time, agenda.location]
-            .filter(Boolean).join("  ·  ")}
-        </div>
-
-        {SECTIONS.map((s) => {
-          const list = bySection[s.key] || [];
-          if (!list.length) return null;
-          return (
-            <div key={s.key} style={{ marginTop: 18, breakInside: "avoid" }}>
-              <div style={{
-                fontSize: 12, letterSpacing: "0.1em", fontWeight: 800, color: "#111",
-                borderBottom: "1.5px solid #111", paddingBottom: 4, marginBottom: 8,
-                textTransform: "uppercase",
-              }}>
-                {s.label}
-              </div>
-              {list.map((it) => (
-                <div key={it.id} style={{ display: "flex", gap: 8, marginBottom: 9, breakInside: "avoid" }}>
-                  <span style={{
-                    flex: "0 0 auto", width: 11, height: 11, marginTop: 3,
-                    border: "1.2px solid #111", borderRadius: 2,
-                    background: it.done ? "#111" : "transparent",
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14.5, fontWeight: 600, lineHeight: 1.35 }}>
-                      {it.text}
-                      {it.who ? <span style={{ fontWeight: 400, color: "#444" }}>{`  — ${it.who}`}</span> : null}
-                      {it.due_date ? <span style={{ fontWeight: 400, color: "#444" }}>{`  (${fmtShort(it.due_date)})`}</span> : null}
-                    </div>
-                    {it.notes && (
-                      <div style={{ fontSize: 13, color: "#444", marginTop: 2, lineHeight: 1.4 }}>{it.notes}</div>
-                    )}
-                    {(it.link_url || it.attachment_url) && (
-                      <div style={{ fontSize: 12, color: "#555", marginTop: 2, wordBreak: "break-all" }}>
-                        {it.link_url && <div>Link: {it.link_url}</div>}
-                        {it.attachment_url && <div>{it.attachment_name || "Attachment"}: {it.attachment_url}</div>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-
-        <div style={{ marginTop: 26, fontSize: 11.5, color: "#888" }}>
-          Printed {new Date().toLocaleDateString("en-US")}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Lbl({ label, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: 1, minWidth: 0 }}>
