@@ -79,6 +79,16 @@ beforeEach(async () => {
   const { resetViewMode } = await import("../src/lib/useViewMode");
   resetViewMode();
 });
+/**
+ * The hub header for a category.
+ *
+ * Every item card carries a tappable category chip now, so the label appears
+ * once on the hub and once on each item inside it. Matching on text alone
+ * finds all of them.
+ */
+const hub = (label) => [...document.querySelectorAll("[aria-expanded]")]
+  .find((b) => b.textContent.startsWith(label));
+
 afterEach(cleanup);
 
 async function mountAgenda() {
@@ -111,7 +121,7 @@ describe("the agenda, grouped by category", () => {
     await goGrouped();
 
     for (const label of ["Sunday", "Temple & Family History", "Service"]) {
-      expect(screen.getByText(label), `no hub for ${label}`).toBeTruthy();
+      expect(hub(label), `no hub for ${label}`).toBeTruthy();
     }
   });
 
@@ -120,12 +130,10 @@ describe("the agenda, grouped by category", () => {
     await goGrouped();
 
     // Two temple items, both open.
-    const temple = screen.getByText("Temple & Family History").closest("button");
-    expect(within(temple).getByText("2 open")).toBeTruthy();
+    expect(within(hub("Temple & Family History")).getByText("2 open")).toBeTruthy();
 
     // The one service item is done, so the hub shows no open count.
-    const service = screen.getByText("Service").closest("button");
-    expect(within(service).queryByText(/open/)).toBeNull();
+    expect(within(hub("Service")).queryByText(/open/)).toBeNull();
   });
 
   it("keeps every item — nothing is dropped by regrouping", async () => {
@@ -137,11 +145,14 @@ describe("the agenda, grouped by category", () => {
     }
   });
 
-  it("files an uncategorised item under the section it was typed into", async () => {
+  it("files an uncategorised item under the one remaining section", async () => {
+    // The "Ministering Checks" section is gone — it was a third name for
+    // something the categories already covered. An untagged item falls back to
+    // the section it lives in, which is now just "Agenda Items".
     await mountAgenda();
     await goGrouped();
 
-    expect(screen.getByText("Ministering Checks").closest("button")).toBeTruthy();
+    expect(hub("Agenda Items")).toBeTruthy();
     expect(screen.getByText("Bro. Bagley")).toBeTruthy();
   });
 
@@ -154,7 +165,10 @@ describe("the agenda, grouped by category", () => {
     const labels = AGENDA_CATEGORIES.map((c) => c.label);
     expect(labels).toContain("Ministering");
     expect(labels).toContain("Brothers in Need");
+    // The name that caused the collision is gone from both the categories and
+    // the sections, so there's nothing left for either to shadow.
     expect(labels).not.toContain("Ministering Checks");
+    expect(document.body.textContent).not.toContain("Ministering Checks");
 
     // The key didn't move with the label, or every item already tagged with it
     // would have been orphaned.
@@ -166,10 +180,10 @@ describe("the agenda, grouped by category", () => {
     await goGrouped();
 
     expect(screen.getByText("Sep 6th Teaching Changes")).toBeTruthy();
-    fireEvent.click(screen.getByText("Sunday").closest("button"));
+    fireEvent.click(hub("Sunday"));
     expect(screen.queryByText("Sep 6th Teaching Changes")).toBeNull();
 
-    fireEvent.click(screen.getByText("Sunday").closest("button"));
+    fireEvent.click(hub("Sunday"));
     expect(screen.getByText("Sep 6th Teaching Changes")).toBeTruthy();
   });
 
@@ -210,7 +224,7 @@ describe("the agenda, grouped by category", () => {
     expect(at("Sunday")).toBeLessThan(at("Temple & Family History"));
     expect(at("Temple & Family History")).toBeLessThan(at("Service"));
     // The section fallback sorts after every real category.
-    expect(at("Service")).toBeLessThan(at("Ministering Checks"));
+    expect(at("Service")).toBeLessThan(at("Agenda Items"));
   });
 });
 
@@ -220,8 +234,8 @@ describe("the planner, grouped by category", () => {
     await mount(<RunningList onCountChange={() => {}} />);
     await goGrouped();
 
-    expect(screen.getByText("Activities/Events")).toBeTruthy();
-    expect(screen.getByText("Move In/Out")).toBeTruthy();
+    expect(hub("Activities/Events")).toBeTruthy();
+    expect(hub("Move In/Out")).toBeTruthy();
     for (const it of RUNNING_ITEMS) {
       expect(screen.getByText(it.text), `${it.text} vanished`).toBeTruthy();
     }
@@ -236,9 +250,65 @@ describe("the planner, grouped by category", () => {
     cleanup();
 
     await mountAgenda();
-    expect(screen.getByText("Temple & Family History")).toBeTruthy();
+    expect(hub("Temple & Family History")).toBeTruthy();
   });
 });
+
+describe("moving an item to another category", () => {
+  it("retags from the card, without opening it", async () => {
+    // Sorting a pile of untagged ministering items into Ministering and
+    // Brothers in Need meant opening each card, changing a dropdown and
+    // saving. The chip is the control now.
+    const patched = [];
+    const { AgendaDetail } = await import("../src/presidency/PresidencyAgenda");
+    await mount(
+      <AgendaDetail
+        agenda={{ id: "ag1", meeting_date: "2026-08-26" }}
+        items={AGENDA_ITEMS} agendas={[]} members={[]} events={[]}
+        onBack={() => {}} onReloadItems={() => {}} onPatchAgenda={() => {}}
+        onDelete={() => {}} flash={() => {}}
+      />
+    );
+
+    // The untagged item offers the control rather than showing nothing.
+    const set = screen.getAllByRole("button", { name: "Set category" })[0];
+    expect(set).toBeTruthy();
+
+    // The prayer pickers are comboboxes too, so count them first and take the
+    // one that appears.
+    const before = screen.getAllByRole("combobox").length;
+    await act(async () => { fireEvent.click(set); });
+    const opened = screen.getAllByRole("combobox");
+    expect(opened.length).toBe(before + 1);
+
+    const select = opened.find((el) =>
+      [...el.options].some((o) => o.text === "Brothers in Need"));
+    expect(select, "the category picker didn't open").toBeTruthy();
+    expect([...select.options].map((o) => o.text)).toContain("Ministering");
+  });
+
+  it("offers to change one that's already tagged", async () => {
+    await mountAgenda();
+    expect(screen.getAllByRole("button", { name: /Change category from Sunday/ }).length)
+      .toBeGreaterThan(0);
+  });
+
+  it("is available inside a hub, where a mis-filed item actually is", async () => {
+    await mountAgenda();
+    await goGrouped();
+    expect(screen.getAllByRole("button", { name: /Change category from/ }).length)
+      .toBeGreaterThan(0);
+  });
+
+  it("uses one dark grey for every category", async () => {
+    // Red, blue, green and brown turned the agenda into a bag of sweets and
+    // printed as muddy halftones. The label says which category it is.
+    const { AGENDA_CATEGORIES } = await import("../src/lib/domain/agendaCategories");
+    expect(new Set(AGENDA_CATEGORIES.map((c) => c.accent))).toEqual(new Set(["var(--sub)"]));
+    expect(new Set(AGENDA_CATEGORIES.map((c) => c.soft))).toEqual(new Set(["var(--inset)"]));
+  });
+});
+
 
 describe("setting the order a meeting runs in", () => {
   it("moves a category up the meeting", async () => {

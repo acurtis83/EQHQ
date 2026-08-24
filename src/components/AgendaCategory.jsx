@@ -14,29 +14,56 @@ export function CategoryChip({ value }) {
   return <Chip color={cat.accent} bg={cat.soft}>{cat.label}</Chip>;
 }
 
-// Colours offered to a new category. Deliberately the palette already in use
-// rather than a free colour picker: the point is that a chip reads as part of
-// the app, not that every category can be any colour.
-const PALETTE = [
-  { label: "Blue", accent: "var(--primary-deep)", soft: "var(--primary-soft)" },
-  { label: "Green", accent: "var(--green)", soft: "var(--green-soft)" },
-  { label: "Gold", accent: "var(--gold)", soft: "var(--gold-soft)" },
-  { label: "Red", accent: "var(--red)", soft: "var(--red-soft)" },
-  { label: "Grey", accent: "var(--sub)", soft: "var(--inset)" },
-];
-
 /**
- * Choosing the subject, or inventing one.
+ * Retag an item without opening it.
  *
- * "No category" clears it, so a category is never a one-way door, and
- * "+ Add a new category" opens a small inline form rather than sending you to
- * a settings screen mid-thought.
+ * Sorting a pile of untagged ministering items into Ministering and Brothers
+ * in Need meant opening each card, changing a dropdown, and saving — three
+ * taps and a re-render per item, for something that is one decision. This is
+ * the chip itself as the control: tap it, pick, done.
  */
+export function CategoryQuickPick({ value, onChange, label = "Set category" }) {
+  const { extra } = useAgendaCategories();
+  const [open, setOpen] = useState(false);
+  const cat = agendaCategory(value, extra);
+  const options = [...AGENDA_CATEGORIES, ...extra];
+
+  if (open) {
+    return (
+      <Select
+        value={value || ""}
+        onChange={(v) => { onChange(v || null); setOpen(false); }}
+        style={{ fontSize: 14, padding: "5px 8px", width: "auto", minWidth: 160 }}
+      >
+        <option value="">No category</option>
+        {options.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+      </Select>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={cat ? `Change category from ${cat.label}` : label}
+      onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit" }}
+    >
+      {cat
+        ? <Chip color={cat.accent} bg={cat.soft}>{cat.label}</Chip>
+        : <Chip color={T.faint} bg={T.inset}>{label}</Chip>}
+    </button>
+  );
+}
+
+// A new category gets the same dark grey as every built-in one. There used to
+// be a colour picker here; the colours came off the agenda entirely, so
+// choosing one was a decision with no outcome.
+const NEW_CATEGORY_TONE = { accent: "var(--sub)", soft: "var(--inset)" };
+
 export function CategoryPicker({ value, onChange }) {
   const { extra, reload } = useAgendaCategories();
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
-  const [colour, setColour] = useState(0);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -53,7 +80,7 @@ export function CategoryPicker({ value, onChange }) {
     const key = categoryKey(name, extra.map((c) => c.key));
     const { error } = await supabase.from("agenda_categories").insert({
       key, label: name,
-      accent: PALETTE[colour].accent, soft: PALETTE[colour].soft,
+      accent: NEW_CATEGORY_TONE.accent, soft: NEW_CATEGORY_TONE.soft,
       sort_order: extra.length,
     });
     setBusy(false);
@@ -92,26 +119,6 @@ export function CategoryPicker({ value, onChange }) {
           padding: 10, display: "flex", flexDirection: "column", gap: 8,
         }}>
           <Input value={label} onChange={setLabel} placeholder="Category name" />
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {PALETTE.map((p, i) => (
-              <button
-                key={p.label}
-                onClick={() => setColour(i)}
-                aria-label={p.label}
-                aria-pressed={colour === i}
-                style={{
-                  width: 30, height: 30, borderRadius: 8, cursor: "pointer",
-                  background: p.soft,
-                  border: `2px solid ${colour === i ? p.accent : "transparent"}`,
-                }}
-              >
-                <span style={{
-                  display: "block", width: 10, height: 10, borderRadius: 3,
-                  background: p.accent, margin: "0 auto",
-                }} />
-              </button>
-            ))}
-          </div>
           {err && <div style={{ fontSize: 13, color: T.red, lineHeight: 1.45 }}>{err}</div>}
           <div style={{ display: "flex", gap: 8 }}>
             <Btn size="sm" kind="primary" disabled={busy || !label.trim()} onClick={create}>

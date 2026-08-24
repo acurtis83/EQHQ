@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Check, X, Paperclip, Link2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
-import { CategoryChip, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
+import { CategoryQuickPick, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
 import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
@@ -372,9 +372,12 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling, sh
           {it.text}
         </div>
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 4 }}>
-          {/* In the grouped view the hub's heading already says what this
-              is; repeating it on every card is noise. */}
-          {showCategory && <CategoryChip value={it.category} />}
+          {/* Tappable, in both views — the grouped view is where you most
+              need to move something out of the wrong pile. */}
+          <CategoryQuickPick
+            value={it.category}
+            onChange={(v) => onPatch(it.id, { category: v })}
+          />
           {it.who && <Chip color={T.sub} bg={T.inset}>{it.who}</Chip>}
           {it.due_date && (
             <Chip

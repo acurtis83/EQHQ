@@ -8,17 +8,22 @@
  *
  * The key is what's stored, so renaming a label is safe but changing a key
  * would orphan existing rows.
+ *
+ * Every category is the same dark grey. They used to be red, blue, green and
+ * brown, which turned an agenda into a bag of sweets and printed as muddy
+ * halftones on the ward machine. The label already says which category it is;
+ * the colour was decoration pretending to be information.
  */
 export const AGENDA_CATEGORIES = [
-  { key: "sunday",      label: "Sunday",                  accent: "var(--primary-deep)", soft: "var(--primary-soft)" },
-  { key: "activities",  label: "Activities/Events",       accent: "var(--primary)",      soft: "var(--primary-soft)" },
-  { key: "assignments", label: "Assignments",             accent: "var(--gold)",         soft: "var(--gold-soft)" },
-  { key: "ministering", label: "Ministering",             accent: "var(--green)",        soft: "var(--green-soft)" },
-  { key: "missionary",  label: "Missionary Work",         accent: "var(--primary)",      soft: "var(--primary-soft)" },
-  { key: "temple",      label: "Temple & Family History", accent: "var(--gold)",         soft: "var(--gold-soft)" },
-  { key: "callings",    label: "Callings/Releasings",     accent: "var(--red)",          soft: "var(--red-soft)" },
-  { key: "service",     label: "Service",                 accent: "var(--green)",        soft: "var(--green-soft)" },
-  { key: "moves",       label: "Move In/Out",             accent: "var(--sub)",          soft: "var(--inset)" },
+  { key: "sunday",      label: "Sunday",                  accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "activities",  label: "Activities/Events",       accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "assignments", label: "Assignments",             accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "ministering", label: "Ministering",             accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "missionary",  label: "Missionary Work",         accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "temple",      label: "Temple & Family History", accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "callings",    label: "Callings/Releasings",     accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "service",     label: "Service",                 accent: "var(--sub)", soft: "var(--inset)" },
+  { key: "moves",       label: "Move In/Out",             accent: "var(--sub)", soft: "var(--inset)" },
   // "Member in Need", then briefly "Ministering Checks", now this. The key
   // stays `need` through all of it on purpose: it's what's stored on every
   // item already tagged with it, and changing it would orphan them.
@@ -26,7 +31,7 @@ export const AGENDA_CATEGORIES = [
   // The middle name was a mistake — it collided with the "Ministering Checks"
   // section, so the two merged into one hub and there was no way to keep a
   // brother in need separate from a routine ministering check.
-  { key: "need",        label: "Brothers in Need",        accent: "var(--red)",          soft: "var(--red-soft)" },
+  { key: "need",        label: "Brothers in Need",        accent: "var(--sub)", soft: "var(--inset)" },
 ];
 
 export function agendaCategory(key, extra) {

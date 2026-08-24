@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Check, Copy, ChevronLeft, ChevronUp, ChevronDown, CalendarPlus, ArrowDownToLine, Printer, Paperclip, Link2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import PersonPick from "../components/PersonPick";
-import { CategoryChip, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
+import { CategoryQuickPick, CategoryPicker, OpenCallings } from "../components/AgendaCategory";
 import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
 import { useAgendaCategories } from "../lib/useAgendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
@@ -17,10 +17,20 @@ import AgendaPrint from "../components/AgendaPrint";
 import { choosePrintPlan, groupByCategory } from "../lib/domain/printPlan";
 import { upcomingForSunday } from "../lib/domain/upcoming";
 
+// One section. There used to be a second, "Ministering Checks", which was a
+// third name for something the categories already covered — a `ministering`
+// category called "Ministering" and a `need` category now called "Brothers in
+// Need". Items sat in the section untagged, so nothing ever separated, and
+// the section's name shadowed the category's in the grouped view.
 const SECTIONS = [
   { key: "items", label: "Agenda Items" },
-  { key: "ministering", label: "Ministering Checks" },
 ];
+
+// Rows written when there was a Ministering Checks section still say so. They
+// belong in the one section that's left rather than in a bucket no screen
+// renders, which is how they'd otherwise disappear.
+const RETIRED_SECTIONS = { ministering: "items" };
+const sectionOf = (it) => RETIRED_SECTIONS[it.section] || it.section || "items";
 
 const blankItem = { text: "", who: "", notes: "", due_date: "", category: "", section: "items" };
 
@@ -241,7 +251,7 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
   const bySection = useMemo(() => {
     const out = {};
     for (const s of SECTIONS) out[s.key] = [];
-    for (const it of items) (out[it.section] ||= []).push(it);
+    for (const it of items) (out[sectionOf(it)] ||= []).push(it);
     return out;
   }, [items]);
 
@@ -571,7 +581,7 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
 
             {!list.length ? (
               <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
-                {s.key === "ministering" ? "No ministering checks yet." : "Nothing on the agenda yet."}
+                Nothing on the agenda yet.
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -661,7 +671,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
     if (!chosen.length) return;
     const insert = chosen.map((r, i) => ({
       agenda_id: agenda.id,
-      section: r.bucket === "watch" ? "ministering" : "items",
+      section: "items",
       text: r.text, who: r.who, notes: r.notes, due_date: r.due_date,
       // The item's own category, not its planner bucket. Buckets are a
       // different vocabulary — "topics", "actions", "watch" aren't categories,
@@ -699,7 +709,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
       >
         <div style={{ fontSize: 19.5, fontWeight: 700, color: T.ink }}>Pull From Planner</div>
         <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
-          Open items only. Ministering Checks entries land in the same section here.
+          Open items only. Everything lands on the agenda tagged with its category.
         </div>
 
         {loading ? (
@@ -846,9 +856,13 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling
           {it.text}
         </div>
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 4 }}>
-          {/* In the grouped view the hub's heading already says what this
-              is; repeating it on every card is noise. */}
-          {showCategory && <CategoryChip value={it.category} />}
+          {/* Tappable, in both views. Grouped, the hub's heading already
+              says what this is — but that's exactly where you need to move an
+              item out of the wrong pile, so the control has to be there. */}
+          <CategoryQuickPick
+            value={it.category}
+            onChange={(v) => onPatch(it.id, { category: v })}
+          />
           {it.who && <Chip color={T.sub} bg={T.inset}>{it.who}</Chip>}
           {it.due_date && (
             <Chip color={late ? T.red : T.sub} bg={late ? T.redSoft : T.inset}>
