@@ -30,6 +30,11 @@ export const PRINTABLE_W = PAGE_W - MARGIN_X * 2;   // 701px (700.8)
  * below — losing a note is a content decision, not a typographic one.
  */
 export const TIERS = [
+  // A short agenda used to print at 11.5pt and leave the bottom third of the
+  // sheet empty — it read as unfinished rather than spacious. These two steps
+  // above it let a light week fill the page properly.
+  { name: "large",    body: 13.5, note: 11.5, rowGap: 13,  sectionGap: 24, headGap: 11 },
+  { name: "full",     body: 12.4, note: 10.8, rowGap: 11,  sectionGap: 20, headGap: 9 },
   { name: "roomy",    body: 11.5, note: 10,   rowGap: 9,   sectionGap: 17, headGap: 8 },
   { name: "normal",   body: 10.8, note: 9.4,  rowGap: 7,   sectionGap: 14, headGap: 7 },
   { name: "compact",  body: 10.2, note: 8.8,  rowGap: 5,   sectionGap: 11, headGap: 6 },
@@ -37,7 +42,9 @@ export const TIERS = [
   // Two more steps below what used to be the floor. They exist so a long
   // agenda can shrink instead of losing its notes — see below.
   { name: "tighter",  body: 9.1,  note: 8.2,  rowGap: 2.5, sectionGap: 8,  headGap: 4 },
-  { name: "smallest", body: 8.6,  note: 8,    rowGap: 2,   sectionGap: 7,  headGap: 4 },
+  // Spacing only at the floor — the type stays at 8.6pt, which is the
+  // smallest worth handing to someone across a table.
+  { name: "smallest", body: 8.6,  note: 8,    rowGap: 1.5, sectionGap: 6,  headGap: 3 },
 ];
 
 // Roughly how many characters fit on a line at a given point size, in the
@@ -67,6 +74,11 @@ export function estimateHeight(tier, {
   let h = 14 + 30 + 14;
   // The details block — date, time, location, prayers — is always there.
   h += 38;
+
+  // The "Agenda Items" heading that sits above the whole run of categories.
+  if (sections.some((s) => (s.items || []).length)) {
+    h += tier.sectionGap + 20 + tier.headGap;
+  }
 
   for (const s of sections) {
     const items = s.items || [];

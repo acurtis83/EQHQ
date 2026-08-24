@@ -25,6 +25,24 @@ function Detail({ label, value }) {
 }
 
 /**
+ * A top-level heading — the parts of the meeting, not the subjects within it.
+ *
+ * Heavier than a category heading so the page reads as an outline: one band
+ * for "Agenda Items", numbered subjects beneath it, items beneath those.
+ */
+function Band({ children, size }) {
+  return (
+    <div style={{
+      fontFamily: SANS, fontSize: size, fontWeight: 800,
+      letterSpacing: "0.16em", textTransform: "uppercase", color: "#111",
+      borderBottom: "2px solid #111", paddingBottom: 4,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
  * A category heading.
  *
  * A colour mark, the label, then a hairline running to the count. The mark is
@@ -32,7 +50,7 @@ function Detail({ label, value }) {
  * band on it — and it still reads as a distinct tone when the page comes out
  * of a black-and-white printer.
  */
-function Head({ children, right, accent = "#111" }) {
+function Head({ children, right, accent = "#111", n, size = 9 }) {
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 7,
@@ -42,9 +60,19 @@ function Head({ children, right, accent = "#111" }) {
         flex: "0 0 auto", width: 7, height: 7, borderRadius: 1,
         background: accent,
       }} />
+      {/* Numbered, so it reads as an outline someone can refer to out loud —
+          "let's come back to three" — rather than an undifferentiated list. */}
+      {n != null && (
+        <span style={{
+          flex: "0 0 auto", fontFamily: SANS, fontSize: size, fontWeight: 800,
+          color: accent, letterSpacing: "0.02em",
+        }}>
+          {n}.
+        </span>
+      )}
       <span style={{
         flex: "0 0 auto",
-        fontFamily: SANS, fontSize: 9, fontWeight: 800,
+        fontFamily: SANS, fontSize: size, fontWeight: 800,
         letterSpacing: "0.14em", textTransform: "uppercase", color: "#111",
       }}>
         {children}
@@ -167,15 +195,31 @@ export default function AgendaPrint({
         </div>
 
         {/* ---- business, by subject ---- */}
-        {groups.map((g) => (
+        {groups.length > 0 && (
+          <div style={{ marginTop: plan.sectionGap }}>
+            <Band size={plan.note}>Agenda Items</Band>
+          </div>
+        )}
+
+        {groups.map((g, i) => (
           <div key={g.label} style={{ marginTop: plan.sectionGap, breakInside: "avoid" }}>
-            <Head right={g.items.length} accent={printAccent(categories, g.label)}>{g.label}</Head>
+            <Head
+              right={g.items.length}
+              accent={printAccent(categories, g.label)}
+              n={i + 1}
+              size={plan.note}
+            >
+              {g.label}
+            </Head>
             {g.items.map((it) => (
               <div
                 key={it.id}
                 style={{
                   display: "flex", gap: 10, alignItems: "flex-start",
                   marginBottom: plan.rowGap, breakInside: "avoid",
+                  // Indented to sit under its numbered heading — the hierarchy
+                  // is what makes it an outline rather than a flat list.
+                  paddingLeft: 14,
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -231,9 +275,9 @@ export default function AgendaPrint({
             breakInside: "avoid",
           }}>
             <div style={{
-              fontFamily: SANS, fontSize: 9, fontWeight: 800,
-              letterSpacing: "0.14em", textTransform: "uppercase", color: "#111",
-              borderBottom: "1px solid #c9ccd2", paddingBottom: 4, marginBottom: 6,
+              fontFamily: SANS, fontSize: plan.note, fontWeight: 800,
+              letterSpacing: "0.16em", textTransform: "uppercase", color: "#111",
+              borderBottom: "1px solid #9ca3af", paddingBottom: 4, marginBottom: 7,
             }}>
               Upcoming
             </div>
@@ -278,12 +322,8 @@ export default function AgendaPrint({
             flex: 1, display: "flex", flexDirection: "column",
             marginTop: plan.sectionGap + 4, minHeight: 0,
           }}>
-            <div style={{
-              fontFamily: SANS, fontSize: 9, fontWeight: 800,
-              letterSpacing: "0.14em", textTransform: "uppercase",
-              borderBottom: "1px solid #111", paddingBottom: 3, flex: "0 0 auto",
-            }}>
-              Decisions &amp; Assignments
+            <div style={{ flex: "0 0 auto" }}>
+              <Band size={plan.note}>Decisions &amp; Assignments</Band>
             </div>
             <div style={{
               flex: 1, minHeight: 44,
