@@ -41,8 +41,12 @@ export default function Forms() {
     if (error) { setErr(error.message); return; }
     if (tpl.questions.length) {
       await supabase.from("form_questions").insert(
+        // `help` was being dropped here, so a template's hint text — the line
+        // under the question that explains how to answer it — never made it
+        // onto the form it was written for.
         tpl.questions.map((q, i) => ({
           form_id: f.id, type: q.type, label: q.label, required: !!q.required,
+          help: q.help || null,
           options: normalizeOptions(q.type, q.options), sort_order: i,
         }))
       );

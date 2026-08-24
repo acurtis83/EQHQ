@@ -231,7 +231,12 @@ export function parseDirectory(text) {
     // Catch-all for statuses not in the list above: a short, digit-free line
     // right after a "Last, First" line, before any date has been seen. A real
     // next person would carry their own age and birthdate.
-    if (buf.length && !/\d/.test(t) && t.split(/\s+/).length <= 3) {
+    //
+    // Except a comma. "Doe, Jane" is a person with no age listed, and this was
+    // gluing them onto the record above — so they vanished from the paste
+    // without even appearing in the skipped list. A status line ("Not
+    // Baptized", "Moved Out") has no comma in it.
+    if (buf.length && !/\d/.test(t) && !t.includes(",") && t.split(/\s+/).length <= 3) {
       if (buf[0].includes(",") && !RE_DATE.test(buf.join(" "))) return true;
     }
     return false;

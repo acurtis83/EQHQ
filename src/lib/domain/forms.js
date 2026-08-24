@@ -193,6 +193,54 @@ export const FORM_TEMPLATES = [
     ],
   },
   {
+    key: "ministering-questionnaire",
+    label: "Ministering Questionnaire",
+    form: {
+      title: "Ministering Questionnaire",
+      description:
+        "We are so excited to get to know you and minister to you. So we can " +
+        "better love and serve you, will you share a little about yourself with us?",
+      kind: "survey",
+      anonymous: false,
+    },
+    // Follows the printed questionnaire the sisters use, with two changes.
+    //
+    // There's no Name question: the form already asks for a name unless it's
+    // anonymous, and a second one would sit right above it.
+    //
+    // The paper version has a Y and an N column against each way of being
+    // ministered to — twelve marks. On a phone that's twelve taps to say the
+    // same thing as ticking the three you want, so it's one checkbox list.
+    // Anything left unticked is a no, which is what the empty column meant.
+    questions: [
+      { type: "date", label: "Birthday", required: false, options: [] },
+      { type: "short", label: "Phone", required: false, options: [] },
+      {
+        type: "checkboxes",
+        label: "How do you like to be ministered to?",
+        help: "Tick as many as you'd like — anything you leave blank is a no.",
+        required: false,
+        options: [
+          "Text", "Phone call", "In-person visit", "Drop by",
+          "Physical mail", "Lunch dates",
+        ],
+      },
+      { type: "short", label: "Another way we haven't listed?", required: false, options: [] },
+      { type: "short", label: "Favorite treat", required: false, options: [] },
+      { type: "short", label: "Favorite drink", required: false, options: [] },
+      { type: "short", label: "Favorite scent", required: false, options: [] },
+      { type: "short", label: "Favorite meal", required: false, options: [] },
+      { type: "short", label: "Favorite scripture", required: false, options: [] },
+      {
+        type: "long",
+        label: "Allergies or dietary restrictions?",
+        help: "Anything we should know before we bring food by.",
+        required: false,
+        options: [],
+      },
+    ],
+  },
+  {
     key: "feedback",
     label: "Anonymous Feedback",
     form: {
