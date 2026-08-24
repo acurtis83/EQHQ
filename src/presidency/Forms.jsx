@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, ChevronLeft, Copy, Download, Mail, ChevronUp, ChevronDown, X, Eye, CalendarPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronLeft, Copy, Download, Mail, ChevronUp, ChevronDown, X, Eye, CalendarPlus, Image as ImageIcon } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { REPEAT_RULES, occurrencesBetween, slotLabel } from "../lib/domain/repeat";
 import { toIso } from "../lib/domain/dates";
@@ -12,6 +12,7 @@ import {
   FORM_TEMPLATES, responsesToCsv, summarize, capacityTotals, namesByOption,
 } from "../lib/domain/forms";
 import FormFill from "../member/FormFill";
+import SummaryGraphic from "../components/SummaryGraphic";
 import { FlyerPicker } from "../components/Flyer";
 
 export default function Forms() {
@@ -710,6 +711,7 @@ function Results({ form, questions }) {
 
   const [err, setErr] = useState("");
   const [summary, setSummary] = useState(false);
+  const [graphic, setGraphic] = useState(false);
 
   const load = useCallback(async () => {
     const [r, a] = await Promise.all([
@@ -803,6 +805,7 @@ function Results({ form, questions }) {
           {view === "summary" ? "See each one" : "See summary"}
         </Btn>
         <Btn size="sm" kind="soft" onClick={() => setSummary(true)}><Mail size={14} />Summary</Btn>
+        <Btn size="sm" kind="soft" onClick={() => setGraphic(true)}><ImageIcon size={14} />Image</Btn>
         <Btn size="sm" kind="soft" onClick={download}><Download size={14} />CSV</Btn>
         {/* Sits after the export on purpose — taking a copy first is the
             sensible order, and it reads that way. */}
@@ -827,8 +830,32 @@ function Results({ form, questions }) {
         />
       )}
 
+      {graphic && (
+        <Sheet title="Sign-Up Picture" onClose={() => setGraphic(false)}>
+          <div style={{ fontSize: 14, color: T.sub, lineHeight: 1.55 }}>
+            The same numbers as the email summary, as a picture you can text or
+            attach. A short bar is a gap somebody still needs to fill.
+          </div>
+          <SummaryGraphic
+            form={form} questions={questions} responses={responses}
+            byResponse={byResponse} todayIso={toIso(new Date())}
+          />
+        </Sheet>
+      )}
+
       {view === "summary" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Above the per-question breakdown rather than below it: the shape
+              of the sign-up is the thing you want first, and the lists are
+              there to answer questions the picture raises. */}
+          {responses.length > 0 && questions.some((q) => q.type === "capacity") && (
+            <div style={{ ...card, padding: 14 }}>
+              <SummaryGraphic
+                form={form} questions={questions} responses={responses}
+                byResponse={byResponse} todayIso={toIso(new Date())}
+              />
+            </div>
+          )}
           {questions.map((q) => {
             const s = summarize(q, valuesFor(q.id));
             return (
