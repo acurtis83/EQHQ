@@ -141,17 +141,6 @@ export default function PresidencyAgenda({ onGo }) {
         </Btn>
       </div>
 
-      {!printFits && (
-        <div style={{
-          background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
-          borderRadius: 10, padding: "9px 12px", fontSize: 13.5,
-          marginBottom: 12, lineHeight: 1.5, fontWeight: 600,
-        }}>
-          This agenda is long enough to run onto a second page. Nothing is left
-          out — shorten a note or move an item to next week to bring it back to one.
-        </div>
-      )}
-
       {err && (
         <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
@@ -354,6 +343,17 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
         <Btn kind="plain" size="sm" onClick={copy}><Copy size={14} />Copy</Btn>
         <Btn kind="plain" size="sm" onClick={onDelete}><Trash2 size={14} /></Btn>
       </div>
+
+      {!printFits && (
+        <div style={{
+          background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
+          borderRadius: 10, padding: "9px 12px", fontSize: 13.5,
+          marginBottom: 12, lineHeight: 1.5, fontWeight: 600,
+        }}>
+          This agenda is long enough to run onto a second page. Nothing is left
+          out — shorten a note or move an item to next week to bring it back to one.
+        </div>
+      )}
 
       {!printFits && (
         <div style={{

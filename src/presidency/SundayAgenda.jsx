@@ -85,6 +85,14 @@ export default function SundayAgenda({ onGo }) {
       if (made.error) { setErr(made.error.message); return; }
       row = made.data;
     }
+    // An insert can succeed and still hand nothing back — that's what happens
+    // when a policy allows the write but not the RETURNING, which this project
+    // has already been bitten by once. Everything below reads row.id, so stop
+    // here with something readable rather than throwing "cannot read id".
+    if (!row) {
+      setErr("Couldn't open this Sunday's agenda. Run supabase/catch-up.sql, then try again.");
+      return;
+    }
     setAgenda(row);
 
     const [its, tl, ev, su, ed] = await Promise.all([
