@@ -47,13 +47,15 @@ export const TIERS = [
   { name: "smallest", body: 8.6,  note: 8,    rowGap: 1.5, sectionGap: 6,  headGap: 3 },
 ];
 
-// Roughly how many characters fit on a line at a given point size, in the
-// column the text actually occupies (page width less the checkbox gutter and
-// the right-hand meta column).
-const TEXT_W = PRINTABLE_W - 22 - 120;
-function linesFor(text, size) {
+// Roughly how many characters fit on a line at a given point size. The width
+// depends on whether the item's category, owner and date are stacked under the
+// name — in which case the name has the whole page less its accent rule — or
+// set beside it in a right-hand column, which takes 120px off.
+const GUTTER = 14;
+const META_COL = 120;
+function linesFor(text, size, width = PRINTABLE_W - GUTTER) {
   if (!text) return 0;
-  const perLine = Math.max(20, Math.floor(TEXT_W / (size * 0.52)));
+  const perLine = Math.max(20, Math.floor(width / (size * 0.52)));
   return Math.max(1, Math.ceil(String(text).length / perLine));
 }
 
@@ -68,34 +70,38 @@ function linesFor(text, size) {
  * @param {object[]} opts.events    upcoming activities, assignments, temple trips
  */
 export function estimateHeight(tier, {
-  sections = [], events = [], showNotes = true, showLinks = true,
+  sections = [], events = [], showNotes = true, showLinks = true, stackMeta = true,
 }) {
   // Masthead: eyebrow, title, rule.
   let h = 14 + 30 + 14;
   // The details block — date, time, location, prayers — is always there.
   h += 38;
 
-  // The "Agenda Items" heading that sits above the whole run of categories.
-  if (sections.some((s) => (s.items || []).length)) {
-    h += tier.sectionGap + 20 + tier.headGap;
-  }
+  const textW = PRINTABLE_W - GUTTER - (stackMeta ? 0 : META_COL);
 
-  for (const s of sections) {
-    const items = s.items || [];
-    if (!items.length) continue;
-    h += tier.sectionGap + 15 + tier.headGap;      // section rule and label
+  // The "Agenda Items" band above the whole run of items.
+  const items = sections.flatMap((s) => s.items || []);
+  if (items.length) h += tier.sectionGap + 20 + tier.headGap;
 
-    for (const it of items) {
-      const bodyLines = linesFor(it.text, tier.body);
-      h += bodyLines * tier.body * 1.35;
-      if (showNotes && it.notes) {
-        h += linesFor(it.notes, tier.note) * tier.note * 1.35 + 2;
-      }
-      if (showLinks && (it.link_url || it.attachment_url)) {
-        h += tier.note * 1.35 + 2;
-      }
-      h += tier.rowGap;
+  for (const it of items) {
+    // The name is the heading, so it gets the full body size and can wrap.
+    h += linesFor(it.text, tier.body, textW) * tier.body * 1.35;
+    // Category, owner and date sit on one line beneath the name — charged only
+    // when there's something to put there, so a bare item costs one line, not
+    // two. Set beside the name instead, they cost nothing: the column is
+    // narrower than the name's line and never taller than the block already is.
+    if (stackMeta && (it.category || it.catLabel || it.who || it.due_date)) {
+      h += tier.note * 1.35 + 2;
     }
+    if (showNotes && it.notes) {
+      h += linesFor(it.notes, tier.note, textW) * tier.note * 1.35 + 2;
+    }
+    if (showLinks && (it.link_url || it.attachment_url)) {
+      h += tier.note * 1.35 + 2;
+    }
+    // A stacked item is its own block and needs air around it or the accent
+    // rules run together into one stripe. Set beside, it's a row again.
+    h += tier.rowGap + (stackMeta ? 4 : 0);
   }
 
   // Upcoming activities, assignments and temple trips: a heading and a line
@@ -127,8 +133,14 @@ export function estimateHeight(tier, {
  */
 export function choosePrintPlan({ sections = [], events = [] } = {}) {
   const attempts = [
-    { showNotes: true, showLinks: true },
-    { showNotes: true, showLinks: false },
+    { showNotes: true, showLinks: true, stackMeta: true },
+    { showNotes: true, showLinks: false, stackMeta: true },
+    // Last resort before the warning: the category, owner and date move off
+    // their own line and sit beside the name in a column. It's the older, more
+    // cramped arrangement and it loses a line per item, which is the only way
+    // a twenty-plus-item agenda with notes on every one stays on a single
+    // sheet. Normal weeks never reach this.
+    { showNotes: true, showLinks: false, stackMeta: false },
   ];
 
   for (const content of attempts) {
@@ -141,7 +153,7 @@ export function choosePrintPlan({ sections = [], events = [] } = {}) {
   }
 
   const tier = TIERS[TIERS.length - 1];
-  const content = { showNotes: true, showLinks: false };
+  const content = { showNotes: true, showLinks: false, stackMeta: false };
   return {
     ...tier, ...content, fits: false,
     height: estimateHeight(tier, { sections, events, ...content }),
@@ -153,6 +165,39 @@ export function itemCount(sections = []) {
   return sections.reduce((n, s) => n + (s.items || []).length, 0);
 }
 
+
+/**
+ * Agenda items in the order the meeting runs them, each carrying its own
+ * category.
+ *
+ * The printed page used to group items under category headings. That reads
+ * well when several items share a subject and badly when they don't — a
+ * heading over a single item is a heading that earns nothing, and a week with
+ * six items in six categories printed as six headings with one line each.
+ *
+ * So the item's own name is the heading now and its category rides underneath
+ * it, which is how the cards on the agenda screen already work. Same order,
+ * same information, one less level of nesting.
+ *
+ * @param {object[]} sections    [{ key, label, items }]
+ * @param {object[]} categories  [{ key, label }] — built-in plus any added
+ */
+export function flattenItems(sections = [], categories = []) {
+  const label = (key) => (categories || []).find((c) => c.key === key)?.label;
+  const out = [];
+  for (const s of sections) {
+    for (const it of s.items || []) {
+      out.push({
+        ...it,
+        // An item with no category falls back to the list it was typed into —
+        // "Ministering Checks" says more than an empty line does.
+        catLabel: label(it.category) || s.label || "",
+        accent: PRINT_ACCENTS[it.category] || PRINT_ACCENT_DEFAULT,
+      });
+    }
+  }
+  return out;
+}
 
 /**
  * Agenda items grouped by what they're about.

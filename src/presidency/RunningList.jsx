@@ -5,6 +5,7 @@ import { CategoryChip, CategoryPicker, OpenCallings } from "../components/Agenda
 import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
+import AssigneePicker from "../components/AssigneePicker";
 import { fmtShort, toIso } from "../lib/domain/dates";
 
 export const BUCKETS = [
@@ -146,7 +147,7 @@ export default function RunningList({ onCountChange, onGo }) {
                     placeholder={b.key === "watch" ? "Who are we checking on?" : "What is it?"}
                   />
                   <div style={{ display: "flex", gap: 8 }}>
-                    <Input value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} placeholder="Who" />
+                    <AssigneePicker value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} />
                     <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
                   </div>
                   <Area value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} placeholder="Notes (optional)" rows={2} />
@@ -227,7 +228,7 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling }) 
       <div style={{ background: T.inset, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
         <Input value={text} onChange={setText} />
         <div style={{ display: "flex", gap: 8 }}>
-          <Input value={who} onChange={setWho} placeholder="Who" />
+          <AssigneePicker value={who} onChange={setWho} />
           <Input type="date" value={due} onChange={setDue} />
         </div>
         <CategoryPicker value={cat} onChange={setCat} />

@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import {
-  choosePrintPlan, groupByCategory, groupEvents, printAccent, PRINTABLE_H,
+  choosePrintPlan, flattenItems, groupEvents, PRINTABLE_H,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
@@ -25,63 +25,69 @@ function Detail({ label, value }) {
 }
 
 /**
- * A top-level heading — the parts of the meeting, not the subjects within it.
+ * A top-level heading — the parts of the meeting, not the items within them.
  *
- * Heavier than a category heading so the page reads as an outline: one band
- * for "Agenda Items", numbered subjects beneath it, items beneath those.
+ * There are only three of these on the page: the business, what's coming up,
+ * and the space to write. Everything else is subordinate to one of them.
  */
-function Band({ children, size }) {
+function Band({ children, size, right }) {
   return (
     <div style={{
+      display: "flex", alignItems: "baseline", gap: 8,
       fontFamily: SANS, fontSize: size, fontWeight: 800,
       letterSpacing: "0.16em", textTransform: "uppercase", color: "#111",
       borderBottom: "2px solid #111", paddingBottom: 4,
     }}>
-      {children}
+      <span>{children}</span>
+      {right != null && (
+        <span style={{
+          marginLeft: "auto", fontSize: size - 1, fontWeight: 700,
+          letterSpacing: "0.08em", color: "#9ca3af",
+        }}>
+          {right}
+        </span>
+      )}
     </div>
   );
 }
 
 /**
- * A category heading.
+ * An item's category, owner and date.
  *
- * A colour mark, the label, then a hairline running to the count. The mark is
- * what tells the eye a new subject has started without spending a whole ruled
- * band on it — and it still reads as a distinct tone when the page comes out
- * of a black-and-white printer.
+ * The category leads and carries the item's colour — it's the subheading to
+ * the item's name, the same pairing the cards on the agenda screen use.
+ * Stacked beneath the name normally; set in a column beside it only when the
+ * page is too full to spend a line per item.
  */
-function Head({ children, right, accent = "#111", n, size = 9 }) {
+function Meta({ it, size, stacked }) {
+  if (!it.catLabel && !it.who && !it.due_date) return null;
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 7,
-      marginBottom: 5,
+      fontFamily: SANS, fontSize: size,
+      ...(stacked
+        ? { marginTop: 1, display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }
+        : { textAlign: "right", lineHeight: 1.3, paddingTop: 1 }),
     }}>
-      <span style={{
-        flex: "0 0 auto", width: 7, height: 7, borderRadius: 1,
-        background: accent,
-      }} />
-      {/* Numbered, so it reads as an outline someone can refer to out loud —
-          "let's come back to three" — rather than an undifferentiated list. */}
-      {n != null && (
-        <span style={{
-          flex: "0 0 auto", fontFamily: SANS, fontSize: size, fontWeight: 800,
-          color: accent, letterSpacing: "0.02em",
+      {it.catLabel && (
+        <div style={{
+          display: stacked ? "inline" : "block",
+          fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase",
+          color: it.accent,
         }}>
-          {n}.
-        </span>
+          {it.catLabel}
+        </div>
       )}
-      <span style={{
-        flex: "0 0 auto",
-        fontFamily: SANS, fontSize: size, fontWeight: 800,
-        letterSpacing: "0.14em", textTransform: "uppercase", color: "#111",
-      }}>
-        {children}
-      </span>
-      <span style={{ flex: 1, height: 1, background: "#c9ccd2", minWidth: 8 }} />
-      {right != null && (
-        <span style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: 8.5, color: "#9ca3af" }}>
-          {right}
-        </span>
+      {it.who && (
+        <div style={{ display: stacked ? "inline" : "block", color: "#374151", fontWeight: 600 }}>
+          {it.who}
+        </div>
+      )}
+      {/* The date is data, not decoration — kept dark enough to read at a
+          glance down the page. */}
+      {it.due_date && (
+        <div style={{ display: stacked ? "inline" : "block", color: "#374151", fontWeight: 600 }}>
+          {fmtShort(it.due_date)}
+        </div>
       )}
     </div>
   );
@@ -109,11 +115,12 @@ export default function AgendaPrint({
     .map((s) => ({ ...s, items: bySection[s.key] || [] }))
     .filter((s) => s.items.length);
 
-  // Grouped by subject, not by which list an item was typed into — that's how
-  // the meeting actually runs.
-  const groups = groupByCategory(withItems, categories);
+  // In the order the meeting runs them, each carrying its own category — the
+  // same shape as the cards on the agenda screen, so the printed copy and the
+  // one on the phone read the same way.
+  const items = flattenItems(withItems, categories);
   const eventGroups = groupEvents(events);
-  const plan = choosePrintPlan({ sections: groups, events });
+  const plan = choosePrintPlan({ sections: withItems, events });
 
   const sheet = (
     <div className="eq-print-root">
@@ -194,68 +201,62 @@ export default function AgendaPrint({
           <Detail label="Closing Prayer" value={agenda.closing_prayer} />
         </div>
 
-        {/* ---- business, by subject ---- */}
-        {groups.length > 0 && (
+        {/* ---- business ---- */}
+        {items.length > 0 && (
           <div style={{ marginTop: plan.sectionGap }}>
-            <Band size={plan.note}>Agenda Items</Band>
+            <Band size={plan.note} right={`${items.length} item${items.length === 1 ? "" : "s"}`}>
+              Agenda Items
+            </Band>
           </div>
         )}
 
-        {groups.map((g, i) => (
-          <div key={g.label} style={{ marginTop: plan.sectionGap, breakInside: "avoid" }}>
-            <Head
-              right={g.items.length}
-              accent={printAccent(categories, g.label)}
-              n={i + 1}
-              size={plan.note}
-            >
-              {g.label}
-            </Head>
-            {g.items.map((it) => (
-              <div
-                key={it.id}
-                style={{
-                  display: "flex", gap: 10, alignItems: "flex-start",
-                  marginBottom: plan.rowGap, breakInside: "avoid",
-                  // Indented to sit under its numbered heading — the hierarchy
-                  // is what makes it an outline rather than a flat list.
-                  paddingLeft: 14,
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{it.text}</div>
-                  {plan.showNotes && it.notes && (
-                    <div style={{
-                      fontSize: plan.note, color: "#4b5563", marginTop: 1,
-                      overflowWrap: "anywhere",
-                    }}>
-                      {it.notes}
-                    </div>
-                  )}
-                  {plan.showLinks && (it.link_url || it.attachment_url) && (
-                    // The name, not the whole URL: nobody types a 90-character
-                    // link off a sheet of paper, and it wraps horribly.
-                    <div style={{ fontFamily: SANS, fontSize: plan.note, color: "#6b7280", marginTop: 1 }}>
-                      {it.attachment_url ? (it.attachment_name || "Attachment") : "Link"} — see the app
-                    </div>
-                  )}
-                </div>
-
-                {/* Fixed right column so who and when line up down the page. */}
-                <div style={{
-                  flex: "0 0 118px", textAlign: "right",
-                  fontFamily: SANS, fontSize: plan.note, color: "#374151",
-                  lineHeight: 1.3, paddingTop: 1,
-                }}>
-                  {it.who && <div style={{ fontWeight: 600 }}>{it.who}</div>}
-                  {/* The date is data, not decoration — kept dark enough to
-                      read at a glance down the column. */}
-                  {it.due_date && (
-                    <div style={{ color: "#374151", fontWeight: 600 }}>{fmtShort(it.due_date)}</div>
-                  )}
-                </div>
+        {items.map((it) => (
+          <div
+            key={it.id}
+            style={{
+              marginTop: plan.rowGap + (plan.stackMeta ? 4 : 0),
+              // A rule in the category's colour down the left edge, which is
+              // what the card on screen does with its border. Cheaper on paper
+              // than a boxed card and it survives a black-and-white printer as
+              // a distinguishable grey.
+              borderLeft: `3px solid ${it.accent}`,
+              paddingLeft: 8,
+              breakInside: "avoid",
+              ...(plan.stackMeta ? {} : { display: "flex", gap: 10, alignItems: "flex-start" }),
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* The name is the heading. It's what somebody is looking for
+                  when they scan the page, so it goes first and at full size. */}
+              <div style={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
+                {it.text}
               </div>
-            ))}
+
+              {plan.stackMeta && <Meta it={it} size={plan.note} stacked />}
+
+              {plan.showNotes && it.notes && (
+                <div style={{
+                  fontSize: plan.note, color: "#4b5563", marginTop: 2,
+                  overflowWrap: "anywhere",
+                }}>
+                  {it.notes}
+                </div>
+              )}
+              {plan.showLinks && (it.link_url || it.attachment_url) && (
+                // The name, not the whole URL: nobody types a 90-character
+                // link off a sheet of paper, and it wraps horribly.
+                <div style={{ fontFamily: SANS, fontSize: plan.note, color: "#6b7280", marginTop: 1 }}>
+                  {it.attachment_url ? (it.attachment_name || "Attachment") : "Link"} — see the app
+                </div>
+              )}
+            </div>
+
+            {/* Only on a page too full to give each item its own meta line. */}
+            {!plan.stackMeta && (
+              <div style={{ flex: "0 0 118px" }}>
+                <Meta it={it} size={plan.note} stacked={false} />
+              </div>
+            )}
           </div>
         ))}
 

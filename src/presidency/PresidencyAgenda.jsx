@@ -9,6 +9,7 @@ import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import { fmtDate, fmtShort, toIso } from "../lib/domain/dates";
 import { BUCKETS, overdueDays } from "./RunningList";
 import AttachSheet from "../components/AttachSheet";
+import AssigneePicker from "../components/AssigneePicker";
 import AgendaPrint from "../components/AgendaPrint";
 import { choosePrintPlan, groupByCategory } from "../lib/domain/printPlan";
 import { upcomingForSunday } from "../lib/domain/upcoming";
@@ -433,7 +434,7 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
               <div style={{ background: T.inset, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
                 <Input value={draft.text} onChange={(v) => setDraft({ ...draft, text: v })} placeholder="What needs discussing?" />
                 <div style={{ display: "flex", gap: 8 }}>
-                  <Input value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} placeholder="Who" />
+                  <AssigneePicker value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} />
                   <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
                 </div>
                 <CategoryPicker value={draft.category} onChange={(v) => setDraft({ ...draft, category: v || "" })} />
@@ -644,7 +645,7 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling
       <div style={{ background: T.inset, borderRadius: 12, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
         <Input value={text} onChange={setText} />
         <div style={{ display: "flex", gap: 8 }}>
-          <Input value={who} onChange={setWho} placeholder="Who" />
+          <AssigneePicker value={who} onChange={setWho} />
           <Input type="date" value={due} onChange={setDue} />
         </div>
         <CategoryPicker value={cat} onChange={setCat} />

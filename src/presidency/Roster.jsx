@@ -3,6 +3,7 @@ import { Plus, Trash2, Upload, Search, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { BANDS, OFFICES, bandForAge, lastNameOf, parseDirectory } from "../lib/domain/roster";
 import { T, card, Btn, Input, Select, Chip, SectionTitle, Empty } from "../components/ui";
+import { refreshMemberNames } from "../components/AssigneePicker";
 
 const blank = {
   name: "", age: "", address: "", phone: "", email: "",
@@ -23,6 +24,9 @@ export default function Roster() {
 
   const load = async () => {
     setLoading(true);
+    // Someone added or renamed here should appear in the "Assigned To" list
+    // without a reload of the whole app.
+    refreshMemberNames();
     const { data, error } = await supabase
       .from("members")
       .select("*")
