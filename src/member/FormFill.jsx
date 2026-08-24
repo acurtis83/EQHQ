@@ -6,7 +6,7 @@ import { FlyerHeader } from "../components/Flyer";
 import { newId } from "../lib/newId";
 
 import {
-  capacityState, normalizeOptions, optionLabel, validateResponse,
+  capacityState, isBlank, normalizeOptions, optionLabel, validateResponse,
 } from "../lib/domain/forms";
 
 /**
@@ -109,8 +109,11 @@ export default function FormFill({ formId, onDone, embedded }) {
       .insert({ id: responseId, form_id: form.id, respondent_name: form.anonymous ? null : name.trim() });
     if (e1) { setErr(submitError(e1.message, "response")); setBusy(false); return; }
 
+    // isBlank rather than a bare !== "" check: a sign-up question the member
+    // opened and then unpicked leaves an empty array behind, which would
+    // otherwise be stored as an answer of nothing and counted as a response.
     const rows = questions
-      .filter((q) => answers[q.id] !== undefined && answers[q.id] !== "")
+      .filter((q) => !isBlank(answers[q.id]))
       .map((q) => ({ response_id: responseId, question_id: q.id, value: answers[q.id] }));
     if (rows.length) {
       const { error: e2 } = await supabase.from("form_answers").insert(rows);
@@ -319,18 +322,33 @@ function QuestionInput({ q, value, onChange, picks }) {
     );
   }
   if (q.type === "capacity") {
+    // Several slots, not one. Somebody bringing a salad and a dessert, or
+    // running two of the games, had to submit the form twice — or pick one
+    // and tell the presidency about the rest in a text.
+    //
+    // A value saved before this was a bare string, so an old answer is read as
+    // a list of one rather than dropped.
+    const arr = Array.isArray(value) ? value : (value ? [value] : []);
+    // Each pick counts against that slot's own limit, so "2 needed" is still 2
+    // whether that's two people or one person taking both.
+    const anyLeft = options.some((o) => !capacityState(o, picks).full);
+
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ fontSize: 13.5, color: T.sub }}>
+          {anyLeft ? "Pick as many as you'd like to bring." : "Every slot is spoken for."}
+        </div>
         {options.map((o) => {
           const label = optionLabel(o);
           const st = capacityState(o, picks);
-          const on = value === label;
+          const on = arr.includes(label);
           const disabled = st.full && !on;
           return (
             <button
               key={label}
               disabled={disabled}
-              onClick={() => onChange(on ? "" : label)}
+              aria-pressed={on}
+              onClick={() => onChange(on ? arr.filter((x) => x !== label) : [...arr, label])}
               style={{
                 ...pickStyle(on),
                 opacity: disabled ? 0.55 : 1,
@@ -345,6 +363,11 @@ function QuestionInput({ q, value, onChange, picks }) {
             </button>
           );
         })}
+        {arr.length > 1 && (
+          <div style={{ fontSize: 13.5, color: T.primaryDeep, fontWeight: 700 }}>
+            You're bringing {arr.length} things — thank you.
+          </div>
+        )}
       </div>
     );
   }

@@ -52,11 +52,10 @@ export const TIERS = [
   { name: "smallest", body: 8.6,  note: 8,    rowGap: 1.5, sectionGap: 6,  headGap: 3 },
 ];
 
-// Roughly how many characters fit on a line at a given point size. An item's
-// name has the page less the indent and less the right-hand column its date
-// and category sit in.
+// Roughly how many characters fit on a line at a given point size. The page is
+// a single column now, so an item's name has the full width less the indent —
+// its category and date are on their own line beneath rather than beside.
 const GUTTER = 14;
-const META_COL = 120;
 function linesFor(text, size, width = PRINTABLE_W - GUTTER) {
   if (!text) return 0;
   const perLine = Math.max(20, Math.floor(width / (size * 0.52)));
@@ -85,9 +84,7 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
   // The details row — date, time, location, prayers.
   h += 8 + line(8) + 1 + line(10) + 9 + 1;
 
-  // An item is a single row: the name on the left, the date (and, when the
-  // page isn't grouped, the category) right-aligned in a fixed column.
-  const textW = PRINTABLE_W - GUTTER - META_COL;
+  const textW = PRINTABLE_W - GUTTER;
   const items = sections.flatMap((s) => s.items || []);
 
   // The "Agenda Items" band.
@@ -101,6 +98,11 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
 
   for (const it of items) {
     h += tier.rowGap + linesFor(it.text, tier.body, textW) * tier.body * 1.3;
+    // Category and date, on their own line under the name. Grouped, the
+    // heading has already said the category, so an item with no date has
+    // nothing to put there and costs nothing.
+    const hasMeta = grouped ? !!it.due_date : !!(it.due_date || it.category || it.catLabel);
+    if (hasMeta) h += 1 + tier.note * 1.3;
   }
 
   // Upcoming: a tinted panel, two columns.
@@ -245,8 +247,9 @@ export function flattenItems(sections = [], categories = []) {
  *
  * @param {object[]} sections  [{ key, label, items }]
  * @param {object[]} categories  [{ key, label }] — built-in plus any added
+ * @param {string[]} order  the presidency's own order for this meeting, if any
  */
-export function groupByCategory(sections = [], categories = []) {
+export function groupByCategory(sections = [], categories = [], order = []) {
   const label = (key) => categories.find((c) => c.key === key)?.label;
   const groups = new Map();
 
@@ -278,7 +281,29 @@ export function groupByCategory(sections = [], categories = []) {
     }
   }
   for (const [name, items] of groups) ordered.push({ key: `label:${name}`, label: name, items });
-  return ordered;
+  return orderGroups(ordered, order);
+}
+
+/**
+ * Put the categories in the order the presidency chose for this meeting.
+ *
+ * A meeting doesn't always run in the same order — a move-in that needs
+ * deciding today goes first, whatever the list normally looks like. The saved
+ * order is a list of category keys, and anything missing from it keeps its
+ * default place rather than being dumped at one end. That matters because the
+ * order is saved per meeting: a category added afterwards, or one that had no
+ * items last week, must still turn up somewhere sensible.
+ */
+export function orderGroups(groups = [], order = []) {
+  if (!order || !order.length) return groups;
+  const rank = new Map(order.map((k, i) => [k, i]));
+  // Sort is stable, so unranked groups hold their default order among
+  // themselves rather than reshuffling.
+  return [...groups].sort((a, b) => {
+    const ra = rank.has(a.key) ? rank.get(a.key) : Number.POSITIVE_INFINITY;
+    const rb = rank.has(b.key) ? rank.get(b.key) : Number.POSITIVE_INFINITY;
+    return ra === rb ? 0 : ra - rb;
+  });
 }
 
 /**

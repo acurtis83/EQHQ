@@ -169,10 +169,15 @@ function Head({ children, right, accent = "#111", size }) {
 }
 
 /**
- * One item, as it prints: a single line.
+ * One item, as it prints.
  *
- * The name on the left, the date — and, when the page isn't grouped, the
- * category — right-aligned in a fixed column so they line up down the sheet.
+ * The name, then the category and date on a line beneath it. A single column:
+ * the meta used to sit right-aligned in its own column, which put a ragged
+ * gutter down the middle of the sheet and left the names in a narrow strip.
+ *
+ * Grouped, the heading above already names the category, so only the date
+ * appears — and with nothing else on it that line is dropped rather than left
+ * hanging under the name.
  *
  * Notes, owners, links and attachments are deliberately not here. Carrying
  * them meant three or four lines an item and a page that had to drop to 9pt to
@@ -184,17 +189,14 @@ function PrintItem({ it, plan, showCategory }) {
     .filter(Boolean);
 
   return (
-    <div style={{
-      display: "flex", gap: 10, alignItems: "baseline",
-      marginTop: plan.rowGap, breakInside: "avoid",
-    }}>
-      <div style={{ flex: 1, minWidth: 0, fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere" }}>
+    <div style={{ marginTop: plan.rowGap, breakInside: "avoid" }}>
+      <div style={{ fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere" }}>
         {it.text}
       </div>
       {meta.length > 0 && (
         <div style={{
-          flex: "0 0 auto", fontFamily: SANS, fontSize: plan.note, color: "#3d3d3d",
-          whiteSpace: "nowrap",
+          fontFamily: SANS, fontSize: plan.note, color: "#3d3d3d",
+          lineHeight: 1.3, marginTop: 1,
         }}>
           {meta.join("  ·  ")}
         </div>
@@ -220,7 +222,7 @@ function PrintItem({ it, plan, showCategory }) {
  */
 export default function AgendaPrint({
   agenda = {}, sections: SECTIONS = [], bySection = {}, events = [], categories = [],
-  grouped = false,
+  grouped = false, categoryOrder = [],
 }) {
   const withItems = SECTIONS
     .map((s) => ({ ...s, items: bySection[s.key] || [] }))
@@ -234,7 +236,7 @@ export default function AgendaPrint({
   // printed copy follows whichever arrangement the presidency is working in,
   // so the sheet on the table matches the screen they planned it on.
   const groups = grouped
-    ? groupByCategory(withItems, categories).map((g) => ({
+    ? groupByCategory(withItems, categories, categoryOrder).map((g) => ({
         ...g, items: flattenItems([g], categories),
       }))
     : [];

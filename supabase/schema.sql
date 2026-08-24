@@ -533,6 +533,11 @@ create table if not exists agendas (
 -- deleting one doesn't bring it back on the next visit.
 alter table agendas add column if not exists carried_over boolean not null default false;
 
+-- The order the presidency wants to work through the categories in, for one
+-- meeting. A list of category keys; anything not in it keeps its default
+-- place, so an order saved before a new category existed still works.
+alter table agendas add column if not exists category_order jsonb not null default '[]';
+
 -- Added after the first release. These run here, immediately after the table,
 -- because policies further down reference it. No-ops when already present.
 -- Sunday agendas carry who prays and who conducts; presidency agendas leave

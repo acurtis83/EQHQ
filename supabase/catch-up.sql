@@ -269,6 +269,9 @@ begin
 end
 $$;
 
+-- Manual category order on a presidency agenda.
+alter table agendas add column if not exists category_order jsonb not null default '[]';
+
 notify pgrst, 'reload schema';
 
 

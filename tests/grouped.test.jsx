@@ -141,10 +141,24 @@ describe("the agenda, grouped by category", () => {
     await mountAgenda();
     await goGrouped();
 
-    const hub = screen.getByText("Ministering Checks").closest("button");
-    expect(hub).toBeTruthy();
-    // "Ministering Checks" is both a section and a category. One hub, not two.
-    expect(screen.getAllByText("Ministering Checks").length).toBe(1);
+    expect(screen.getByText("Ministering Checks").closest("button")).toBeTruthy();
+    expect(screen.getByText("Bro. Bagley")).toBeTruthy();
+  });
+
+  it("keeps Ministering, Ministering Checks and Brothers in Need apart", async () => {
+    // The category now called "Brothers in Need" was briefly called
+    // "Ministering Checks", which is also the name of a section — so the two
+    // merged into one hub and a brother in real need sat in the same pile as a
+    // routine check. Three different things, three different places.
+    const { AGENDA_CATEGORIES } = await import("../src/lib/domain/agendaCategories");
+    const labels = AGENDA_CATEGORIES.map((c) => c.label);
+    expect(labels).toContain("Ministering");
+    expect(labels).toContain("Brothers in Need");
+    expect(labels).not.toContain("Ministering Checks");
+
+    // The key didn't move with the label, or every item already tagged with it
+    // would have been orphaned.
+    expect(AGENDA_CATEGORIES.find((c) => c.key === "need").label).toBe("Brothers in Need");
   });
 
   it("folds a hub away and back", async () => {
@@ -223,5 +237,59 @@ describe("the planner, grouped by category", () => {
 
     await mountAgenda();
     expect(screen.getByText("Temple & Family History")).toBeTruthy();
+  });
+});
+
+describe("setting the order a meeting runs in", () => {
+  it("moves a category up the meeting", async () => {
+    // The order a meeting runs in is decided on the day — a move-in that needs
+    // settling goes first, whatever the standing list looks like.
+    const patched = [];
+    const { AgendaDetail } = await import("../src/presidency/PresidencyAgenda");
+    await mount(
+      <AgendaDetail
+        agenda={{ id: "ag1", meeting_date: "2026-08-26" }}
+        items={AGENDA_ITEMS} agendas={[]} members={[]} events={[]}
+        onBack={() => {}} onReloadItems={() => {}} onDelete={() => {}} flash={() => {}}
+        onPatchAgenda={(f) => patched.push(f)}
+      />
+    );
+    await goGrouped();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Service up" }));
+
+    // The whole visible order is written, not just the pair that swapped.
+    const order = patched.at(-1).category_order;
+    expect(order.indexOf("service")).toBeLessThan(order.indexOf("temple"));
+    expect(order.length).toBeGreaterThan(2);
+  });
+
+  it("honours a saved order", async () => {
+    const { AgendaDetail } = await import("../src/presidency/PresidencyAgenda");
+    await mount(
+      <AgendaDetail
+        agenda={{ id: "ag1", meeting_date: "2026-08-26", category_order: ["service", "sunday"] }}
+        items={AGENDA_ITEMS} agendas={[]} members={[]} events={[]}
+        onBack={() => {}} onReloadItems={() => {}} onPatchAgenda={() => {}}
+        onDelete={() => {}} flash={() => {}}
+      />
+    );
+    await goGrouped();
+
+    const headings = [...document.querySelectorAll("[aria-expanded]")].map((b) => b.textContent);
+    const at = (label) => headings.findIndex((h) => h.startsWith(label));
+    expect(at("Service")).toBeLessThan(at("Sunday"));
+    // A category nobody moved keeps its default place rather than being
+    // dumped at one end.
+    expect(at("Sunday")).toBeLessThan(at("Temple & Family History"));
+  });
+
+  it("can't move the first one up or the last one down", async () => {
+    await mountAgenda();
+    await goGrouped();
+
+    const headings = [...document.querySelectorAll("[aria-expanded]")].map((b) => b.textContent);
+    const firstLabel = headings[0].replace(/\d+ (open|total)/g, "").trim();
+    expect(screen.getByRole("button", { name: `Move ${firstLabel} up` }).disabled).toBe(true);
   });
 });

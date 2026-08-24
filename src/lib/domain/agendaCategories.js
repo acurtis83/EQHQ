@@ -19,9 +19,14 @@ export const AGENDA_CATEGORIES = [
   { key: "callings",    label: "Callings/Releasings",     accent: "var(--red)",          soft: "var(--red-soft)" },
   { key: "service",     label: "Service",                 accent: "var(--green)",        soft: "var(--green-soft)" },
   { key: "moves",       label: "Move In/Out",             accent: "var(--sub)",          soft: "var(--inset)" },
-  // Was "Member in Need". The key stays `need` on purpose: it's what's stored
-  // on every item already tagged with it, and changing it would orphan them.
-  { key: "need",        label: "Ministering Checks",      accent: "var(--red)",          soft: "var(--red-soft)" },
+  // "Member in Need", then briefly "Ministering Checks", now this. The key
+  // stays `need` through all of it on purpose: it's what's stored on every
+  // item already tagged with it, and changing it would orphan them.
+  //
+  // The middle name was a mistake — it collided with the "Ministering Checks"
+  // section, so the two merged into one hub and there was no way to keep a
+  // brother in need separate from a routine ministering check.
+  { key: "need",        label: "Brothers in Need",        accent: "var(--red)",          soft: "var(--red-soft)" },
 ];
 
 export function agendaCategory(key, extra) {

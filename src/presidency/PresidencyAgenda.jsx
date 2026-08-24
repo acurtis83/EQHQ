@@ -113,8 +113,16 @@ export default function PresidencyAgenda({ onGo }) {
         onGoCalling={goCalling}
         onPatchAgenda={async (fields) => {
           const { error } = await supabase.from("agendas").update(fields).eq("id", selected.id);
-          if (error) setErr(error.message);
-          else setSelected({ ...selected, ...fields });
+          if (error) {
+            // Reordering writes a column added after the first release. On a
+            // database that hasn't caught up, Postgres says "column ... does
+            // not exist", which tells the presidency nothing they can act on.
+            setErr(/column .* does not exist|schema cache/i.test(error.message)
+              ? "The database needs updating before the order can be saved — run supabase/catch-up.sql."
+              : error.message);
+          } else {
+            setSelected({ ...selected, ...fields });
+          }
         }}
         onDelete={async () => {
           if (!confirm("Delete this agenda and all its items?")) return;
@@ -246,11 +254,31 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
       .filter((sec) => sec.items.length),
     [bySection]
   );
-  const groups = useMemo(
-    () => groupByCategory(withItems, printCategories),
-    // printCategories is rebuilt every render; the custom list is what changes.
-    [withItems, customCategories]
+  // The order the presidency chose for this meeting, if they've moved anything.
+  const categoryOrder = useMemo(
+    () => (Array.isArray(agenda.category_order) ? agenda.category_order : []),
+    [agenda.category_order]
   );
+  const groups = useMemo(
+    () => groupByCategory(withItems, printCategories, categoryOrder),
+    // printCategories is rebuilt every render; the custom list is what changes.
+    [withItems, customCategories, categoryOrder]
+  );
+
+  /**
+   * Move a category up or down the meeting.
+   *
+   * The whole visible order is written, not just the pair that swapped, so a
+   * category that had never been moved gets a place of its own rather than
+   * staying implicit and sliding around the next time something else moves.
+   */
+  const moveCategory = (index, dir) => {
+    const next = groups.map((g) => g.key);
+    const to = index + dir;
+    if (to < 0 || to >= next.length) return;
+    [next[index], next[to]] = [next[to], next[index]];
+    onPatchAgenda({ category_order: next });
+  };
 
   // Whether the printed copy will hold. Notes are never dropped to make room,
   // so a very long agenda runs to a second page — better to say so here than
@@ -467,7 +495,7 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
                 Nothing on the agenda yet.
               </div>
             </div>
-          ) : groups.map((g) => {
+          ) : groups.map((g, i) => {
             // A hub built from a section rather than a category adds into that
             // section; a real category adds to the main list, tagged.
             const section = g.section || "items";
@@ -481,6 +509,9 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
                 open={g.items.filter((i) => !i.done).length}
                 adding={adding === token}
                 addForm={addForm(section, !g.section)}
+                onMove={(dir) => moveCategory(i, dir)}
+                first={i === 0}
+                last={i === groups.length - 1}
                 onAdd={() => {
                   setAdding(adding === token ? null : token);
                   setDraft({ ...blankItem, section, category: g.section ? "" : g.key });
@@ -567,6 +598,7 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
         <AgendaPrint
           agenda={agenda} sections={SECTIONS} bySection={bySection}
           events={events} categories={printCategories} grouped={grouped}
+          categoryOrder={categoryOrder}
         />
       )}
 

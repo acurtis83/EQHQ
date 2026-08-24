@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Plus } from "lucide-react";
 import { T, card, Btn, Chip } from "./ui";
 
 /**
@@ -15,9 +15,13 @@ import { T, card, Btn, Chip } from "./ui";
  * Collapsing is deliberately not remembered between visits. A hub folded away
  * last week would hide items this week, and nothing on a folded header says
  * what's inside it beyond a count.
+ *
+ * The order is remembered, though — see onMove. A meeting doesn't always run
+ * the same way round, and the presidency decides that on the day.
  */
 export default function CategoryHub({
-  label, accent, count, open, children, onAdd, adding, addForm, defaultCollapsed = false,
+  label, accent, count, open, children, onAdd, adding, addForm,
+  defaultCollapsed = false, onMove, first, last,
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const Chevron = collapsed ? ChevronRight : ChevronDown;
@@ -55,6 +59,22 @@ export default function CategoryHub({
             <Chip color={T.faint} bg={T.inset}>{count} total</Chip>
           )}
         </button>
+
+        {/* Reordering lives on the header rather than behind an edit mode:
+            setting the order of a meeting means moving several categories in
+            a row, and a mode to enter and leave would make that tedious. */}
+        {onMove && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: "0 0 auto" }}>
+            <Btn size="sm" kind="plain" disabled={first} aria-label={`Move ${label} up`}
+              onClick={(e) => { e.stopPropagation(); onMove(-1); }}>
+              <ChevronUp size={14} />
+            </Btn>
+            <Btn size="sm" kind="plain" disabled={last} aria-label={`Move ${label} down`}
+              onClick={(e) => { e.stopPropagation(); onMove(1); }}>
+              <ChevronDown size={14} />
+            </Btn>
+          </div>
+        )}
 
         {onAdd && (
           <Btn size="sm" kind="plain" onClick={onAdd} aria-label={`Add to ${label}`}>
