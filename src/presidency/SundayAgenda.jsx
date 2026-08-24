@@ -3,6 +3,7 @@ import {
   Plus, Trash2, Printer, Mail, Copy, ArrowDownToLine, ExternalLink,
   Check, RefreshCw,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 import Sheet from "../components/Sheet";
 import EmailSheet from "../components/EmailSheet";
@@ -690,22 +691,29 @@ function PullSheet({ agendaId, startOrder, onClose, onPulled, setErr }) {
 /* --------------------------------- print --------------------------------- */
 
 function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustainings = [] }) {
-  return (
-    <div className="eq-print-only">
-      {/* Same mechanism as the presidency agenda: hide everything, show this. */}
-      <style>{`
+  const sheet = (
+    <div className="eq-print-root">
+      {/* Same mechanism as the presidency agenda, and for the same reason:
+          mounted onto <body> rather than positioned inside the app's shell,
+          whose max-width was clipping the right edge off the sheet. The CSS is
+          set as raw markup because React escapes ">" inside a <style> text
+          child when rendering on the server. */}
+      <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          body * { visibility: hidden !important; }
-          .eq-print-only, .eq-print-only * { visibility: visible !important; }
-          .eq-print-only {
-            position: absolute !important; left: 0; top: 0; width: 100%;
-            padding: 0 !important; background: #fff !important; color: #111 !important;
+          html, body {
+            margin: 0 !important; padding: 0 !important;
+            width: auto !important; background: #fff !important;
           }
-          @page { margin: 18mm 16mm; }
+          body > * { display: none !important; }
+          body > .eq-print-root { display: block !important; }
+          .eq-print-root {
+            width: auto !important; max-width: 100% !important;
+            box-sizing: border-box; color: #111 !important;
+          }
+          @page { size: letter; margin: 0.5in 0.6in; }
         }
-        .eq-print-only { display: none; }
-        @media print { .eq-print-only { display: block; } }
-      `}</style>
+        .eq-print-root { display: none; }
+      ` }} />
       <div style={{ fontSize: 12, letterSpacing: "0.14em", color: "#666", fontWeight: 700 }}>
         HOLBROOK FARMS 8TH WARD
       </div>
@@ -770,6 +778,10 @@ function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustain
       </div>
     </div>
   );
+
+  // Onto <body>, so nothing in the app's layout constrains the page width.
+  // In a server render there's no document; the tree is returned as-is.
+  return typeof document === "undefined" ? sheet : createPortal(sheet, document.body);
 }
 
 function Lbl({ label, children }) {

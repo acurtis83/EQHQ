@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   choosePrintPlan, groupByCategory, groupEvents, printAccent, PRINTABLE_H,
 } from "../lib/domain/printPlan";
@@ -86,22 +87,37 @@ export default function AgendaPrint({
   const eventGroups = groupEvents(events);
   const plan = choosePrintPlan({ sections: groups, events });
 
-  return (
-    <div className="eq-print-only">
-      <style>{`
+  const sheet = (
+    <div className="eq-print-root">
+      {/* Set as raw CSS rather than as a text child. React escapes text
+          inside <style> when it renders on the server, which turns
+          "body > *" into "body &gt; *" — an invalid selector the browser
+          silently drops, taking the whole print layout with it. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* The document is mounted straight onto <body>, not left inside the
+           app's layout. It used to be absolutely positioned inside the shell,
+           which has a max-width — so "width: 100%" resolved against whatever
+           happened to be constraining it rather than the page, and the right
+           edge printed off the sheet. As a direct child of body in normal
+           flow, its width is simply the page's content box. */
         @media print {
-          body * { visibility: hidden !important; }
-          .eq-print-only, .eq-print-only * { visibility: visible !important; }
-          .eq-print-only {
-            position: absolute !important; left: 0; top: 0; width: 100%;
-            padding: 0 !important; background: #fff !important; color: #111 !important;
+          html, body {
+            margin: 0 !important; padding: 0 !important;
+            width: auto !important; background: #fff !important;
+          }
+          body > * { display: none !important; }
+          body > .eq-print-root { display: block !important; }
+          .eq-print-root {
+            width: auto !important; max-width: 100% !important;
+            box-sizing: border-box; color: #111 !important;
           }
           /* Letter is shorter than A4, so sizing to Letter fits both. */
           @page { size: letter; margin: 0.5in 0.6in; }
         }
-        .eq-print-only { display: none; }
-        @media print { .eq-print-only { display: block; } }
-      `}</style>
+        /* Off-screen the rest of the time — it's a print artefact, not part
+           of the app's interface. */
+        .eq-print-root { display: none; }
+` }} />
 
       <div style={{
         fontFamily: "Georgia, 'Times New Roman', serif",
@@ -114,6 +130,13 @@ export default function AgendaPrint({
         display: "flex",
         flexDirection: "column",
         minHeight: PRINTABLE_H,
+        // Never wider than the page. Without this a long unbroken string in an
+        // item could stretch the flex row and take the right-hand column off
+        // the edge of the sheet.
+        width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        overflow: "hidden",
       }}>
         {/* ---- masthead ---- */}
         <div style={{ borderBottom: "2px solid #111", paddingBottom: 5 }}>
@@ -156,9 +179,12 @@ export default function AgendaPrint({
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{it.text}</div>
+                  <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{it.text}</div>
                   {plan.showNotes && it.notes && (
-                    <div style={{ fontSize: plan.note, color: "#4b5563", marginTop: 1 }}>
+                    <div style={{
+                      fontSize: plan.note, color: "#4b5563", marginTop: 1,
+                      overflowWrap: "anywhere",
+                    }}>
                       {it.notes}
                     </div>
                   )}
@@ -228,7 +254,7 @@ export default function AgendaPrint({
                   </div>
                   {g.items.map((e) => (
                     <div key={e.id} style={{ marginBottom: 3 }}>
-                      <div style={{ fontWeight: 600, lineHeight: 1.25 }}>{e.title}</div>
+                      <div style={{ fontWeight: 600, lineHeight: 1.25, overflowWrap: "anywhere" }}>{e.title}</div>
                       <div style={{
                         fontFamily: SANS, fontSize: plan.note, color: "#4b5563", lineHeight: 1.3,
                       }}>
@@ -278,4 +304,9 @@ export default function AgendaPrint({
       </div>
     </div>
   );
+
+  // Rendered onto <body> so nothing in the app's layout can constrain its
+  // width. Falls back to rendering in place when there's no document, which is
+  // how the standalone print sample gets generated on the server.
+  return typeof document === "undefined" ? sheet : createPortal(sheet, document.body);
 }
