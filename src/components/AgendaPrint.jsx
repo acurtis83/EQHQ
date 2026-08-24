@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import {
-  choosePrintPlan, flattenItems, groupEvents, PRINTABLE_H,
+  choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent, PRINTABLE_H,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
@@ -52,6 +52,35 @@ function Band({ children, size, right }) {
 }
 
 /**
+ * A category heading, for the grouped layout.
+ *
+ * A colour mark, the label, then a hairline running to the count. Lighter than
+ * a Band — these are subjects within the business, not parts of the meeting —
+ * but heavy enough that the eye can find where one subject ends.
+ */
+function Head({ children, right, accent = "#111", size }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+      <span style={{
+        flex: "0 0 auto", width: 7, height: 7, borderRadius: 1, background: accent,
+      }} />
+      <span style={{
+        flex: "0 0 auto", fontFamily: SANS, fontSize: size, fontWeight: 800,
+        letterSpacing: "0.13em", textTransform: "uppercase", color: "#111",
+      }}>
+        {children}
+      </span>
+      <span style={{ flex: 1, height: 1, background: "#c9ccd2", minWidth: 8 }} />
+      {right != null && (
+        <span style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: size - 1, color: "#9ca3af" }}>
+          {right}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
  * An item's category, owner and date.
  *
  * The category leads and carries the item's colour — it's the subheading to
@@ -59,8 +88,9 @@ function Band({ children, size, right }) {
  * Stacked beneath the name normally; set in a column beside it only when the
  * page is too full to spend a line per item.
  */
-function Meta({ it, size, stacked }) {
-  if (!it.catLabel && !it.who && !it.due_date) return null;
+function Meta({ it, size, stacked, showCategory = true }) {
+  const cat = showCategory ? it.catLabel : "";
+  if (!cat && !it.who && !it.due_date) return null;
   return (
     <div style={{
       fontFamily: SANS, fontSize: size,
@@ -68,13 +98,13 @@ function Meta({ it, size, stacked }) {
         ? { marginTop: 1, display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }
         : { textAlign: "right", lineHeight: 1.3, paddingTop: 1 }),
     }}>
-      {it.catLabel && (
+      {cat && (
         <div style={{
           display: stacked ? "inline" : "block",
           fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase",
           color: it.accent,
         }}>
-          {it.catLabel}
+          {cat}
         </div>
       )}
       {it.who && (
@@ -87,6 +117,63 @@ function Meta({ it, size, stacked }) {
       {it.due_date && (
         <div style={{ display: stacked ? "inline" : "block", color: "#374151", fontWeight: 600 }}>
           {fmtShort(it.due_date)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One item, as it prints.
+ *
+ * Shared by both layouts — the only difference is whether the category is
+ * repeated on the item, which it isn't when a heading above already says it.
+ */
+function PrintItem({ it, plan, showCategory }) {
+  return (
+    <div
+      style={{
+        marginTop: plan.rowGap + (plan.stackMeta ? 4 : 0),
+        // A rule in the category's colour down the left edge, which is what
+        // the card on screen does with its border. Cheaper on paper than a
+        // boxed card and it survives a black-and-white printer as a
+        // distinguishable grey.
+        borderLeft: `3px solid ${it.accent}`,
+        paddingLeft: 8,
+        breakInside: "avoid",
+        ...(plan.stackMeta ? {} : { display: "flex", gap: 10, alignItems: "flex-start" }),
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {/* The name is the heading. It's what somebody is looking for when
+            they scan the page, so it goes first and at full size. */}
+        <div style={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
+          {it.text}
+        </div>
+
+        {plan.stackMeta && <Meta it={it} size={plan.note} stacked showCategory={showCategory} />}
+
+        {plan.showNotes && it.notes && (
+          <div style={{
+            fontSize: plan.note, color: "#4b5563", marginTop: 2,
+            overflowWrap: "anywhere",
+          }}>
+            {it.notes}
+          </div>
+        )}
+        {plan.showLinks && (it.link_url || it.attachment_url) && (
+          // The name, not the whole URL: nobody types a 90-character link off
+          // a sheet of paper, and it wraps horribly.
+          <div style={{ fontFamily: SANS, fontSize: plan.note, color: "#6b7280", marginTop: 1 }}>
+            {it.attachment_url ? (it.attachment_name || "Attachment") : "Link"} — see the app
+          </div>
+        )}
+      </div>
+
+      {/* Only on a page too full to give each item its own meta line. */}
+      {!plan.stackMeta && (
+        <div style={{ flex: "0 0 118px" }}>
+          <Meta it={it} size={plan.note} stacked={false} showCategory={showCategory} />
         </div>
       )}
     </div>
@@ -110,6 +197,7 @@ function Meta({ it, size, stacked }) {
  */
 export default function AgendaPrint({
   agenda = {}, sections: SECTIONS = [], bySection = {}, events = [], categories = [],
+  grouped = false,
 }) {
   const withItems = SECTIONS
     .map((s) => ({ ...s, items: bySection[s.key] || [] }))
@@ -119,8 +207,18 @@ export default function AgendaPrint({
   // same shape as the cards on the agenda screen, so the printed copy and the
   // one on the phone read the same way.
   const items = flattenItems(withItems, categories);
+  // Grouped, the page is a heading per subject with its items beneath. The
+  // printed copy follows whichever arrangement the presidency is working in,
+  // so the sheet on the table matches the screen they planned it on.
+  const groups = grouped
+    ? groupByCategory(withItems, categories).map((g) => ({
+        ...g, items: flattenItems([g], categories),
+      }))
+    : [];
   const eventGroups = groupEvents(events);
-  const plan = choosePrintPlan({ sections: withItems, events });
+  const plan = choosePrintPlan({
+    sections: grouped ? groups : withItems, events, grouped,
+  });
 
   const sheet = (
     <div className="eq-print-root">
@@ -210,55 +308,24 @@ export default function AgendaPrint({
           </div>
         )}
 
-        {items.map((it) => (
-          <div
-            key={it.id}
-            style={{
-              marginTop: plan.rowGap + (plan.stackMeta ? 4 : 0),
-              // A rule in the category's colour down the left edge, which is
-              // what the card on screen does with its border. Cheaper on paper
-              // than a boxed card and it survives a black-and-white printer as
-              // a distinguishable grey.
-              borderLeft: `3px solid ${it.accent}`,
-              paddingLeft: 8,
-              breakInside: "avoid",
-              ...(plan.stackMeta ? {} : { display: "flex", gap: 10, alignItems: "flex-start" }),
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* The name is the heading. It's what somebody is looking for
-                  when they scan the page, so it goes first and at full size. */}
-              <div style={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
-                {it.text}
+        {grouped
+          ? groups.map((g) => (
+              <div key={g.key || g.label} style={{ marginTop: plan.sectionGap, breakInside: "avoid" }}>
+                <Head
+                  size={plan.note}
+                  right={g.items.length}
+                  accent={printAccent(categories, g.label)}
+                >
+                  {g.label}
+                </Head>
+                {g.items.map((it) => (
+                  <PrintItem key={it.id} it={it} plan={plan} showCategory={false} />
+                ))}
               </div>
-
-              {plan.stackMeta && <Meta it={it} size={plan.note} stacked />}
-
-              {plan.showNotes && it.notes && (
-                <div style={{
-                  fontSize: plan.note, color: "#4b5563", marginTop: 2,
-                  overflowWrap: "anywhere",
-                }}>
-                  {it.notes}
-                </div>
-              )}
-              {plan.showLinks && (it.link_url || it.attachment_url) && (
-                // The name, not the whole URL: nobody types a 90-character
-                // link off a sheet of paper, and it wraps horribly.
-                <div style={{ fontFamily: SANS, fontSize: plan.note, color: "#6b7280", marginTop: 1 }}>
-                  {it.attachment_url ? (it.attachment_name || "Attachment") : "Link"} — see the app
-                </div>
-              )}
-            </div>
-
-            {/* Only on a page too full to give each item its own meta line. */}
-            {!plan.stackMeta && (
-              <div style={{ flex: "0 0 118px" }}>
-                <Meta it={it} size={plan.note} stacked={false} />
-              </div>
-            )}
-          </div>
-        ))}
+            ))
+          : items.map((it) => (
+              <PrintItem key={it.id} it={it} plan={plan} showCategory />
+            ))}
 
         {/* ---- what's coming up ---- */}
         {/* A tinted panel, not another ruled section. What's above is business

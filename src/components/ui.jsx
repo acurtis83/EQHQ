@@ -18,7 +18,10 @@ export const card = {
   padding: 16,
 };
 
-export function Btn({ children, onClick, kind = "ghost", size = "md", style, disabled, type = "button", title }) {
+// `rest` is forwarded so aria-label reaches the button. It didn't, and every
+// icon-only Btn in the app — remove, move up, move down — was passing one that
+// went nowhere, leaving those buttons with no accessible name at all.
+export function Btn({ children, onClick, kind = "ghost", size = "md", style, disabled, type = "button", title, ...rest }) {
   const pad = size === "sm" ? "6px 10px" : size === "lg" ? "12px 18px" : "9px 14px";
   const font = size === "sm" ? 14 : 15.5;
   const kinds = {
@@ -34,6 +37,7 @@ export function Btn({ children, onClick, kind = "ghost", size = "md", style, dis
       title={title}
       onClick={onClick}
       disabled={disabled}
+      {...rest}
       style={{
         ...kinds[kind], padding: pad, fontSize: font, fontWeight: 600,
         borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer",

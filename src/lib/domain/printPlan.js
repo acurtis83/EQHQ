@@ -71,6 +71,7 @@ function linesFor(text, size, width = PRINTABLE_W - GUTTER) {
  */
 export function estimateHeight(tier, {
   sections = [], events = [], showNotes = true, showLinks = true, stackMeta = true,
+  grouped = false,
 }) {
   // Masthead: eyebrow, title, rule.
   let h = 14 + 30 + 14;
@@ -83,6 +84,14 @@ export function estimateHeight(tier, {
   const items = sections.flatMap((s) => s.items || []);
   if (items.length) h += tier.sectionGap + 20 + tier.headGap;
 
+  // Grouped by category, each group costs a heading — and in exchange every
+  // item under it stops paying for its own category line, because the heading
+  // has already said what they are.
+  if (grouped) {
+    const withItems = sections.filter((s) => (s.items || []).length);
+    h += withItems.length * (tier.sectionGap + 15 + tier.headGap);
+  }
+
   for (const it of items) {
     // The name is the heading, so it gets the full body size and can wrap.
     h += linesFor(it.text, tier.body, textW) * tier.body * 1.35;
@@ -90,9 +99,10 @@ export function estimateHeight(tier, {
     // when there's something to put there, so a bare item costs one line, not
     // two. Set beside the name instead, they cost nothing: the column is
     // narrower than the name's line and never taller than the block already is.
-    if (stackMeta && (it.category || it.catLabel || it.who || it.due_date)) {
-      h += tier.note * 1.35 + 2;
-    }
+    const meta = grouped
+      ? (it.who || it.due_date)          // the heading already carries the category
+      : (it.category || it.catLabel || it.who || it.due_date);
+    if (stackMeta && meta) h += tier.note * 1.35 + 2;
     if (showNotes && it.notes) {
       h += linesFor(it.notes, tier.note, textW) * tier.note * 1.35 + 2;
     }
@@ -131,7 +141,7 @@ export function estimateHeight(tier, {
  * steps. If none of them fit, it says `fits: false` and the screen warns
  * before printing rather than the page quietly running over.
  */
-export function choosePrintPlan({ sections = [], events = [] } = {}) {
+export function choosePrintPlan({ sections = [], events = [], grouped = false } = {}) {
   const attempts = [
     { showNotes: true, showLinks: true, stackMeta: true },
     { showNotes: true, showLinks: false, stackMeta: true },
@@ -145,9 +155,9 @@ export function choosePrintPlan({ sections = [], events = [] } = {}) {
 
   for (const content of attempts) {
     for (const tier of TIERS) {
-      const height = estimateHeight(tier, { sections, events, ...content });
+      const height = estimateHeight(tier, { sections, events, grouped, ...content });
       if (height <= PRINTABLE_H) {
-        return { ...tier, ...content, height, fits: true };
+        return { ...tier, ...content, grouped, height, fits: true };
       }
     }
   }
@@ -155,8 +165,8 @@ export function choosePrintPlan({ sections = [], events = [] } = {}) {
   const tier = TIERS[TIERS.length - 1];
   const content = { showNotes: true, showLinks: false, stackMeta: false };
   return {
-    ...tier, ...content, fits: false,
-    height: estimateHeight(tier, { sections, events, ...content }),
+    ...tier, ...content, grouped, fits: false,
+    height: estimateHeight(tier, { sections, events, grouped, ...content }),
   };
 }
 
@@ -225,14 +235,24 @@ export function groupByCategory(sections = [], categories = []) {
 
   // Category order first, so the page reads the same way every week; anything
   // falling back to a section name goes after, in section order.
+  //
+  // Keying by label rather than by category key is what merges a section and a
+  // category that share a name — "Ministering Checks" is both — into one hub
+  // instead of two identical-looking headings next to each other.
   const ordered = [];
   for (const c of categories) {
-    if (groups.has(c.label)) { ordered.push({ label: c.label, items: groups.get(c.label) }); groups.delete(c.label); }
+    if (groups.has(c.label)) {
+      ordered.push({ key: c.key, label: c.label, accent: c.accent, items: groups.get(c.label) });
+      groups.delete(c.label);
+    }
   }
   for (const s of sections) {
-    if (groups.has(s.label)) { ordered.push({ label: s.label, items: groups.get(s.label) }); groups.delete(s.label); }
+    if (groups.has(s.label)) {
+      ordered.push({ key: `section:${s.key}`, label: s.label, section: s.key, items: groups.get(s.label) });
+      groups.delete(s.label);
+    }
   }
-  for (const [name, items] of groups) ordered.push({ label: name, items });
+  for (const [name, items] of groups) ordered.push({ key: `label:${name}`, label: name, items });
   return ordered;
 }
 
@@ -246,6 +266,8 @@ export function groupByCategory(sections = [], categories = []) {
  */
 export const PRINT_ACCENTS = {
   sunday: "#1f4e79",
+  activities: "#2f6f8f",
+  assignments: "#8a6d1f",
   ministering: "#2e7d4f",
   missionary: "#3b6ea5",
   temple: "#a07c2c",

@@ -10,6 +10,9 @@ import { fmtDate, fmtShort, toIso } from "../lib/domain/dates";
 import { BUCKETS, overdueDays } from "./RunningList";
 import AttachSheet from "../components/AttachSheet";
 import AssigneePicker from "../components/AssigneePicker";
+import CategoryHub from "../components/CategoryHub";
+import ViewToggle from "../components/ViewToggle";
+import { useViewMode, VIEWS } from "../lib/useViewMode";
 import AgendaPrint from "../components/AgendaPrint";
 import { choosePrintPlan, groupByCategory } from "../lib/domain/printPlan";
 import { upcomingForSunday } from "../lib/domain/upcoming";
@@ -190,7 +193,10 @@ async function swapOrder(a, b) {
   ]);
 }
 
-function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err, onGoCalling }) {
+// Exported so the tests can mount it directly. Reaching it through the list
+// means clicking a row, which makes a test about the grouped view mostly a
+// test of the list — and this is the component the blank-screen bugs landed in.
+export function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err, onGoCalling }) {
   const [adding, setAdding] = useState(null); // section key
   const [draft, setDraft] = useState(blankItem);
   const [editing, setEditing] = useState(null);
@@ -221,6 +227,9 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
     onReloadItems();
   };
 
+  const [view, setView] = useViewMode();
+  const grouped = view === VIEWS.CATEGORY;
+
   const bySection = useMemo(() => {
     const out = {};
     for (const s of SECTIONS) out[s.key] = [];
@@ -228,15 +237,29 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
     return out;
   }, [items]);
 
+  // The sections that actually have something in them, and the same items
+  // gathered by subject. Both arrangements are derived here so the screen, the
+  // fit warning and the printed copy can never disagree about what's on the
+  // agenda.
+  const withItems = useMemo(
+    () => SECTIONS.map((sec) => ({ ...sec, items: bySection[sec.key] || [] }))
+      .filter((sec) => sec.items.length),
+    [bySection]
+  );
+  const groups = useMemo(
+    () => groupByCategory(withItems, printCategories),
+    // printCategories is rebuilt every render; the custom list is what changes.
+    [withItems, customCategories]
+  );
+
   // Whether the printed copy will hold. Notes are never dropped to make room,
   // so a very long agenda runs to a second page — better to say so here than
-  // to let the printer be the one to break the news.
+  // to let the printer be the one to break the news. Measured against whichever
+  // arrangement is on screen, because that's the one that will print.
   const printFits = choosePrintPlan({
-    sections: groupByCategory(
-      SECTIONS.map((sec) => ({ ...sec, items: bySection[sec.key] || [] })).filter((sec) => sec.items.length),
-      printCategories
-    ),
+    sections: grouped ? groups : withItems,
     events,
+    grouped,
   }).fits;
 
   const addItem = async (section) => {
@@ -253,6 +276,31 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
     });
     if (!error) { setDraft(blankItem); setAdding(null); onReloadItems(); }
   };
+
+  /**
+   * The form for a new item.
+   *
+   * One form for both arrangements. In the grouped view the category is
+   * already decided — it's the hub the plus was tapped on — so the picker is
+   * hidden rather than asking again for something already answered.
+   */
+  const addForm = (section, fixedCategory) => (
+    <div style={{ background: T.inset, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+      <Input value={draft.text} onChange={(v) => setDraft({ ...draft, text: v })} placeholder="What needs discussing?" />
+      <div style={{ display: "flex", gap: 8 }}>
+        <AssigneePicker value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} />
+        <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
+      </div>
+      {!fixedCategory && (
+        <CategoryPicker value={draft.category} onChange={(v) => setDraft({ ...draft, category: v || "" })} />
+      )}
+      <Area value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} placeholder="Notes (optional)" rows={2} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <Btn kind="primary" onClick={() => addItem(section)} disabled={!draft.text.trim()}>Add</Btn>
+        <Btn kind="plain" onClick={() => setAdding(null)}>Cancel</Btn>
+      </div>
+    </div>
+  );
 
   const patchItem = async (id, fields) => {
     await supabase.from("agenda_items").update(fields).eq("id", id);
@@ -356,17 +404,6 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
         </div>
       )}
 
-      {!printFits && (
-        <div style={{
-          background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
-          borderRadius: 10, padding: "9px 12px", fontSize: 13.5,
-          marginBottom: 12, lineHeight: 1.5, fontWeight: 600,
-        }}>
-          This agenda is long enough to run onto a second page. Nothing is left
-          out — shorten a note or move an item to next week to bring it back to one.
-        </div>
-      )}
-
       {err && (
         <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
           {err}
@@ -415,7 +452,76 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
         </div>
       )}
 
-      {SECTIONS.map((s) => {
+      {/* Which arrangement the meeting runs in. Sits above the items rather
+          than in a settings screen: it gets flipped mid-meeting, when the
+          presidency decides to work through a subject rather than a list. */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <ViewToggle value={view} onChange={setView} />
+      </div>
+
+      {grouped ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {!groups.length ? (
+            <div style={{ ...card }}>
+              <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
+                Nothing on the agenda yet.
+              </div>
+            </div>
+          ) : groups.map((g) => {
+            // A hub built from a section rather than a category adds into that
+            // section; a real category adds to the main list, tagged.
+            const section = g.section || "items";
+            const token = `hub:${g.key}`;
+            return (
+              <CategoryHub
+                key={g.key}
+                label={g.label}
+                accent={g.accent}
+                count={g.items.length}
+                open={g.items.filter((i) => !i.done).length}
+                adding={adding === token}
+                addForm={addForm(section, !g.section)}
+                onAdd={() => {
+                  setAdding(adding === token ? null : token);
+                  setDraft({ ...blankItem, section, category: g.section ? "" : g.key });
+                }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {g.items.map((it) => (
+                    <ItemRow
+                      key={it.id} it={it}
+                      editing={editing === it.id}
+                      onEdit={() => setEditing(editing === it.id ? null : it.id)}
+                      onPatch={patchItem} onRemove={removeItem}
+                      onAttach={() => setAttachFor(it)}
+                      onGoCalling={onGoCalling}
+                      showCategory={false}
+                    />
+                  ))}
+                </div>
+              </CategoryHub>
+            );
+          })}
+
+          {/* Only categories that have something show a hub, or the screen
+              would be ten mostly-empty cards. This is how something gets into
+              one that isn't there yet. */}
+          <div>
+            <Btn
+              kind="soft"
+              onClick={() => {
+                setAdding(adding === "hub:new" ? null : "hub:new");
+                setDraft(blankItem);
+              }}
+            >
+              <Plus size={15} />Add To Another Category
+            </Btn>
+            {adding === "hub:new" && (
+              <div style={{ marginTop: 10 }}>{addForm("items")}</div>
+            )}
+          </div>
+        </div>
+      ) : SECTIONS.map((s) => {
         const list = bySection[s.key] || [];
         return (
           <div key={s.key} style={{ ...card, marginBottom: 12 }}>
@@ -430,21 +536,7 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
               </Btn>
             </div>
 
-            {adding === s.key && (
-              <div style={{ background: T.inset, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                <Input value={draft.text} onChange={(v) => setDraft({ ...draft, text: v })} placeholder="What needs discussing?" />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <AssigneePicker value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} />
-                  <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
-                </div>
-                <CategoryPicker value={draft.category} onChange={(v) => setDraft({ ...draft, category: v || "" })} />
-                <Area value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} placeholder="Notes (optional)" rows={2} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn kind="primary" onClick={() => addItem(s.key)} disabled={!draft.text.trim()}>Add</Btn>
-                  <Btn kind="plain" onClick={() => setAdding(null)}>Cancel</Btn>
-                </div>
-              </div>
-            )}
+            {adding === s.key && addForm(s.key)}
 
             {!list.length ? (
               <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>
@@ -474,7 +566,7 @@ function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, on
       {printing && (
         <AgendaPrint
           agenda={agenda} sections={SECTIONS} bySection={bySection}
-          events={events} categories={printCategories}
+          events={events} categories={printCategories} grouped={grouped}
         />
       )}
 
@@ -628,7 +720,7 @@ function PullSheet({ agenda, existing, onClose, onPulled }) {
   );
 }
 
-function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling, onMove, first, last }) {
+function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling, onMove, first, last, showCategory = true }) {
   const [text, setText] = useState(it.text);
   const [who, setWho] = useState(it.who || "");
   const [notes, setNotes] = useState(it.notes || "");
@@ -722,7 +814,9 @@ function ItemRow({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling
           {it.text}
         </div>
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 4 }}>
-          <CategoryChip value={it.category} />
+          {/* In the grouped view the hub's heading already says what this
+              is; repeating it on every card is noise. */}
+          {showCategory && <CategoryChip value={it.category} />}
           {it.who && <Chip color={T.sub} bg={T.inset}>{it.who}</Chip>}
           {it.due_date && (
             <Chip color={late ? T.red : T.sub} bg={late ? T.redSoft : T.inset}>

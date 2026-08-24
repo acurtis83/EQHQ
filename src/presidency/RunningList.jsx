@@ -6,6 +6,10 @@ import { AGENDA_CATEGORIES } from "../lib/domain/agendaCategories";
 import { T, card, Btn, Input, Area, Chip, Empty } from "../components/ui";
 import AttachSheet from "../components/AttachSheet";
 import AssigneePicker from "../components/AssigneePicker";
+import CategoryHub from "../components/CategoryHub";
+import ViewToggle from "../components/ViewToggle";
+import { useViewMode, VIEWS } from "../lib/useViewMode";
+import { groupByCategory } from "../lib/domain/printPlan";
 import { fmtShort, toIso } from "../lib/domain/dates";
 
 export const BUCKETS = [
@@ -30,7 +34,7 @@ export default function RunningList({ onCountChange, onGo }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [draftFor, setDraftFor] = useState(null);
-  const [draft, setDraft] = useState({ text: "", who: "", notes: "", due_date: "" });
+  const [draft, setDraft] = useState({ text: "", who: "", notes: "", due_date: "", category: "" });
   const [editing, setEditing] = useState(null);
   const [attachFor, setAttachFor] = useState(null);
   const [showDone, setShowDone] = useState(false);
@@ -52,6 +56,9 @@ export default function RunningList({ onCountChange, onGo }) {
     onCountChange?.(items.filter((i) => !i.done).length);
   }, [items, onCountChange]);
 
+  const [view, setView] = useViewMode();
+  const grouped = view === VIEWS.CATEGORY;
+
   const byBucket = useMemo(() => {
     const out = {};
     for (const b of BUCKETS) out[b.key] = [];
@@ -69,6 +76,47 @@ export default function RunningList({ onCountChange, onGo }) {
     return out;
   }, [items]);
 
+  // The same items gathered by subject rather than by bucket, so the planner
+  // and the agenda group the same way. A planner item with no category falls
+  // back to its bucket's name, which is already a subject — "Ministering
+  // Checks", "Service" — so nothing lands in an "Other" pile.
+  const groups = useMemo(() => groupByCategory(
+    BUCKETS.map((b) => ({
+      key: b.key, label: b.label,
+      items: (byBucket[b.key] || []).filter((i) => showDone || !i.done),
+    })).filter((b) => b.items.length),
+    AGENDA_CATEGORIES
+  ), [byBucket, showDone]);
+
+
+  /**
+   * The form for a new planner item.
+   *
+   * One form for both arrangements. Grouped, the category is already decided —
+   * it's the hub the plus was tapped on — so the picker is hidden rather than
+   * asking again for something already answered.
+   */
+  const addForm = (bucket, b, fixedCategory) => (
+    <div style={{ background: T.inset, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+      <Input
+        value={draft.text} onChange={(v) => setDraft({ ...draft, text: v })}
+        placeholder={b && b.key === "watch" ? "Who are we checking on?" : "What is it?"}
+      />
+      <div style={{ display: "flex", gap: 8 }}>
+        <AssigneePicker value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} />
+        <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
+      </div>
+      {!fixedCategory && (
+        <CategoryPicker value={draft.category} onChange={(v) => setDraft({ ...draft, category: v || "" })} />
+      )}
+      <Area value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} placeholder="Notes (optional)" rows={2} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <Btn kind="primary" onClick={() => add(bucket)} disabled={!draft.text.trim()}>Add</Btn>
+        <Btn kind="plain" onClick={() => setDraftFor(null)}>Cancel</Btn>
+      </div>
+    </div>
+  );
+
   const add = async (bucket) => {
     if (!draft.text.trim()) return;
     const { error } = await supabase.from("running_items").insert({
@@ -77,11 +125,12 @@ export default function RunningList({ onCountChange, onGo }) {
       who: draft.who.trim() || null,
       notes: draft.notes.trim() || null,
       due_date: draft.due_date || null,
+      category: draft.category || null,
       sort_order: items.filter((i) => i.bucket === bucket).length,
     });
     if (error) setErr(error.message);
     else {
-      setDraft({ text: "", who: "", notes: "", due_date: "" });
+      setDraft({ text: "", who: "", notes: "", due_date: "", category: "" });
       setDraftFor(null);
       load();
     }
@@ -122,8 +171,47 @@ export default function RunningList({ onCountChange, onGo }) {
         </label>
       </div>
 
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        <ViewToggle value={view} onChange={setView} />
+      </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {BUCKETS.map((b) => {
+        {grouped ? groups.map((g) => {
+          // A hub built from a bucket adds into that bucket; a real category
+          // adds to Topics, tagged, which is where a subject with no obvious
+          // bucket belongs.
+          const bucket = g.section || "topics";
+          const token = `hub:${g.key}`;
+          return (
+            <CategoryHub
+              key={g.key}
+              label={g.label}
+              accent={g.accent}
+              count={g.items.length}
+              open={g.items.filter((i) => !i.done).length}
+              adding={draftFor === token}
+              addForm={addForm(bucket, null, !g.section)}
+              onAdd={() => {
+                setDraftFor(draftFor === token ? null : token);
+                setDraft({ text: "", who: "", notes: "", due_date: "", category: g.section ? "" : g.key });
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {g.items.map((it) => (
+                  <Row
+                    key={it.id} it={it}
+                    editing={editing === it.id}
+                    onEdit={() => setEditing(editing === it.id ? null : it.id)}
+                    onPatch={patch} onRemove={remove}
+                    onAttach={setAttachFor}
+                    onGoCalling={goCalling}
+                    showCategory={false}
+                  />
+                ))}
+              </div>
+            </CategoryHub>
+          );
+        }) : BUCKETS.map((b) => {
           const list = byBucket[b.key].filter((i) => showDone || !i.done);
           const open = byBucket[b.key].filter((i) => !i.done).length;
           return (
@@ -133,30 +221,14 @@ export default function RunningList({ onCountChange, onGo }) {
                 {open > 0 && <Chip>{open}</Chip>}
                 <Btn
                   size="sm" kind="plain" style={{ marginLeft: "auto" }}
-                  onClick={() => { setDraftFor(draftFor === b.key ? null : b.key); setDraft({ text: "", who: "", notes: "", due_date: "" }); }}
+                  onClick={() => { setDraftFor(draftFor === b.key ? null : b.key); setDraft({ text: "", who: "", notes: "", due_date: "", category: "" }); }}
                 >
                   <Plus size={15} />Add
                 </Btn>
               </div>
               <div style={{ fontSize: 13.5, color: T.faint, marginBottom: 10 }}>{b.hint}</div>
 
-              {draftFor === b.key && (
-                <div style={{ background: T.inset, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <Input
-                    value={draft.text} onChange={(v) => setDraft({ ...draft, text: v })}
-                    placeholder={b.key === "watch" ? "Who are we checking on?" : "What is it?"}
-                  />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <AssigneePicker value={draft.who} onChange={(v) => setDraft({ ...draft, who: v })} />
-                    <Input type="date" value={draft.due_date} onChange={(v) => setDraft({ ...draft, due_date: v })} />
-                  </div>
-                  <Area value={draft.notes} onChange={(v) => setDraft({ ...draft, notes: v })} placeholder="Notes (optional)" rows={2} />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Btn kind="primary" onClick={() => add(b.key)} disabled={!draft.text.trim()}>Add</Btn>
-                    <Btn kind="plain" onClick={() => setDraftFor(null)}>Cancel</Btn>
-                  </div>
-                </div>
-              )}
+              {draftFor === b.key && addForm(b.key, b)}
 
               {!list.length ? (
                 <div style={{ fontSize: 14, color: T.faint, fontStyle: "italic" }}>Nothing here.</div>
@@ -177,6 +249,23 @@ export default function RunningList({ onCountChange, onGo }) {
             </div>
           );
         })}
+
+        {grouped && (
+          <div>
+            <Btn
+              kind="soft"
+              onClick={() => {
+                setDraftFor(draftFor === "hub:new" ? null : "hub:new");
+                setDraft({ text: "", who: "", notes: "", due_date: "", category: "" });
+              }}
+            >
+              <Plus size={15} />Add To Another Category
+            </Btn>
+            {draftFor === "hub:new" && (
+              <div style={{ marginTop: 10 }}>{addForm("topics", null)}</div>
+            )}
+          </div>
+        )}
       </div>
 
       {attachFor && (
@@ -201,7 +290,7 @@ export default function RunningList({ onCountChange, onGo }) {
   );
 }
 
-function Row({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling }) {
+function Row({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling, showCategory = true }) {
   const [text, setText] = useState(it.text);
   const [who, setWho] = useState(it.who || "");
   const [notes, setNotes] = useState(it.notes || "");
@@ -283,7 +372,9 @@ function Row({ it, editing, onEdit, onPatch, onRemove, onAttach, onGoCalling }) 
           {it.text}
         </div>
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 4 }}>
-          <CategoryChip value={it.category} />
+          {/* In the grouped view the hub's heading already says what this
+              is; repeating it on every card is noise. */}
+          {showCategory && <CategoryChip value={it.category} />}
           {it.who && <Chip color={T.sub} bg={T.inset}>{it.who}</Chip>}
           {it.due_date && (
             <Chip

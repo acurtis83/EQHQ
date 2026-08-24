@@ -10,14 +10,18 @@
  * would orphan existing rows.
  */
 export const AGENDA_CATEGORIES = [
-  { key: "sunday",     label: "Sunday",                  accent: "var(--primary-deep)", soft: "var(--primary-soft)" },
-  { key: "ministering", label: "Ministering",            accent: "var(--green)",        soft: "var(--green-soft)" },
-  { key: "missionary", label: "Missionary Work",         accent: "var(--primary)",      soft: "var(--primary-soft)" },
-  { key: "temple",     label: "Temple & Family History", accent: "var(--gold)",         soft: "var(--gold-soft)" },
-  { key: "callings",   label: "Callings/Releasings",     accent: "var(--red)",          soft: "var(--red-soft)" },
-  { key: "service",    label: "Service",                 accent: "var(--green)",        soft: "var(--green-soft)" },
-  { key: "moves",      label: "Move In/Out",             accent: "var(--sub)",          soft: "var(--inset)" },
-  { key: "need",       label: "Member in Need",          accent: "var(--red)",          soft: "var(--red-soft)" },
+  { key: "sunday",      label: "Sunday",                  accent: "var(--primary-deep)", soft: "var(--primary-soft)" },
+  { key: "activities",  label: "Activities/Events",       accent: "var(--primary)",      soft: "var(--primary-soft)" },
+  { key: "assignments", label: "Assignments",             accent: "var(--gold)",         soft: "var(--gold-soft)" },
+  { key: "ministering", label: "Ministering",             accent: "var(--green)",        soft: "var(--green-soft)" },
+  { key: "missionary",  label: "Missionary Work",         accent: "var(--primary)",      soft: "var(--primary-soft)" },
+  { key: "temple",      label: "Temple & Family History", accent: "var(--gold)",         soft: "var(--gold-soft)" },
+  { key: "callings",    label: "Callings/Releasings",     accent: "var(--red)",          soft: "var(--red-soft)" },
+  { key: "service",     label: "Service",                 accent: "var(--green)",        soft: "var(--green-soft)" },
+  { key: "moves",       label: "Move In/Out",             accent: "var(--sub)",          soft: "var(--inset)" },
+  // Was "Member in Need". The key stays `need` on purpose: it's what's stored
+  // on every item already tagged with it, and changing it would orphan them.
+  { key: "need",        label: "Ministering Checks",      accent: "var(--red)",          soft: "var(--red-soft)" },
 ];
 
 export function agendaCategory(key, extra) {
