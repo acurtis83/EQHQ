@@ -8,8 +8,14 @@
  * it fits.
  *
  * Everything here is arithmetic on counts and character lengths, so it can be
- * checked without a browser. The estimates are deliberately generous — it is
- * far better to print slightly tighter than needed than to overflow by a line.
+ * checked without a browser. It is only the opening bid, though: the component
+ * measures the sheet once it's in the DOM and adjusts from there.
+ *
+ * The printed agenda is a one-line-per-item summary — name, date, category —
+ * and nothing else. Notes, owners, links and attachments stay in the app. That
+ * was a deliberate trade: carrying them meant three or four lines an item, and
+ * a page that had to shrink to 9pt to hold a normal week. A sheet somebody can
+ * read across a table beats a sheet that repeats what's already on the phone.
  */
 
 // US Letter at 96dpi, less the print margins. Letter is shorter than A4, so
@@ -25,9 +31,9 @@ export const PRINTABLE_W = PAGE_W - MARGIN_X * 2;   // 701px (700.8)
 /**
  * Density tiers, loosest first.
  *
- * Only spacing and type size change between them; nothing is dropped. What
- * gets dropped, when even the tightest tier won't fit, is decided separately
- * below — losing a note is a content decision, not a typographic one.
+ * Only spacing and type size change between them; nothing is ever dropped.
+ * The page carries a name, a date and a category per item, and there is no
+ * arrangement in which it carries less.
  */
 export const TIERS = [
   // A short agenda used to print at 11.5pt and leave the bottom third of the
@@ -39,18 +45,16 @@ export const TIERS = [
   { name: "normal",   body: 10.8, note: 9.4,  rowGap: 7,   sectionGap: 14, headGap: 7 },
   { name: "compact",  body: 10.2, note: 8.8,  rowGap: 5,   sectionGap: 11, headGap: 6 },
   { name: "tight",    body: 9.6,  note: 8.4,  rowGap: 3.5, sectionGap: 9,  headGap: 5 },
-  // Two more steps below what used to be the floor. They exist so a long
-  // agenda can shrink instead of losing its notes — see below.
+  // Two steps below what used to be the floor, for the week that runs long.
   { name: "tighter",  body: 9.1,  note: 8.2,  rowGap: 2.5, sectionGap: 8,  headGap: 4 },
   // Spacing only at the floor — the type stays at 8.6pt, which is the
   // smallest worth handing to someone across a table.
   { name: "smallest", body: 8.6,  note: 8,    rowGap: 1.5, sectionGap: 6,  headGap: 3 },
 ];
 
-// Roughly how many characters fit on a line at a given point size. The width
-// depends on whether the item's category, owner and date are stacked under the
-// name — in which case the name has the whole page less its accent rule — or
-// set beside it in a right-hand column, which takes 120px off.
+// Roughly how many characters fit on a line at a given point size. An item's
+// name has the page less the indent and less the right-hand column its date
+// and category sit in.
 const GUTTER = 14;
 const META_COL = 120;
 function linesFor(text, size, width = PRINTABLE_W - GUTTER) {
@@ -65,22 +69,14 @@ function linesFor(text, size, width = PRINTABLE_W - GUTTER) {
  * @param {object}   tier      one of TIERS
  * @param {object}   opts
  * @param {object[]} opts.sections  [{ label, items }]
- * @param {boolean}  opts.showNotes
- * @param {boolean}  opts.showLinks
  * @param {object[]} opts.events    upcoming activities, assignments, temple trips
+ * @param {boolean}  opts.grouped   a heading per category, or one flat run
  */
-export function estimateHeight(tier, {
-  sections = [], events = [], showNotes = true, showLinks = true, stackMeta = true,
-  grouped = false,
-}) {
+export function estimateHeight(tier, { sections = [], events = [], grouped = false }) {
   // Every term below mirrors a real rule in AgendaPrint. An earlier version
   // padded each one "to be safe", and the padding compounded: a page it called
-  // 96% full printed at about 74%, so the fitter dropped two type sizes and
-  // left the bottom quarter of the sheet blank. The margin for error is one
-  // number at the end now, where it can be seen.
-  //
-  // The root sets line-height 1.35, so anything without its own line-height
-  // gets that.
+  // 96% full printed at about 74%. The margin for error is one number at the
+  // end now, where it can be seen.
   const LINE = 1.35;
   const line = (size) => size * LINE;
 
@@ -89,33 +85,22 @@ export function estimateHeight(tier, {
   // The details row — date, time, location, prayers.
   h += 8 + line(8) + 1 + line(10) + 9 + 1;
 
-  const textW = PRINTABLE_W - GUTTER - (stackMeta ? 0 : META_COL);
+  // An item is a single row: the name on the left, the date (and, when the
+  // page isn't grouped, the category) right-aligned in a fixed column.
+  const textW = PRINTABLE_W - GUTTER - META_COL;
   const items = sections.flatMap((s) => s.items || []);
 
   // The "Agenda Items" band.
   if (items.length) h += tier.sectionGap + line(tier.note) + 4 + 2;
 
-  // Grouped, each group costs a heading — and in exchange every item under it
-  // stops paying for its own category line, because the heading has said it.
+  // Grouped, each group costs a heading.
   if (grouped) {
     const withItems = sections.filter((s) => (s.items || []).length);
     h += withItems.length * (tier.sectionGap + line(tier.note) + 4);
   }
 
   for (const it of items) {
-    h += tier.rowGap + (stackMeta ? 4 : 0);
-    // The name is the heading — its own line-height, tighter than the body.
-    h += linesFor(it.text, tier.body, textW) * tier.body * 1.25;
-    const meta = grouped
-      ? (it.who || it.due_date)          // the heading already carries the category
-      : (it.category || it.catLabel || it.who || it.due_date);
-    if (stackMeta && meta) h += 1 + line(tier.note);
-    if (showNotes && it.notes) {
-      h += 2 + linesFor(it.notes, tier.note, textW) * line(tier.note);
-    }
-    if (showLinks && (it.link_url || it.attachment_url)) {
-      h += 1 + line(tier.note);
-    }
+    h += tier.rowGap + linesFor(it.text, tier.body, textW) * tier.body * 1.3;
   }
 
   // Upcoming: a tinted panel, two columns.
@@ -125,15 +110,12 @@ export function estimateHeight(tier, {
       .map(([kind]) => withDates.filter((e) => (e.kind || "activity") === kind))
       .filter((list) => list.length);
 
-    // How tall each kind's block is on its own.
     const blocks = kinds.map((list) =>
       line(tier.note - 0.5) + 2 +
       list.length * (tier.body * 1.25 + tier.note * 1.3 + 3) + 4);
 
-    // Laid out in a two-column grid, so the panel is as tall as the taller
-    // column of each row — not the sum of every block. Charging the sum was
-    // the single biggest over-estimate: five upcoming events were costed as a
-    // stack when they print side by side.
+    // A two-column grid is as tall as the taller column of each row, not the
+    // sum of every block. Charging the sum was the biggest single over-count.
     let grid = 0;
     for (let i = 0; i < blocks.length; i += 2) {
       grid += Math.max(blocks[i], blocks[i + 1] || 0) + (i ? 2 : 0);
@@ -180,61 +162,36 @@ export function writeLinesFor(tier, contentHeight) {
 }
 
 /**
- * The loosest arrangement that still fits on one page.
+ * The loosest type size that still fits on one page.
  *
- * Notes are never dropped. An earlier version shed them to save space, which
- * meant a long agenda printed with information silently missing — and nothing
- * on the page said so. Losing what somebody wrote down is worse than a smaller
- * typeface, and worse than a second sheet.
- *
- * So the only concession is the link line, which reads "Link — see the app"
- * and carries no information anyway. Past that, the type tightens through six
- * steps. If none of them fit, it says `fits: false` and the screen warns
- * before printing rather than the page quietly running over.
+ * There is nothing left to shed — the page carries a name, a date and a
+ * category per item and that is all — so the only lever is density. It steps
+ * down through the tiers until the content plus a few lines to write on fits,
+ * then, failing that, until the content alone fits, and only then admits it
+ * won't hold and lets the screen warn before anyone hits print.
  */
 export function choosePrintPlan({ sections = [], events = [], grouped = false } = {}) {
-  const attempts = [
-    { showNotes: true, showLinks: true, stackMeta: true },
-    { showNotes: true, showLinks: false, stackMeta: true },
-    // Last resort before the warning: the category, owner and date move off
-    // their own line and sit beside the name in a column. It's the older, more
-    // cramped arrangement and it loses a line per item, which is the only way
-    // a twenty-plus-item agenda with notes on every one stays on a single
-    // sheet. Normal weeks never reach this.
-    { showNotes: true, showLinks: false, stackMeta: false },
-  ];
-
-  for (const content of attempts) {
-    for (const tier of TIERS) {
-      const height = estimateHeight(tier, { sections, events, grouped, ...content });
-      // The loosest tier whose content leaves room for at least a few lines to
-      // write on. Anything tighter than that is a page with no working space.
-      if (height + writeBlockHeight(tier, WRITE_MIN_LINES) <= PRINTABLE_H) {
-        return {
-          ...tier, ...content, grouped, height, fits: true,
-          writeLines: writeLinesFor(tier, height),
-        };
-      }
+  for (const tier of TIERS) {
+    const height = estimateHeight(tier, { sections, events, grouped });
+    if (height + writeBlockHeight(tier, WRITE_MIN_LINES) <= PRINTABLE_H) {
+      return { ...tier, grouped, height, fits: true, writeLines: writeLinesFor(tier, height) };
     }
   }
 
   // Nothing left room to write on. A packed agenda that fills the sheet
   // exactly still fits — it just prints with no ruled area, which is a better
   // answer than warning about a second page that isn't coming.
-  for (const content of attempts) {
-    for (const tier of TIERS) {
-      const height = estimateHeight(tier, { sections, events, grouped, ...content });
-      if (height <= PRINTABLE_H) {
-        return { ...tier, ...content, grouped, height, fits: true, writeLines: 0 };
-      }
+  for (const tier of TIERS) {
+    const height = estimateHeight(tier, { sections, events, grouped });
+    if (height <= PRINTABLE_H) {
+      return { ...tier, grouped, height, fits: true, writeLines: 0 };
     }
   }
 
   const tier = TIERS[TIERS.length - 1];
-  const content = { showNotes: true, showLinks: false, stackMeta: false };
   return {
-    ...tier, ...content, grouped, fits: false, writeLines: 0,
-    height: estimateHeight(tier, { sections, events, grouped, ...content }),
+    ...tier, grouped, fits: false, writeLines: 0,
+    height: estimateHeight(tier, { sections, events, grouped }),
   };
 }
 
@@ -325,26 +282,33 @@ export function groupByCategory(sections = [], categories = []) {
 }
 
 /**
- * Category colours for paper.
+ * Category tones for paper.
  *
- * Chosen for print rather than reused from the screen palette: the app's
- * colours are CSS variables that also have to work on a dark background, and
- * several of them turn to mud on white. These are picked to stay distinct when
- * a printer renders them as greys, which is how most of these will come out.
+ * Greys, not colours. The presidency prints this on a ward machine that is
+ * usually black and white, and the colours either came out as muddy halftones
+ * or ate the toner. Three steps of grey carry the same "a new subject starts
+ * here" signal and cost nothing to print.
+ *
+ * True neutrals rather than the slate tones the screen uses: those carry a
+ * blue cast that a colour printer renders as faintly blue text, which is the
+ * colour the presidency asked to be rid of.
+ *
+ * Kept keyed by category so the tone is stable week to week — Sunday is always
+ * the darkest, and the eye learns the shape of the page.
  */
 export const PRINT_ACCENTS = {
-  sunday: "#1f4e79",
-  activities: "#2f6f8f",
-  assignments: "#8a6d1f",
-  ministering: "#2e7d4f",
-  missionary: "#3b6ea5",
-  temple: "#a07c2c",
-  callings: "#b03a34",
-  service: "#4a7c59",
-  moves: "#6b7280",
-  need: "#8c2f2a",
+  sunday: "#1a1a1a",
+  activities: "#3d3d3d",
+  assignments: "#565656",
+  ministering: "#1a1a1a",
+  missionary: "#3d3d3d",
+  temple: "#565656",
+  callings: "#1a1a1a",
+  service: "#3d3d3d",
+  moves: "#565656",
+  need: "#1a1a1a",
 };
-export const PRINT_ACCENT_DEFAULT = "#4b5563";
+export const PRINT_ACCENT_DEFAULT = "#757575";
 
 export function printAccent(categories, label) {
   const cat = (categories || []).find((c) => c.label === label);

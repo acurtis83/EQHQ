@@ -6,7 +6,7 @@ import {
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
-const RULE = "1px solid #d7d9de";
+const RULE = "1px solid #d9d9d9";
 const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 /** One labelled fact in the details block. */
@@ -15,7 +15,7 @@ function Detail({ label, value }) {
     <div style={{ minWidth: 0 }}>
       <div style={{
         fontFamily: SANS, fontSize: 8, fontWeight: 700, letterSpacing: "0.13em",
-        textTransform: "uppercase", color: "#9ca3af", marginBottom: 1,
+        textTransform: "uppercase", color: "#a3a3a3", marginBottom: 1,
       }}>
         {label}
       </div>
@@ -44,7 +44,7 @@ function Band({ children, size, right }) {
       {right != null && (
         <span style={{
           marginLeft: "auto", fontSize: size - 1, fontWeight: 700,
-          letterSpacing: "0.08em", color: "#9ca3af",
+          letterSpacing: "0.08em", color: "#a3a3a3",
         }}>
           {right}
         </span>
@@ -139,9 +139,12 @@ function useMeasuredTier(estimate) {
 /**
  * A category heading, for the grouped layout.
  *
- * A colour mark, the label, then a hairline running to the count. Lighter than
- * a Band — these are subjects within the business, not parts of the meeting —
+ * A mark, the label, then a hairline running to the count. Lighter than a
+ * Band — these are subjects within the business, not parts of the meeting —
  * but heavy enough that the eye can find where one subject ends.
+ *
+ * The mark is a grey, not a colour. This gets printed on a ward machine that
+ * is usually black and white, where the colours came out as muddy halftones.
  */
 function Head({ children, right, accent = "#111", size }) {
   return (
@@ -155,9 +158,9 @@ function Head({ children, right, accent = "#111", size }) {
       }}>
         {children}
       </span>
-      <span style={{ flex: 1, height: 1, background: "#c9ccd2", minWidth: 8 }} />
+      <span style={{ flex: 1, height: 1, background: "#cccccc", minWidth: 8 }} />
       {right != null && (
-        <span style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: size - 1, color: "#9ca3af" }}>
+        <span style={{ flex: "0 0 auto", fontFamily: SANS, fontSize: size - 1, color: "#a3a3a3" }}>
           {right}
         </span>
       )}
@@ -166,99 +169,34 @@ function Head({ children, right, accent = "#111", size }) {
 }
 
 /**
- * An item's category, owner and date.
+ * One item, as it prints: a single line.
  *
- * The category leads and carries the item's colour — it's the subheading to
- * the item's name, the same pairing the cards on the agenda screen use.
- * Stacked beneath the name normally; set in a column beside it only when the
- * page is too full to spend a line per item.
- */
-function Meta({ it, size, stacked, showCategory = true }) {
-  const cat = showCategory ? it.catLabel : "";
-  if (!cat && !it.who && !it.due_date) return null;
-  return (
-    <div style={{
-      fontFamily: SANS, fontSize: size,
-      ...(stacked
-        ? { marginTop: 1, display: "flex", gap: 7, alignItems: "baseline", flexWrap: "wrap" }
-        : { textAlign: "right", lineHeight: 1.3, paddingTop: 1 }),
-    }}>
-      {cat && (
-        <div style={{
-          display: stacked ? "inline" : "block",
-          fontWeight: 800, letterSpacing: "0.1em", textTransform: "uppercase",
-          color: it.accent,
-        }}>
-          {cat}
-        </div>
-      )}
-      {it.who && (
-        <div style={{ display: stacked ? "inline" : "block", color: "#374151", fontWeight: 600 }}>
-          {it.who}
-        </div>
-      )}
-      {/* The date is data, not decoration — kept dark enough to read at a
-          glance down the page. */}
-      {it.due_date && (
-        <div style={{ display: stacked ? "inline" : "block", color: "#374151", fontWeight: 600 }}>
-          {fmtShort(it.due_date)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * One item, as it prints.
+ * The name on the left, the date — and, when the page isn't grouped, the
+ * category — right-aligned in a fixed column so they line up down the sheet.
  *
- * Shared by both layouts — the only difference is whether the category is
- * repeated on the item, which it isn't when a heading above already says it.
+ * Notes, owners, links and attachments are deliberately not here. Carrying
+ * them meant three or four lines an item and a page that had to drop to 9pt to
+ * hold a normal week. This is the sheet on the table during the meeting; the
+ * detail is on the phone next to it.
  */
 function PrintItem({ it, plan, showCategory }) {
+  const meta = [showCategory ? it.catLabel : "", it.due_date ? fmtShort(it.due_date) : ""]
+    .filter(Boolean);
+
   return (
-    <div
-      style={{
-        marginTop: plan.rowGap + (plan.stackMeta ? 4 : 0),
-        // A rule in the category's colour down the left edge, which is what
-        // the card on screen does with its border. Cheaper on paper than a
-        // boxed card and it survives a black-and-white printer as a
-        // distinguishable grey.
-        borderLeft: `3px solid ${it.accent}`,
-        paddingLeft: 8,
-        breakInside: "avoid",
-        ...(plan.stackMeta ? {} : { display: "flex", gap: 10, alignItems: "flex-start" }),
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {/* The name is the heading. It's what somebody is looking for when
-            they scan the page, so it goes first and at full size. */}
-        <div style={{ fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
-          {it.text}
-        </div>
-
-        {plan.stackMeta && <Meta it={it} size={plan.note} stacked showCategory={showCategory} />}
-
-        {plan.showNotes && it.notes && (
-          <div style={{
-            fontSize: plan.note, color: "#4b5563", marginTop: 2,
-            overflowWrap: "anywhere",
-          }}>
-            {it.notes}
-          </div>
-        )}
-        {plan.showLinks && (it.link_url || it.attachment_url) && (
-          // The name, not the whole URL: nobody types a 90-character link off
-          // a sheet of paper, and it wraps horribly.
-          <div style={{ fontFamily: SANS, fontSize: plan.note, color: "#6b7280", marginTop: 1 }}>
-            {it.attachment_url ? (it.attachment_name || "Attachment") : "Link"} — see the app
-          </div>
-        )}
+    <div style={{
+      display: "flex", gap: 10, alignItems: "baseline",
+      marginTop: plan.rowGap, breakInside: "avoid",
+    }}>
+      <div style={{ flex: 1, minWidth: 0, fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere" }}>
+        {it.text}
       </div>
-
-      {/* Only on a page too full to give each item its own meta line. */}
-      {!plan.stackMeta && (
-        <div style={{ flex: "0 0 118px" }}>
-          <Meta it={it} size={plan.note} stacked={false} showCategory={showCategory} />
+      {meta.length > 0 && (
+        <div style={{
+          flex: "0 0 auto", fontFamily: SANS, fontSize: plan.note, color: "#3d3d3d",
+          whiteSpace: "nowrap",
+        }}>
+          {meta.join("  ·  ")}
         </div>
       )}
     </div>
@@ -367,7 +305,7 @@ export default function AgendaPrint({
         <div style={{ borderBottom: "2px solid #111", paddingBottom: 5 }}>
           <div style={{
             fontFamily: SANS, fontSize: 8.5, letterSpacing: "0.18em",
-            color: "#6b7280", fontWeight: 700, textTransform: "uppercase",
+            color: "#757575", fontWeight: 700, textTransform: "uppercase",
           }}>
             Holbrook Farms 8th Ward
           </div>
@@ -428,8 +366,8 @@ export default function AgendaPrint({
         {eventGroups.length > 0 && (
           <div style={{
             marginTop: plan.sectionGap + 2,
-            border: "1px solid #c9ccd2",
-            background: "#f6f7f8",
+            border: "1px solid #cccccc",
+            background: "#f7f7f7",
             borderRadius: 3,
             padding: "8px 10px 9px",
             breakInside: "avoid",
@@ -437,7 +375,7 @@ export default function AgendaPrint({
             <div style={{
               fontFamily: SANS, fontSize: plan.note, fontWeight: 800,
               letterSpacing: "0.16em", textTransform: "uppercase", color: "#111",
-              borderBottom: "1px solid #9ca3af", paddingBottom: 4, marginBottom: 7,
+              borderBottom: "1px solid #a3a3a3", paddingBottom: 4, marginBottom: 7,
             }}>
               Upcoming
             </div>
@@ -451,7 +389,7 @@ export default function AgendaPrint({
                 <div key={g.label} style={{ breakInside: "avoid", marginBottom: 4 }}>
                   <div style={{
                     fontFamily: SANS, fontSize: plan.note - 0.5, fontWeight: 800,
-                    color: "#6b7280", letterSpacing: "0.1em", textTransform: "uppercase",
+                    color: "#757575", letterSpacing: "0.1em", textTransform: "uppercase",
                     marginBottom: 2,
                   }}>
                     {g.label}
@@ -460,7 +398,7 @@ export default function AgendaPrint({
                     <div key={e.id} style={{ marginBottom: 3 }}>
                       <div style={{ fontWeight: 600, lineHeight: 1.25, overflowWrap: "anywhere" }}>{e.title}</div>
                       <div style={{
-                        fontFamily: SANS, fontSize: plan.note, color: "#4b5563", lineHeight: 1.3,
+                        fontFamily: SANS, fontSize: plan.note, color: "#565656", lineHeight: 1.3,
                       }}>
                         {[fmtShort(e.when || e.event_date), e.event_time, e.location]
                           .filter(Boolean).join(" · ")}
@@ -485,7 +423,7 @@ export default function AgendaPrint({
             <Band size={plan.note}>Decisions &amp; Assignments</Band>
             <div>
               {Array.from({ length: plan.writeLines }, (_, i) => (
-                <div key={i} style={{ height: RULE_H, borderBottom: "1px solid #d7d9de" }} />
+                <div key={i} style={{ height: RULE_H, borderBottom: "1px solid #d9d9d9" }} />
               ))}
             </div>
           </div>
@@ -493,7 +431,7 @@ export default function AgendaPrint({
 
         <div ref={footerRef} data-eq-footer style={{
           marginTop: 12, paddingTop: 5, borderTop: RULE, flex: "0 0 auto",
-          fontFamily: SANS, fontSize: 8, color: "#9ca3af",
+          fontFamily: SANS, fontSize: 8, color: "#a3a3a3",
           display: "flex", justifyContent: "space-between",
         }}>
           <span>Elders Quorum Presidency &middot; Holbrook Farms 8th Ward</span>

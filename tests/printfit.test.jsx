@@ -132,7 +132,7 @@ describe("the printed page measures itself", () => {
     await act(async () => { render(sheet()); });
 
     const ruled = [...document.querySelectorAll("div")]
-      .filter((d) => d.style.borderBottom === "1px solid rgb(215, 217, 222)");
+      .filter((d) => d.style.borderBottom === "1px solid rgb(217, 217, 217)");
     expect(ruled.length).toBeGreaterThanOrEqual(3);
     expect(document.body.innerHTML).not.toContain("repeating-linear-gradient");
   });
