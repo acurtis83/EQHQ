@@ -73,59 +73,110 @@ export function estimateHeight(tier, {
   sections = [], events = [], showNotes = true, showLinks = true, stackMeta = true,
   grouped = false,
 }) {
+  // Every term below mirrors a real rule in AgendaPrint. An earlier version
+  // padded each one "to be safe", and the padding compounded: a page it called
+  // 96% full printed at about 74%, so the fitter dropped two type sizes and
+  // left the bottom quarter of the sheet blank. The margin for error is one
+  // number at the end now, where it can be seen.
+  //
+  // The root sets line-height 1.35, so anything without its own line-height
+  // gets that.
+  const LINE = 1.35;
+  const line = (size) => size * LINE;
+
   // Masthead: eyebrow, title, rule.
-  let h = 14 + 30 + 14;
-  // The details block — date, time, location, prayers — is always there.
-  h += 38;
+  let h = 10 + 25 + 1 + 5 + 2;
+  // The details row — date, time, location, prayers.
+  h += 8 + line(8) + 1 + line(10) + 9 + 1;
 
   const textW = PRINTABLE_W - GUTTER - (stackMeta ? 0 : META_COL);
-
-  // The "Agenda Items" band above the whole run of items.
   const items = sections.flatMap((s) => s.items || []);
-  if (items.length) h += tier.sectionGap + 20 + tier.headGap;
 
-  // Grouped by category, each group costs a heading — and in exchange every
-  // item under it stops paying for its own category line, because the heading
-  // has already said what they are.
+  // The "Agenda Items" band.
+  if (items.length) h += tier.sectionGap + line(tier.note) + 4 + 2;
+
+  // Grouped, each group costs a heading — and in exchange every item under it
+  // stops paying for its own category line, because the heading has said it.
   if (grouped) {
     const withItems = sections.filter((s) => (s.items || []).length);
-    h += withItems.length * (tier.sectionGap + 15 + tier.headGap);
+    h += withItems.length * (tier.sectionGap + line(tier.note) + 4);
   }
 
   for (const it of items) {
-    // The name is the heading, so it gets the full body size and can wrap.
-    h += linesFor(it.text, tier.body, textW) * tier.body * 1.35;
-    // Category, owner and date sit on one line beneath the name — charged only
-    // when there's something to put there, so a bare item costs one line, not
-    // two. Set beside the name instead, they cost nothing: the column is
-    // narrower than the name's line and never taller than the block already is.
+    h += tier.rowGap + (stackMeta ? 4 : 0);
+    // The name is the heading — its own line-height, tighter than the body.
+    h += linesFor(it.text, tier.body, textW) * tier.body * 1.25;
     const meta = grouped
       ? (it.who || it.due_date)          // the heading already carries the category
       : (it.category || it.catLabel || it.who || it.due_date);
-    if (stackMeta && meta) h += tier.note * 1.35 + 2;
+    if (stackMeta && meta) h += 1 + line(tier.note);
     if (showNotes && it.notes) {
-      h += linesFor(it.notes, tier.note, textW) * tier.note * 1.35 + 2;
+      h += 2 + linesFor(it.notes, tier.note, textW) * line(tier.note);
     }
     if (showLinks && (it.link_url || it.attachment_url)) {
-      h += tier.note * 1.35 + 2;
+      h += 1 + line(tier.note);
     }
-    // A stacked item is its own block and needs air around it or the accent
-    // rules run together into one stripe. Set beside, it's a row again.
-    h += tier.rowGap + (stackMeta ? 4 : 0);
   }
 
-  // Upcoming activities, assignments and temple trips: a heading and a line
-  // each. Grouped by kind, so each kind that has anything costs a sub-heading.
+  // Upcoming: a tinted panel, two columns.
   const withDates = (events || []).filter((e) => e.when || e.event_date);
   if (withDates.length) {
-    h += tier.sectionGap + 15 + tier.headGap;
-    const kinds = new Set(withDates.map((e) => e.kind || "activity"));
-    h += kinds.size * (tier.note * 1.4 + 3);
-    h += withDates.length * (tier.body * 1.35 + tier.rowGap * 0.6);
+    const kinds = EVENT_KIND_LABELS
+      .map(([kind]) => withDates.filter((e) => (e.kind || "activity") === kind))
+      .filter((list) => list.length);
+
+    // How tall each kind's block is on its own.
+    const blocks = kinds.map((list) =>
+      line(tier.note - 0.5) + 2 +
+      list.length * (tier.body * 1.25 + tier.note * 1.3 + 3) + 4);
+
+    // Laid out in a two-column grid, so the panel is as tall as the taller
+    // column of each row — not the sum of every block. Charging the sum was
+    // the single biggest over-estimate: five upcoming events were costed as a
+    // stack when they print side by side.
+    let grid = 0;
+    for (let i = 0; i < blocks.length; i += 2) {
+      grid += Math.max(blocks[i], blocks[i + 1] || 0) + (i ? 2 : 0);
+    }
+
+    h += tier.sectionGap + 2 + 2 + 8 + line(tier.note) + 4 + 1 + 7 + grid + 9;
   }
 
-  h += 30;  // footer
-  return Math.round(h);
+  // Footer.
+  h += 5 + 1 + line(8);
+
+  // One explicit margin for error, rather than a thumb on every scale above.
+  return Math.round(h + 10);
+}
+
+/** A comfortable hand-writing line, and what the "Decisions" heading costs. */
+export const RULE_H = 22;
+export const WRITE_MIN_LINES = 3;
+export const WRITE_MAX_LINES = 16;
+
+export function writeBlockHeight(tier, lines) {
+  return tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2 + lines * RULE_H;
+}
+
+/**
+ * How many ruled lines the leftover space is worth.
+ *
+ * The writing area used to be `flex: 1` over a repeating-gradient background,
+ * which meant the page had to know its own height to stretch into — and the
+ * printed sheet is not reliably 960px tall. Browsers apply their own margins,
+ * add a header and footer, and scale the whole thing down to make it fit; a
+ * column pinned to a hard pixel height came out shrunk, with the bottom
+ * quarter blank.
+ *
+ * Counting the lines instead makes the page a definite length. Nothing has to
+ * stretch, nothing gets scaled, and the rules are real borders rather than a
+ * background — which matters because browsers do not print background images
+ * unless the person ticks a box.
+ */
+export function writeLinesFor(tier, contentHeight) {
+  const heading = tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2;
+  const spare = PRINTABLE_H - contentHeight - heading;
+  return Math.max(WRITE_MIN_LINES, Math.min(WRITE_MAX_LINES, Math.floor(spare / RULE_H)));
 }
 
 /**
@@ -156,8 +207,25 @@ export function choosePrintPlan({ sections = [], events = [], grouped = false } 
   for (const content of attempts) {
     for (const tier of TIERS) {
       const height = estimateHeight(tier, { sections, events, grouped, ...content });
+      // The loosest tier whose content leaves room for at least a few lines to
+      // write on. Anything tighter than that is a page with no working space.
+      if (height + writeBlockHeight(tier, WRITE_MIN_LINES) <= PRINTABLE_H) {
+        return {
+          ...tier, ...content, grouped, height, fits: true,
+          writeLines: writeLinesFor(tier, height),
+        };
+      }
+    }
+  }
+
+  // Nothing left room to write on. A packed agenda that fills the sheet
+  // exactly still fits — it just prints with no ruled area, which is a better
+  // answer than warning about a second page that isn't coming.
+  for (const content of attempts) {
+    for (const tier of TIERS) {
+      const height = estimateHeight(tier, { sections, events, grouped, ...content });
       if (height <= PRINTABLE_H) {
-        return { ...tier, ...content, grouped, height, fits: true };
+        return { ...tier, ...content, grouped, height, fits: true, writeLines: 0 };
       }
     }
   }
@@ -165,7 +233,7 @@ export function choosePrintPlan({ sections = [], events = [], grouped = false } 
   const tier = TIERS[TIERS.length - 1];
   const content = { showNotes: true, showLinks: false, stackMeta: false };
   return {
-    ...tier, ...content, grouped, fits: false,
+    ...tier, ...content, grouped, fits: false, writeLines: 0,
     height: estimateHeight(tier, { sections, events, grouped, ...content }),
   };
 }

@@ -1,6 +1,8 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent, PRINTABLE_H,
+  choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent,
+  RULE_H, TIERS, PRINTABLE_H, WRITE_MIN_LINES, WRITE_MAX_LINES,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
@@ -49,6 +51,89 @@ function Band({ children, size, right }) {
       )}
     </div>
   );
+}
+
+/**
+ * Let the browser do the measuring.
+ *
+ * printPlan.js estimates the page's height from counts and character lengths,
+ * which is what makes it testable without a browser — but an estimate built
+ * from a dozen guessed constants drifts, and it drifted conservative. A page
+ * it called full printed with the bottom quarter empty, so the presidency got
+ * 9.6pt type on a sheet that had room for 12.
+ *
+ * So the estimate is now only the opening bid. Once the sheet is in the DOM,
+ * this measures what actually got laid out and walks the tier up while there's
+ * room, or down while there isn't. Three or four passes and it settles, before
+ * the print dialog opens.
+ *
+ * Where there's no layout engine — jsdom in the tests, or server rendering for
+ * the standalone sample — every measurement is 0, and it keeps the estimate.
+ * That's deliberate: the estimate must stay good enough to ship on its own.
+ */
+// useLayoutEffect warns when there's no DOM to lay anything out in. The
+// standalone print sample is rendered on the server, where the measuring pass
+// is a no-op anyway.
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function useMeasuredTier(estimate) {
+  const startAt = Math.max(0, TIERS.findIndex((t) => t.name === estimate.name));
+  const contentRef = useRef(null);
+  const footerRef = useRef(null);
+  const [index, setIndex] = useState(startAt);
+  const [lines, setLines] = useState(estimate.writeLines);
+  // Guards against a layout that never settles — two tiers that each measure
+  // as wanting the other would otherwise re-render forever.
+  const passes = useRef(0);
+  const seen = useRef(new Set());
+
+  // The starting point moves when the agenda does, so a new item resets it.
+  const key = `${estimate.name}:${estimate.height}:${estimate.grouped}`;
+  const lastKey = useRef(key);
+  if (lastKey.current !== key) {
+    lastKey.current = key;
+    passes.current = 0;
+    seen.current = new Set();
+  }
+
+  useIsoLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const contentH = content.getBoundingClientRect().height;
+    if (!contentH) return;             // no layout engine — trust the estimate
+
+    const footerH = footerRef.current?.getBoundingClientRect().height || 18;
+    const tier = TIERS[index];
+    const headingH = tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2;
+    const spare = PRINTABLE_H - contentH - footerH - 12 - headingH;
+
+    const want = Math.max(WRITE_MIN_LINES, Math.min(WRITE_MAX_LINES, Math.floor(spare / RULE_H)));
+    if (want !== lines) setLines(want);
+
+    if (passes.current >= 8) return;
+
+    // Too tall: tighten. Room to spare: loosen, but only if the next size up
+    // plausibly still fits — the ratio of body sizes is a good enough guide
+    // for one step, and the next pass measures it for real anyway.
+    let next = index;
+    if (spare < WRITE_MIN_LINES * RULE_H && index < TIERS.length - 1) {
+      next = index + 1;
+    } else if (index > 0) {
+      const up = TIERS[index - 1];
+      const projected = contentH * (up.body / tier.body);
+      if (projected + footerH + 12 + headingH + WRITE_MIN_LINES * RULE_H <= PRINTABLE_H) {
+        next = index - 1;
+      }
+    }
+
+    if (next !== index && !seen.current.has(next)) {
+      seen.current.add(index);
+      passes.current += 1;
+      setIndex(next);
+    }
+  });
+
+  return { tier: TIERS[index], lines, contentRef, footerRef };
 }
 
 /**
@@ -216,9 +301,12 @@ export default function AgendaPrint({
       }))
     : [];
   const eventGroups = groupEvents(events);
-  const plan = choosePrintPlan({
+  const estimate = choosePrintPlan({
     sections: grouped ? groups : withItems, events, grouped,
   });
+  // The estimate opens; the browser's own layout has the last word.
+  const { tier, lines, contentRef, footerRef } = useMeasuredTier(estimate);
+  const plan = { ...estimate, ...tier, writeLines: lines };
 
   const sheet = (
     <div className="eq-print-root">
@@ -252,17 +340,20 @@ export default function AgendaPrint({
         .eq-print-root { display: none; }
 ` }} />
 
-      <div style={{
+      <div data-eq-sheet data-eq-tier={plan.name} style={{
         fontFamily: "Georgia, 'Times New Roman', serif",
         color: "#111",
         fontSize: plan.body,
         lineHeight: 1.35,
-        // A full-height column so the page always looks composed: whatever
-        // space the agenda doesn't use becomes writing space, and the footer
-        // sits on the bottom rule rather than halfway up a blank sheet.
+        // Deliberately no min-height. The column used to be pinned to the
+        // printable height so the writing area could stretch into whatever was
+        // left — but the printed sheet is not reliably that tall. Browsers
+        // apply their own margins, add a header and footer, and then scale the
+        // whole page down to make it fit, which came out as small type with
+        // the bottom of the sheet blank. The page is a definite length now:
+        // the leftover space is counted into ruled lines by the plan.
         display: "flex",
         flexDirection: "column",
-        minHeight: PRINTABLE_H,
         // Never wider than the page. Without this a long unbroken string in an
         // item could stretch the flex row and take the right-hand column off
         // the edge of the sheet.
@@ -271,6 +362,7 @@ export default function AgendaPrint({
         boxSizing: "border-box",
         overflow: "hidden",
       }}>
+        <div ref={contentRef} data-eq-content>
         {/* ---- masthead ---- */}
         <div style={{ borderBottom: "2px solid #111", paddingBottom: 5 }}>
           <div style={{
@@ -381,28 +473,26 @@ export default function AgendaPrint({
           </div>
         )}
 
+        </div>
+
         {/* ---- room to write ---- */}
-        {/* Takes whatever is left. The rules are a repeating gradient rather
-            than counted <div>s, so the block fills the exact remaining height
-            without arithmetic that could be off by a line and push to page 2. */}
-        {plan.fits && (
-          <div style={{
-            flex: 1, display: "flex", flexDirection: "column",
-            marginTop: plan.sectionGap + 4, minHeight: 0,
-          }}>
-            <div style={{ flex: "0 0 auto" }}>
-              <Band size={plan.note}>Decisions &amp; Assignments</Band>
+        {/* As many ruled lines as the leftover space is worth, drawn as real
+            borders. The rules were a repeating-linear-gradient before, and
+            browsers don't print background images unless the person ticks
+            "Background graphics" — so on paper this was a blank void. */}
+        {plan.fits && plan.writeLines > 0 && (
+          <div style={{ marginTop: plan.sectionGap + 4 }}>
+            <Band size={plan.note}>Decisions &amp; Assignments</Band>
+            <div>
+              {Array.from({ length: plan.writeLines }, (_, i) => (
+                <div key={i} style={{ height: RULE_H, borderBottom: "1px solid #d7d9de" }} />
+              ))}
             </div>
-            <div style={{
-              flex: 1, minHeight: 44,
-              backgroundImage:
-                "repeating-linear-gradient(to bottom, transparent 0 21px, #d7d9de 21px 22px)",
-            }} />
           </div>
         )}
 
-        <div style={{
-          marginTop: "auto", paddingTop: 5, borderTop: RULE, flex: "0 0 auto",
+        <div ref={footerRef} data-eq-footer style={{
+          marginTop: 12, paddingTop: 5, borderTop: RULE, flex: "0 0 auto",
           fontFamily: SANS, fontSize: 8, color: "#9ca3af",
           display: "flex", justifyContent: "space-between",
         }}>
