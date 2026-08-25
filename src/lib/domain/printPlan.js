@@ -29,28 +29,39 @@ export const PRINTABLE_H = PAGE_H - MARGIN_Y * 2;   // 960px
 export const PRINTABLE_W = PAGE_W - MARGIN_X * 2;   // 701px (700.8)
 
 /**
- * Density tiers, loosest first.
+ * The agenda prints at 12 point. Not "about 12" — 12.
  *
- * Only spacing and type size change between them; nothing is ever dropped.
- * The page carries a name, a date and a category per item, and there is no
- * arrangement in which it carries less.
+ * It used to pick its own size, stepping down through eight densities until
+ * the page fitted. That made every week a different shape: one meeting came
+ * out at 13.5pt, the next at 9.6pt because somebody added four items, and the
+ * presidency couldn't tell at a glance whether they were holding this week's
+ * sheet or last week's.
+ *
+ * A fixed size is worth more than a guaranteed single page. When an agenda
+ * genuinely won't fit, the screen says so before anyone prints — see
+ * choosePrintPlan — rather than shrinking the type until it does.
+ *
+ * CSS lengths here are pixels, and print is 96 pixels to the inch against 72
+ * points, so a point is 4/3 of a pixel. Setting `body: 12` directly would have
+ * printed at nine point.
  */
-export const TIERS = [
-  // A short agenda used to print at 11.5pt and leave the bottom third of the
-  // sheet empty — it read as unfinished rather than spacious. These two steps
-  // above it let a light week fill the page properly.
-  { name: "large",    body: 13.5, note: 11.5, rowGap: 13,  sectionGap: 24, headGap: 11 },
-  { name: "full",     body: 12.4, note: 10.8, rowGap: 11,  sectionGap: 20, headGap: 9 },
-  { name: "roomy",    body: 11.5, note: 10,   rowGap: 9,   sectionGap: 17, headGap: 8 },
-  { name: "normal",   body: 10.8, note: 9.4,  rowGap: 7,   sectionGap: 14, headGap: 7 },
-  { name: "compact",  body: 10.2, note: 8.8,  rowGap: 5,   sectionGap: 11, headGap: 6 },
-  { name: "tight",    body: 9.6,  note: 8.4,  rowGap: 3.5, sectionGap: 9,  headGap: 5 },
-  // Two steps below what used to be the floor, for the week that runs long.
-  { name: "tighter",  body: 9.1,  note: 8.2,  rowGap: 2.5, sectionGap: 8,  headGap: 4 },
-  // Spacing only at the floor — the type stays at 8.6pt, which is the
-  // smallest worth handing to someone across a table.
-  { name: "smallest", body: 8.6,  note: 8,    rowGap: 1.5, sectionGap: 6,  headGap: 3 },
-];
+export const PT = 96 / 72;
+export const BODY_PT = 12;
+export const pt = (n) => Math.round(n * PT * 100) / 100;
+
+export const TIER = {
+  name: "12pt",
+  body: pt(BODY_PT),        // 16px
+  note: pt(9.5),            // the category-and-date line under each item
+  rowGap: 9,
+  sectionGap: 18,
+  headGap: 9,
+};
+
+// Kept as a list because the fitter and its tests are written against one, and
+// because a second entry would be the honest way to add, say, a large-print
+// copy later. There is deliberately nothing to fall back to today.
+export const TIERS = [TIER];
 
 // Roughly how many characters fit on a line at a given point size. The page is
 // a single column now, so an item's name has the full width less the indent —
@@ -90,10 +101,13 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
   // The "Agenda Items" band.
   if (items.length) h += tier.sectionGap + line(tier.note) + 4 + 2;
 
-  // Grouped, each group costs a heading.
+  // Grouped, each group costs a heading. Measured against Chrome at 12pt: the
+  // heading itself plus its margin comes to sectionGap + one line, and the
+  // extra 4 this used to add was over-charging by about 34px on a page with
+  // eight groups.
   if (grouped) {
     const withItems = sections.filter((s) => (s.items || []).length);
-    h += withItems.length * (tier.sectionGap + line(tier.note) + 4);
+    h += withItems.length * (tier.sectionGap + line(tier.note));
   }
 
   for (const it of items) {
@@ -126,20 +140,37 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
     h += tier.sectionGap + 2 + 2 + 8 + line(tier.note) + 4 + 1 + 7 + grid + 9;
   }
 
-  // Footer.
-  h += 5 + 1 + line(8);
+  // Footer, including the 12px it sits below whatever is above it. That margin
+  // was missing, which is a small number that mattered: it was the difference
+  // between the sheet measuring 960 and measuring 964, and 964 is two pages.
+  h += 12 + 5 + 1 + line(8);
 
   // One explicit margin for error, rather than a thumb on every scale above.
-  return Math.round(h + 10);
+  // Measured against Chrome, the terms above land within a few pixels of the
+  // real layout, so this is a small deliberate cushion rather than slack.
+  return Math.round(h + 6);
 }
 
-/** A comfortable hand-writing line, and what the "Decisions" heading costs. */
+/**
+ * A hand-writing line, and what the "Decisions" heading costs.
+ *
+ * RULE_H is the CSS height; the 1px border underneath makes each line occupy
+ * one more than that. Measuring the rendered page is how that turned up —
+ * three lines were quietly 3px taller than the arithmetic said.
+ */
 export const RULE_H = 22;
-export const WRITE_MIN_LINES = 3;
+export const RULE_TOTAL = RULE_H + 1;
+// Below this the block is more heading than paper, so nothing is drawn.
+export const WRITE_MIN_LINES = 2;
 export const WRITE_MAX_LINES = 16;
 
+/** The "Decisions & Assignments" band: its top margin, line box, rule. */
+export function writeHeadingHeight(tier) {
+  return tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2;
+}
+
 export function writeBlockHeight(tier, lines) {
-  return tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2 + lines * RULE_H;
+  return lines > 0 ? writeHeadingHeight(tier) + lines * RULE_TOTAL : 0;
 }
 
 /**
@@ -147,53 +178,40 @@ export function writeBlockHeight(tier, lines) {
  *
  * The writing area used to be `flex: 1` over a repeating-gradient background,
  * which meant the page had to know its own height to stretch into — and the
- * printed sheet is not reliably 960px tall. Browsers apply their own margins,
- * add a header and footer, and scale the whole thing down to make it fit; a
- * column pinned to a hard pixel height came out shrunk, with the bottom
- * quarter blank.
+ * printed sheet is not reliably that tall. Counting the lines instead makes
+ * the page a definite length: nothing stretches, nothing gets scaled, and the
+ * rules are real borders rather than a background, which matters because
+ * browsers don't print background images unless the person ticks a box.
  *
- * Counting the lines instead makes the page a definite length. Nothing has to
- * stretch, nothing gets scaled, and the rules are real borders rather than a
- * background — which matters because browsers do not print background images
- * unless the person ticks a box.
+ * Returns 0 when there's no room. It used to insist on three, which turned a
+ * page with room for two into a page with none — and, worse, into a page the
+ * fitter called too long.
  */
 export function writeLinesFor(tier, contentHeight) {
-  const heading = tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2;
-  const spare = PRINTABLE_H - contentHeight - heading;
-  return Math.max(WRITE_MIN_LINES, Math.min(WRITE_MAX_LINES, Math.floor(spare / RULE_H)));
+  const spare = PRINTABLE_H - contentHeight - writeHeadingHeight(tier);
+  const lines = Math.floor(spare / RULE_TOTAL);
+  if (lines < WRITE_MIN_LINES) return 0;
+  return Math.min(WRITE_MAX_LINES, lines);
 }
 
 /**
- * The loosest type size that still fits on one page.
+ * The page, at twelve point.
  *
- * There is nothing left to shed — the page carries a name, a date and a
- * category per item and that is all — so the only lever is density. It steps
- * down through the tiers until the content plus a few lines to write on fits,
- * then, failing that, until the content alone fits, and only then admits it
- * won't hold and lets the screen warn before anyone hits print.
+ * There is no longer anything to choose: one size, one arrangement. What's
+ * left is to say whether the content fits on a single sheet, and how much of
+ * the leftover is worth ruling for notes.
+ *
+ * `fits` is about the content alone. The writing block is sized from whatever
+ * is left over, so it can never be the thing that pushes the page over.
  */
 export function choosePrintPlan({ sections = [], events = [], grouped = false } = {}) {
-  for (const tier of TIERS) {
-    const height = estimateHeight(tier, { sections, events, grouped });
-    if (height + writeBlockHeight(tier, WRITE_MIN_LINES) <= PRINTABLE_H) {
-      return { ...tier, grouped, height, fits: true, writeLines: writeLinesFor(tier, height) };
-    }
-  }
-
-  // Nothing left room to write on. A packed agenda that fills the sheet
-  // exactly still fits — it just prints with no ruled area, which is a better
-  // answer than warning about a second page that isn't coming.
-  for (const tier of TIERS) {
-    const height = estimateHeight(tier, { sections, events, grouped });
-    if (height <= PRINTABLE_H) {
-      return { ...tier, grouped, height, fits: true, writeLines: 0 };
-    }
-  }
-
-  const tier = TIERS[TIERS.length - 1];
+  const height = estimateHeight(TIER, { sections, events, grouped });
   return {
-    ...tier, grouped, fits: false, writeLines: 0,
-    height: estimateHeight(tier, { sections, events, grouped }),
+    ...TIER,
+    grouped,
+    height,
+    fits: height <= PRINTABLE_H,
+    writeLines: writeLinesFor(TIER, height),
   };
 }
 

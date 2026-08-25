@@ -2,33 +2,26 @@ import { render, cleanup, act } from "@testing-library/react";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import AgendaPrint from "../src/components/AgendaPrint";
 import { AGENDA_CATEGORIES } from "../src/lib/domain/agendaCategories";
-import { PRINTABLE_H, TIERS, choosePrintPlan } from "../src/lib/domain/printPlan";
+import {
+  PRINTABLE_H, TIER, BODY_PT, PT, RULE_TOTAL, choosePrintPlan, writeLinesFor,
+} from "../src/lib/domain/printPlan";
 
 /**
- * The print layout measuring itself.
+ * The printed page: one fixed size, and the leftover ruled for notes.
  *
- * jsdom has no layout engine, so every height is 0 — which is exactly the case
- * the component has to survive by falling back to the estimate. To test the
- * other case, this stands in a fake layout engine: content height scales with
- * the chosen type size, the way a real page does.
+ * The agenda used to choose its own type size, walking a ladder of eight
+ * densities until the page fitted — so one week printed at 13.5pt and the next
+ * at 9.6pt. It's twelve point now whatever the agenda looks like, and the only
+ * thing still measured is how many writing lines the remaining space is worth.
  *
- * That's enough to check the two things that matter and that no amount of
- * arithmetic in printPlan.js can promise — the tier walks up when there's room
- * on the sheet, and the loop always stops.
+ * jsdom has no layout engine, so every height is 0 — which is the case the
+ * component has to survive by standing on the estimate. For the other case
+ * this stands in a fake layout engine.
  */
 
 const ITEMS = Array.from({ length: 11 }, (_, i) => ({
   id: i, section: "items", text: "Follow up with the brethren about item " + i,
-  category: AGENDA_CATEGORIES[i % 6].key, who: "Cam Pearson", due_date: "2026-09-06",
-}));
-
-// A heavy week. Used wherever the test needs the estimate to open somewhere
-// other than the loosest tier — otherwise "it didn't blow the type up" and
-// "it climbed to the top" are the same observation.
-const MANY = Array.from({ length: 24 }, (_, i) => ({
-  id: i, section: "items", text: "Follow up with the brethren about item " + i,
-  category: AGENDA_CATEGORIES[i % 6].key, who: "Cam Pearson",
-  due_date: "2026-09-06", notes: "Report back before the next meeting.",
+  category: AGENDA_CATEGORIES[i % 6].key, due_date: "2026-09-06",
 }));
 
 function sheet(extra = {}) {
@@ -44,103 +37,113 @@ function sheet(extra = {}) {
   );
 }
 
-/**
- * @param {number} pxPerPt how tall the content is per point of body size.
- *   Tuned per test to put the "right" answer at a known tier.
- */
-function fakeLayout(pxPerPt) {
+/** @param {number} contentH what the content measures, in px. */
+function fakeLayout(contentH) {
   const real = Element.prototype.getBoundingClientRect;
   Element.prototype.getBoundingClientRect = function () {
-    if (this.hasAttribute && this.hasAttribute("data-eq-footer")) return { height: 18, width: 700 };
-    if (this.hasAttribute && this.hasAttribute("data-eq-content")) {
-      const sheetEl = this.closest("[data-eq-sheet]");
-      const body = parseFloat((sheetEl && sheetEl.style.fontSize) || "10");
-      return { height: body * pxPerPt, width: 700 };
-    }
+    if (this.hasAttribute && this.hasAttribute("data-eq-footer")) return { height: 17, width: 700 };
+    if (this.hasAttribute && this.hasAttribute("data-eq-content")) return { height: contentH, width: 700 };
     return real.call(this);
   };
   return () => { Element.prototype.getBoundingClientRect = real; };
 }
 
-const tierOf = () => {
-  const el = document.querySelector("[data-eq-sheet]");
-  return el && el.getAttribute("data-eq-tier");
-};
-const bodyOf = () => parseFloat(document.querySelector("[data-eq-sheet]").style.fontSize);
+const sheetEl = () => document.querySelector("[data-eq-sheet]");
+const bodyPx = () => parseFloat(sheetEl().style.fontSize);
+const ruleCount = () => [...document.querySelectorAll("div")]
+  .filter((d) => d.style.height === "22px" && d.style.borderBottom).length;
 
 let restore = () => {};
 beforeEach(() => { restore = () => {}; });
 afterEach(() => { restore(); cleanup(); });
 
-describe("the printed page measures itself", () => {
+describe("the printed page", () => {
+  it("is twelve point, stated in points", async () => {
+    await act(async () => { render(sheet()); });
+    expect(bodyPx()).toBeCloseTo(BODY_PT * PT, 2);
+    expect(bodyPx() / PT).toBeCloseTo(12, 2);
+  });
+
+  it("is twelve point on a short agenda and a long one alike", async () => {
+    // The whole point of fixing the size: the sheet looks the same every week.
+    await act(async () => { render(sheet({ bySection: { items: ITEMS.slice(0, 2) } })); });
+    const short = bodyPx();
+    cleanup();
+
+    const many = Array.from({ length: 40 }, (_, i) => ({ ...ITEMS[i % 11], id: i }));
+    await act(async () => { render(sheet({ bySection: { items: many } })); });
+    expect(bodyPx()).toBe(short);
+  });
+
+  it("never pins the column to a fixed page height", async () => {
+    // A hard min-height is one of the things that makes browsers scale a sheet.
+    await act(async () => { render(sheet()); });
+    expect(sheetEl().style.minHeight).toBe("");
+  });
+
+  it("asks for the page width in inches, not a percentage", async () => {
+    // "width: auto" on body doesn't resolve to the page box in Chrome — it
+    // keeps the window width, so the sheet laid out at 1280px against a 7.3in
+    // printable area and the whole page was scaled to 55%. Twelve point
+    // printed at six and a half with the bottom of the sheet blank.
+    await act(async () => { render(sheet()); });
+    const css = document.querySelector(".eq-print-root style").textContent;
+    expect(css).toContain("width: 7.3in !important");
+    expect(css).not.toContain("width: auto !important");
+  });
+
   it("keeps the estimate where there's no layout engine", async () => {
-    // Plain jsdom: every rect is 0. Read naively that says the page is empty,
-    // and the type would blow up to the largest tier on every server render
-    // and in every test. It has to recognise "no layout" and stand pat on
-    // exactly what printPlan.js worked out.
+    // Every rect is 0 in jsdom. Read naively that says the page is empty and
+    // the writing block would fill the sheet with rules.
     const estimate = choosePrintPlan({
-      sections: [{ key: "items", label: "Agenda Items", items: MANY }],
+      sections: [{ key: "items", label: "Agenda Items", items: ITEMS }],
       events: [],
     });
-    expect(estimate.name).not.toBe(TIERS[0].name);   // or the check proves nothing
-
-    await act(async () => { render(sheet({ bySection: { items: MANY } })); });
-
-    expect(tierOf()).toBe(estimate.name);
-  });
-
-  it("walks the type up when the sheet has room", async () => {
-    // A long agenda, so the estimate opens conservatively — and a layout that
-    // turns out to be roomy, which is the exact situation that produced a
-    // 9.6pt page with the bottom quarter blank. It has to climb all the way to
-    // the loosest tier rather than trusting the estimate it started from.
-    restore = fakeLayout(40);
-    await act(async () => { render(sheet({ bySection: { items: MANY } })); });
-
-    expect(tierOf()).toBe(TIERS[0].name);
-    expect(bodyOf() * 40).toBeLessThanOrEqual(PRINTABLE_H);
-  });
-
-  it("fills the sheet rather than stopping short", async () => {
-    restore = fakeLayout(55);
     await act(async () => { render(sheet()); });
-
-    const content = bodyOf() * 55;
-    expect(content).toBeLessThanOrEqual(PRINTABLE_H);
-    expect(content).toBeGreaterThan(PRINTABLE_H * 0.7);
+    expect(ruleCount()).toBe(estimate.writeLines);
   });
 
-  it("walks it down when the content overruns", async () => {
-    restore = fakeLayout(110);
+  it("rules the leftover once the browser has measured it", async () => {
+    restore = fakeLayout(500);
     await act(async () => { render(sheet()); });
-
-    expect(bodyOf() * 110).toBeLessThanOrEqual(PRINTABLE_H);
+    expect(ruleCount()).toBe(writeLinesFor(TIER, 500 + 17 + 12));
+    expect(ruleCount()).toBeGreaterThan(0);
   });
 
-  it("stops even when no tier is comfortable", async () => {
-    // Every tier overflows. It has to settle on the smallest and stop, not
-    // oscillate — a render loop here would hang the print dialog.
-    restore = fakeLayout(400);
+  it("draws no writing block at all when the page is full", async () => {
+    // It used to insist on a minimum of three lines, which turned a page with
+    // room for two into a page the fitter called too long.
+    restore = fakeLayout(940);
     await act(async () => { render(sheet()); });
-    expect(tierOf()).toBe(TIERS[TIERS.length - 1].name);
+    expect(ruleCount()).toBe(0);
+  });
+
+  it("never rules past the bottom of the sheet", async () => {
+    // The writing block only ever uses space that's already left over, so it
+    // can never be the thing that pushes a page onto a second sheet. A page
+    // whose content alone overruns is a different problem, and the screen
+    // warns about that one — so it's excluded here rather than asserted away.
+    for (const contentH of [200, 500, 700, 850]) {
+      restore = fakeLayout(contentH);
+      await act(async () => { render(sheet()); });
+
+      const spent = contentH + 17 + 12;
+      expect(spent, "this case is meant to fit").toBeLessThanOrEqual(PRINTABLE_H);
+      const block = ruleCount() ? ruleCount() * RULE_TOTAL + 45 : 0;
+      expect(spent + block, `content ${contentH} overran with ${ruleCount()} lines`)
+        .toBeLessThanOrEqual(PRINTABLE_H);
+
+      restore();
+      cleanup();
+    }
   });
 
   it("draws the writing rules as borders, not a background", async () => {
     // Browsers don't print background images unless the person ticks
     // "Background graphics", so the ruled area used to come out blank.
-    restore = fakeLayout(55);
+    restore = fakeLayout(400);
     await act(async () => { render(sheet()); });
-
-    const ruled = [...document.querySelectorAll("div")]
-      .filter((d) => d.style.borderBottom === "1px solid rgb(217, 217, 217)");
-    expect(ruled.length).toBeGreaterThanOrEqual(3);
+    expect(ruleCount()).toBeGreaterThanOrEqual(3);
     expect(document.body.innerHTML).not.toContain("repeating-linear-gradient");
-  });
-
-  it("never pins the column to a fixed page height", async () => {
-    // A hard min-height is what makes browsers scale the whole sheet down.
-    restore = fakeLayout(55);
-    await act(async () => { render(sheet()); });
-    expect(document.querySelector("[data-eq-sheet]").style.minHeight).toBe("");
   });
 });

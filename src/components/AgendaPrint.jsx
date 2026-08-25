@@ -2,11 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent,
-  RULE_H, TIERS, PRINTABLE_H, WRITE_MIN_LINES, WRITE_MAX_LINES,
+  RULE_H, TIER, writeLinesFor,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
 const RULE = "1px solid #d9d9d9";
+const FOOTER_GAP = 12;
 const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 /** One labelled fact in the details block. */
@@ -54,46 +55,34 @@ function Band({ children, size, right }) {
 }
 
 /**
- * Let the browser do the measuring.
+ * Let the browser count the ruled lines.
  *
- * printPlan.js estimates the page's height from counts and character lengths,
- * which is what makes it testable without a browser — but an estimate built
- * from a dozen guessed constants drifts, and it drifted conservative. A page
- * it called full printed with the bottom quarter empty, so the presidency got
- * 9.6pt type on a sheet that had room for 12.
+ * printPlan.js estimates the page from counts and character lengths, which is
+ * what makes it testable without a browser, and it's now accurate to about two
+ * pixels — every term in it was checked against Chrome. But two pixels either
+ * way is still the difference between four writing lines and three, so once
+ * the sheet is in the DOM this measures what actually got laid out and rules
+ * the leftover properly.
  *
- * So the estimate is now only the opening bid. Once the sheet is in the DOM,
- * this measures what actually got laid out and walks the tier up while there's
- * room, or down while there isn't. Three or four passes and it settles, before
- * the print dialog opens.
+ * It used to walk a whole ladder of type sizes here. There's one size now, so
+ * there's nothing to walk: the type is 12pt whatever the agenda looks like.
  *
  * Where there's no layout engine — jsdom in the tests, or server rendering for
- * the standalone sample — every measurement is 0, and it keeps the estimate.
- * That's deliberate: the estimate must stay good enough to ship on its own.
+ * the standalone sample — every measurement is 0 and the estimate stands.
+ * That's deliberate: the estimate has to be good enough to ship on its own.
  */
-// useLayoutEffect warns when there's no DOM to lay anything out in. The
-// standalone print sample is rendered on the server, where the measuring pass
-// is a no-op anyway.
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-function useMeasuredTier(estimate) {
-  const startAt = Math.max(0, TIERS.findIndex((t) => t.name === estimate.name));
+function useMeasuredWriteLines(estimate) {
   const contentRef = useRef(null);
   const footerRef = useRef(null);
-  const [index, setIndex] = useState(startAt);
   const [lines, setLines] = useState(estimate.writeLines);
-  // Guards against a layout that never settles — two tiers that each measure
-  // as wanting the other would otherwise re-render forever.
-  const passes = useRef(0);
-  const seen = useRef(new Set());
 
-  // The starting point moves when the agenda does, so a new item resets it.
-  const key = `${estimate.name}:${estimate.height}:${estimate.grouped}`;
+  // A new agenda starts from the estimate again.
+  const key = `${estimate.height}:${estimate.grouped}`;
   const lastKey = useRef(key);
   if (lastKey.current !== key) {
     lastKey.current = key;
-    passes.current = 0;
-    seen.current = new Set();
   }
 
   useIsoLayoutEffect(() => {
@@ -102,38 +91,14 @@ function useMeasuredTier(estimate) {
     const contentH = content.getBoundingClientRect().height;
     if (!contentH) return;             // no layout engine — trust the estimate
 
-    const footerH = footerRef.current?.getBoundingClientRect().height || 18;
-    const tier = TIERS[index];
-    const headingH = tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2;
-    const spare = PRINTABLE_H - contentH - footerH - 12 - headingH;
-
-    const want = Math.max(WRITE_MIN_LINES, Math.min(WRITE_MAX_LINES, Math.floor(spare / RULE_H)));
+    // The footer's own top margin counts against the page too; leaving it out
+    // was worth 12px, which was the difference between one page and two.
+    const footerH = (footerRef.current?.getBoundingClientRect().height || 17) + FOOTER_GAP;
+    const want = writeLinesFor(TIER, contentH + footerH);
     if (want !== lines) setLines(want);
-
-    if (passes.current >= 8) return;
-
-    // Too tall: tighten. Room to spare: loosen, but only if the next size up
-    // plausibly still fits — the ratio of body sizes is a good enough guide
-    // for one step, and the next pass measures it for real anyway.
-    let next = index;
-    if (spare < WRITE_MIN_LINES * RULE_H && index < TIERS.length - 1) {
-      next = index + 1;
-    } else if (index > 0) {
-      const up = TIERS[index - 1];
-      const projected = contentH * (up.body / tier.body);
-      if (projected + footerH + 12 + headingH + WRITE_MIN_LINES * RULE_H <= PRINTABLE_H) {
-        next = index - 1;
-      }
-    }
-
-    if (next !== index && !seen.current.has(next)) {
-      seen.current.add(index);
-      passes.current += 1;
-      setIndex(next);
-    }
   });
 
-  return { tier: TIERS[index], lines, contentRef, footerRef };
+  return { lines, contentRef, footerRef };
 }
 
 /**
@@ -244,9 +209,9 @@ export default function AgendaPrint({
   const estimate = choosePrintPlan({
     sections: grouped ? groups : withItems, events, grouped,
   });
-  // The estimate opens; the browser's own layout has the last word.
-  const { tier, lines, contentRef, footerRef } = useMeasuredTier(estimate);
-  const plan = { ...estimate, ...tier, writeLines: lines };
+  // The estimate opens; the browser's own layout settles the ruled lines.
+  const { lines, contentRef, footerRef } = useMeasuredWriteLines(estimate);
+  const plan = { ...estimate, writeLines: lines };
 
   const sheet = (
     <div className="eq-print-root">
@@ -262,15 +227,22 @@ export default function AgendaPrint({
            edge printed off the sheet. As a direct child of body in normal
            flow, its width is simply the page's content box. */
         @media print {
+          /* The width is stated in inches, not left to work itself out.
+             "width: auto" on body does not resolve to the page box in Chrome —
+             it keeps the browser window's width, so the sheet laid out at
+             1280px against a 7.3in printable area and Chrome scaled the whole
+             page down to 55% to make it fit. Twelve point came out at six and
+             a half, with the bottom of the sheet empty. Pinning it to the page
+             box leaves nothing to scale: 8.5in less two 0.6in margins. */
           html, body {
             margin: 0 !important; padding: 0 !important;
-            width: auto !important; background: #fff !important;
+            width: 7.3in !important; background: #fff !important;
           }
           body > * { display: none !important; }
           body > .eq-print-root { display: block !important; }
           .eq-print-root {
-            width: auto !important; max-width: 100% !important;
-            box-sizing: border-box; color: #111 !important;
+            width: 7.3in !important; max-width: 7.3in !important;
+            box-sizing: border-box; color: #1a1a1a !important;
           }
           /* Letter is shorter than A4, so sizing to Letter fits both. */
           @page { size: letter; margin: 0.5in 0.6in; }
@@ -432,7 +404,7 @@ export default function AgendaPrint({
         )}
 
         <div ref={footerRef} data-eq-footer style={{
-          marginTop: 12, paddingTop: 5, borderTop: RULE, flex: "0 0 auto",
+          marginTop: FOOTER_GAP, paddingTop: 5, borderTop: RULE, flex: "0 0 auto",
           fontFamily: SANS, fontSize: 8, color: "#a3a3a3",
           display: "flex", justifyContent: "space-between",
         }}>
