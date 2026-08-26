@@ -146,6 +146,13 @@ export default function Feed({ focus, onFocusHandled }) {
           Sunday agenda and the Presidency Home use. */}
       <div className="eq-feed-top">
         <HomeTiles counts={counts} active={filter} onPick={setFilter} />
+
+        {/* A standing invitation rather than news, so it sits up here with the
+            tiles instead of down among the posts. Renders nothing at all until
+            the presidency has set a link — no element, so the flex gap above
+            Upcoming doesn't double. */}
+        <GroupMeCard />
+
         <UpcomingStrip
           empty="Nothing on the calendar yet."
           items={upcoming.slice(0, 6).map((p) => ({
@@ -159,10 +166,6 @@ export default function Feed({ focus, onFocusHandled }) {
           }))}
         />
       </div>
-
-      {/* A standing invitation rather than news, so it sits above the posts.
-          Renders nothing until the presidency has set a link. */}
-      <GroupMeCard />
 
       {filter !== "all" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>

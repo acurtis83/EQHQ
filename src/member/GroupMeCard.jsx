@@ -7,9 +7,15 @@ import { useSettings, SETTING_KEYS, safeUrl } from "../lib/useSettings";
 /**
  * Join the quorum's GroupMe.
  *
- * Sits above the posts rather than among them: it's not news, it's a standing
- * invitation, and as a post it would scroll away behind three weeks of
- * announcements exactly when a new brother goes looking for it.
+ * Sits with the tiles at the top of the feed, above Upcoming Events, rather
+ * than among the posts: it's not news, it's a standing invitation, and as a
+ * post it would scroll away behind three weeks of announcements exactly when
+ * a new brother goes looking for it.
+ *
+ * No bottom margin of its own — the feed's top block spaces its children, and
+ * a margin here would double the gap above Upcoming Events. Returning null
+ * rather than an empty div matters for the same reason: an unset link leaves
+ * no element, so it contributes no gap either.
  *
  * Compact by default — the code is a tap away rather than taking a third of
  * the screen every time anybody opens the feed. Shows nothing at all until
@@ -25,7 +31,7 @@ export default function GroupMeCard() {
   const Chevron = open ? ChevronUp : ChevronDown;
 
   return (
-    <div style={{ ...card, padding: 13, marginBottom: 12 }}>
+    <div style={{ ...card, padding: 13 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <MessageCircle size={17} style={{ flex: "0 0 auto", color: T.sub }} />
         <div style={{ flex: 1, minWidth: 0 }}>
