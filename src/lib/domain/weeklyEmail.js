@@ -26,6 +26,9 @@ export const APP_NAME = "Elders Quorum App";
 export const APP_LINE =
   `Stay up to date and find all of the upcoming events and announcements on our ${APP_NAME}`;
 
+export const GROUPME_NAME = "EQ GroupMe";
+export const GROUPME_LINE = `Join the day-to-day quorum chat on our ${GROUPME_NAME}`;
+
 export function emailSubject({ sundayIso }) {
   return `Elders Quorum ${dash} Week of ${fmtShort(sundayIso)}`;
 }
@@ -151,13 +154,14 @@ function asNote(a) {
 export function buildEmailText({
   sundayIso, lesson, noLessonReason, announcements = [], events = [], senderName = "",
   siteUrl = "",
+  groupMeUrl = "",
 }) {
   const out = [];
   out.push(`Brethren,`);
   out.push("");
 
   // --- lesson ---
-  out.push(`THIS SUNDAY ${dash} ${fmtDate(sundayIso)}`);
+  out.push(`NEXT SUNDAY LESSON ${dash} ${fmtDate(sundayIso)}`);
   if (noLessonReason) {
     out.push(noLessonReason);
   } else if (lesson && (lesson.teacher_name || lesson.talk_title)) {
@@ -171,11 +175,17 @@ export function buildEmailText({
     // already showing it as "Read the talk" while the plain one showed the
     // address — so a hand-edited email came out different from a sent one.
     if (lesson.talk_link) out.push(`Read the talk: ${lesson.talk_link}`);
+    // Only when there's a talk to read. Most weeks have one, but a lesson from
+    // the manual or a testimony meeting doesn't, and "please read the talk"
+    // with no talk named is an instruction nobody can follow.
+    //
     // The teacher, the lesson and the link are one block — no breaks between
     // them. The ask is a different kind of line, so it gets one blank line
     // above it, and the heading below it gets a wider margin than that.
-    out.push("");
-    out.push("Please read the talk before Sunday.");
+    if (lesson.talk_title || lesson.talk_link) {
+      out.push("");
+      out.push("Please read the talk before Sunday.");
+    }
   } else {
     out.push("Lesson details to follow.");
   }
@@ -219,6 +229,12 @@ export function buildEmailText({
     out.push("");
     out.push(`${APP_LINE}: ${String(siteUrl).replace(/\/+$/, "")}`);
   }
+  // Only when the presidency has set one. A ward that doesn't use GroupMe
+  // shouldn't get a sentence about joining a group that doesn't exist.
+  if (groupMeUrl) {
+    if (!siteUrl) out.push("");
+    out.push(`${GROUPME_LINE}: ${groupMeUrl}`);
+  }
 
   out.push("");
   out.push(senderName ? `${senderName}` : "Elders Quorum Presidency");
@@ -240,6 +256,7 @@ const escHtml = (s) =>
 export function buildEmailHtml({
   sundayIso, lesson, noLessonReason, announcements = [], events = [], senderName = "",
   siteUrl = "",
+  groupMeUrl = "",
 }) {
   const P = 'margin:0 0 12px;font-size:15px;line-height:1.55;color:#17181c';
   const H = 'margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
@@ -247,7 +264,7 @@ export function buildEmailHtml({
   parts.push(`<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:560px">`);
   parts.push(`<p style="${P}">Brethren,</p>`);
 
-  parts.push(`<div style="${H}">This Sunday ${dash} ${escHtml(fmtDate(sundayIso))}</div>`);
+  parts.push(`<div style="${H}">Next Sunday Lesson ${dash} ${escHtml(fmtDate(sundayIso))}</div>`);
   if (noLessonReason) {
     parts.push(`<p style="${P}">${escHtml(noLessonReason)}</p>`);
   } else if (lesson && (lesson.teacher_name || lesson.talk_title)) {
@@ -261,8 +278,11 @@ export function buildEmailHtml({
     if (lesson.talk_link) {
       rows.push(`<a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a>`);
     }
-    parts.push(`<p style="${P};margin-bottom:0">${rows.join("<br>")}</p>`);
-    parts.push(`<p style="${P};margin-top:10px">Please read the talk before Sunday.</p>`);
+    const asked = !!(lesson.talk_title || lesson.talk_link);
+    parts.push(`<p style="${P}${asked ? ";margin-bottom:0" : ""}">${rows.join("<br>")}</p>`);
+    if (asked) {
+      parts.push(`<p style="${P};margin-top:10px">Please read the talk before Sunday.</p>`);
+    }
   } else {
     parts.push(`<p style="${P}">Lesson details to follow.</p>`);
   }
@@ -293,8 +313,14 @@ export function buildEmailHtml({
   if (siteUrl) {
     const home = String(siteUrl).replace(/\/+$/, "");
     const [before, after] = APP_LINE.split(APP_NAME);
-    parts.push(`<p style="${P};margin-top:18px">${escHtml(before)}` +
+    parts.push(`<p style="${P};margin-top:18px${groupMeUrl ? ";margin-bottom:4px" : ""}">${escHtml(before)}` +
       `<a href="${escHtml(home)}" style="color:#0063d6">${escHtml(APP_NAME)}</a>` +
+      `${escHtml(after)}</p>`);
+  }
+  if (groupMeUrl) {
+    const [before, after] = GROUPME_LINE.split(GROUPME_NAME);
+    parts.push(`<p style="${P}${siteUrl ? "" : ";margin-top:18px"}">${escHtml(before)}` +
+      `<a href="${escHtml(groupMeUrl)}" style="color:#0063d6">${escHtml(GROUPME_NAME)}</a>` +
       `${escHtml(after)}</p>`);
   }
 
@@ -380,14 +406,15 @@ function linkify(escaped) {
   // The closing line links a phrase inside a sentence rather than the whole
   // line, so it's handled before the label rule below — which would otherwise
   // make the entire sentence the link text.
-  const appName = escHtml(APP_NAME);
-  const closing = escaped.match(
-    new RegExp(`^(.*${appName}.*?)[:\\s]+\\s*(https?://[^\\s<]+)$`)
+  const phrase = [APP_NAME, GROUPME_NAME].map(escHtml)
+    .find((n) => escaped.includes(n));
+  const closing = phrase && escaped.match(
+    new RegExp(`^(.*${phrase}.*?)[:\\s]+\\s*(https?://[^\\s<]+)$`)
   );
   if (closing) {
     const [, sentence, url] = closing;
-    return sentence.replace(appName,
-      `<a href="${url}" style="color:#0063d6">${appName}</a>`);
+    return sentence.replace(phrase,
+      `<a href="${url}" style="color:#0063d6">${phrase}</a>`);
   }
 
   const named = escaped.replace(

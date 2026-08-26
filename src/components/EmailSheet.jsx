@@ -5,6 +5,7 @@ import Sheet from "./Sheet";
 import {
   buildEmailText, buildEmailHtml, textToHtml, emailSubject,
 } from "../lib/domain/weeklyEmail";
+import { useSettings, SETTING_KEYS, safeUrl } from "../lib/useSettings";
 
 /** A label above a field. Small enough to live here rather than be imported. */
 function Lbl({ label, children }) {
@@ -35,9 +36,13 @@ export default function EmailSheet({
   // Where the app is served from, so a form_id can become a link someone can
   // tap. Read here rather than baked into the builder, which stays pure.
   const siteUrl = typeof window !== "undefined" ? window.location.origin : "";
+  // The same value the feed's card uses, so the email and the app never
+  // disagree about where the group is.
+  const { settings } = useSettings();
+  const groupMeUrl = safeUrl(settings[SETTING_KEYS.GROUPME_URL]);
   const generate = useCallback(
-    () => buildEmailText({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl }),
-    [sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl]
+    () => buildEmailText({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl }),
+    [sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl]
   );
 
   // A saved body wins, so an edit survives reopening. "Regenerate" is how you
@@ -53,7 +58,7 @@ export default function EmailSheet({
     // edits would silently not make it into the email.
     const plain = text;
     const html = agenda.email_body === text && !edited
-      ? buildEmailHtml({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl })
+      ? buildEmailHtml({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl })
       : textToHtml(text);
     try {
       if (kind === "html" && window.ClipboardItem && navigator.clipboard?.write) {

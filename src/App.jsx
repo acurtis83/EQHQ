@@ -7,6 +7,7 @@ import { T, Btn, Stub } from "./components/ui";
 import Feed from "./member/Feed";
 import FormFill from "./member/FormFill";
 import Roster from "./presidency/Roster";
+import QuorumSettings from "./presidency/QuorumSettings";
 import Callings from "./presidency/Callings";
 import Plan from "./presidency/Plan";
 import Meetings from "./presidency/Meetings";
@@ -39,16 +40,18 @@ const PRESIDENCY_TABS = [
 // app. The roster used to have its own slot in the bottom bar, which it didn't
 // earn — it's consulted, not worked in.
 const SETTINGS_SECTIONS = [
+  { key: "quorum", label: "Quorum" },
   { key: "roster", label: "Roster" },
   { key: "talks", label: "Conference Talks" },
   { key: "import", label: "Import" },
 ];
 
 function SettingsTab() {
-  const [section, setSection] = useState("roster");
+  const [section, setSection] = useState("quorum");
   return (
     <div>
       <Segmented value={section} onChange={setSection} options={SETTINGS_SECTIONS} idAttr="data-settings" />
+      {section === "quorum" && <QuorumSettings />}
       {section === "roster" && <Roster />}
       {section === "talks" && <TalkLibrary />}
       {section === "import" && <ImportLegacy />}

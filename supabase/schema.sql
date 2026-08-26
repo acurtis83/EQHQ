@@ -130,6 +130,25 @@ create policy "Public can claim a slot" on signup_claims for insert with check (
 -- Deliberately no public delete: members sign up without an account, so the
 -- database can't tell whose claim is whose. Removing a claim is presidency-only.
 
+-- Things the quorum sets up once and then mostly reads: the GroupMe link, for
+-- one. A key/value table rather than a column on something, because the next
+-- one of these will be a different shape and a table per setting is silly.
+--
+-- Readable by anyone, including members with no account — the feed shows the
+-- GroupMe card to everybody, and the weekly email is written from the same
+-- value. Writable by the presidency only.
+create table if not exists app_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz not null default now()
+);
+alter table app_settings enable row level security;
+drop policy if exists "Anyone can read settings" on app_settings;
+create policy "Anyone can read settings" on app_settings for select using (true);
+drop policy if exists "Presidency writes settings" on app_settings;
+create policy "Presidency writes settings" on app_settings
+  for all using (is_presidency()) with check (is_presidency());
+
 -- Only presidency may publish or manage feed content.
 drop policy if exists "Presidency writes posts" on posts;
 create policy "Presidency writes posts" on posts

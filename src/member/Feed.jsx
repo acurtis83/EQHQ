@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Plus, Pin, Trash2, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import Rsvp from "./Rsvp";
+import GroupMeCard from "./GroupMeCard";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui";
 import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
@@ -158,6 +159,10 @@ export default function Feed({ focus, onFocusHandled }) {
           }))}
         />
       </div>
+
+      {/* A standing invitation rather than news, so it sits above the posts.
+          Renders nothing until the presidency has set a link. */}
+      <GroupMeCard />
 
       {filter !== "all" && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>

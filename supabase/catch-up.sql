@@ -272,6 +272,19 @@ $$;
 -- Manual category order on a presidency agenda.
 alter table agendas add column if not exists category_order jsonb not null default '[]';
 
+-- Quorum settings: the GroupMe link and anything like it.
+create table if not exists app_settings (
+  key text primary key,
+  value text,
+  updated_at timestamptz not null default now()
+);
+alter table app_settings enable row level security;
+drop policy if exists "Anyone can read settings" on app_settings;
+create policy "Anyone can read settings" on app_settings for select using (true);
+drop policy if exists "Presidency writes settings" on app_settings;
+create policy "Presidency writes settings" on app_settings
+  for all using (is_presidency()) with check (is_presidency());
+
 notify pgrst, 'reload schema';
 
 
