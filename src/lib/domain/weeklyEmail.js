@@ -171,9 +171,10 @@ export function buildEmailText({
     // already showing it as "Read the talk" while the plain one showed the
     // address — so a hand-edited email came out different from a sent one.
     if (lesson.talk_link) out.push(`Read the talk: ${lesson.talk_link}`);
-    // No blank line before this: the teacher, the lesson, the link and this
-    // are one block about one thing, and a paragraph break between each of
-    // them spread four short lines down half the screen on a phone.
+    // The teacher, the lesson and the link are one block — no breaks between
+    // them. The ask is a different kind of line, so it gets one blank line
+    // above it, and the heading below it gets a wider margin than that.
+    out.push("");
     out.push("Please read the talk before Sunday.");
   } else {
     out.push("Lesson details to follow.");
@@ -241,7 +242,7 @@ export function buildEmailHtml({
   siteUrl = "",
 }) {
   const P = 'margin:0 0 12px;font-size:15px;line-height:1.55;color:#17181c';
-  const H = 'margin:20px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
+  const H = 'margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
   const parts = [];
   parts.push(`<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:560px">`);
   parts.push(`<p style="${P}">Brethren,</p>`);
@@ -260,8 +261,8 @@ export function buildEmailHtml({
     if (lesson.talk_link) {
       rows.push(`<a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a>`);
     }
-    rows.push("Please read the talk before Sunday.");
-    parts.push(`<p style="${P}">${rows.join("<br>")}</p>`);
+    parts.push(`<p style="${P};margin-bottom:0">${rows.join("<br>")}</p>`);
+    parts.push(`<p style="${P};margin-top:10px">Please read the talk before Sunday.</p>`);
   } else {
     parts.push(`<p style="${P}">Lesson details to follow.</p>`);
   }
@@ -310,7 +311,7 @@ export function buildEmailHtml({
  */
 export function textToHtml(text) {
   const P = 'margin:0 0 12px;font-size:15px;line-height:1.55;color:#17181c';
-  const H = 'margin:20px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
+  const H = 'margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
   const lines = String(text || "").split(/\r?\n/);
   const out = [`<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:560px">`];
   let bullets = [];
