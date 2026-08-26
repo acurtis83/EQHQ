@@ -7,6 +7,7 @@ import {
   noLessonReason, NO_LESSON,
 } from "../lib/domain/dates";
 import { talkUrl } from "../presidency/Teaching";
+import { hasTalk } from "../lib/domain/lesson";
 
 // The coming Sunday the quorum gathers — today counts if it's Sunday.
 function nextGatheringSunday(fromIso) {
@@ -54,9 +55,19 @@ export default function ThisWeeksLesson() {
 
   const { sunday, reason, row } = state;
   const isThisSunday = sunday === toIso(new Date());
-  const url = talkUrl(row);
 
-  const eyebrow = `${isThisSunday ? "TODAY" : "THIS SUNDAY"} · ${fmtDate(sunday)
+  // Only when a talk was actually chosen. talkUrl() falls back to a Church
+  // search built from the topic, which is useful to the presidency looking
+  // for a talk to assign but is not something to put "Read the talk" on in
+  // front of the quorum — it opens a page of search results.
+  const url = hasTalk(row) ? talkUrl(row) : "";
+
+  // Matches the weekly email's heading so the app and the Monday note call the
+  // same Sunday the same thing. "LESSON" comes off when there isn't one —
+  // "NEXT SUNDAY LESSON" sitting above "no quorum lesson" contradicts itself.
+  const when = isThisSunday ? "TODAY" : reason ? "NEXT SUNDAY" : "NEXT SUNDAY LESSON";
+
+  const eyebrow = `${when} · ${fmtDate(sunday)
     .replace(/^\w+, /, "")
     .replace(/, \d{4}$/, "")
     .toUpperCase()}`;
@@ -72,8 +83,11 @@ export default function ThisWeeksLesson() {
         : reason === NO_LESSON.GENERAL_CONF
         ? "General Conference — no quorum meeting."
         : "The bishopric directs this one — no quorum lesson.";
-  } else if (row?.talk_title || row?.teacher_name) {
-    title = row.talk_title || "Lesson";
+  } else if (row?.talk_title || row?.topic || row?.teacher_name) {
+    // The topic stands in as the headline when no talk has been chosen. It was
+    // being dropped, so a week set up with a teacher and a subject showed the
+    // bare word "Lesson" — less than the email said about the same week.
+    title = row.talk_title || row.topic || "Lesson";
     sub = [row.teacher_name, row.speaker].filter(Boolean).join(" · ");
   } else {
     title = "Lesson Coming";

@@ -7,6 +7,7 @@
 // Explicit .js so this module can be imported by plain Node as well as Vite —
 // the email is pure text assembly and worth testing on its own.
 import { fmtDate, fmtShort } from "./dates.js";
+import { hasTalk } from "./lesson.js";
 
 const dash = "—";
 
@@ -182,7 +183,7 @@ export function buildEmailText({
     // The teacher, the lesson and the link are one block — no breaks between
     // them. The ask is a different kind of line, so it gets one blank line
     // above it, and the heading below it gets a wider margin than that.
-    if (lesson.talk_title || lesson.talk_link) {
+    if (hasTalk(lesson)) {
       out.push("");
       out.push("Please read the talk before Sunday.");
     }
@@ -278,7 +279,7 @@ export function buildEmailHtml({
     if (lesson.talk_link) {
       rows.push(`<a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a>`);
     }
-    const asked = !!(lesson.talk_title || lesson.talk_link);
+    const asked = hasTalk(lesson);
     parts.push(`<p style="${P}${asked ? ";margin-bottom:0" : ""}">${rows.join("<br>")}</p>`);
     if (asked) {
       parts.push(`<p style="${P};margin-top:10px">Please read the talk before Sunday.</p>`);
