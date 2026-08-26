@@ -7,6 +7,7 @@ import { T, card, Chip, Btn, SectionTitle } from "../components/ui";
 import { BANDS, bandCounts } from "../lib/domain/roster";
 import { CALLING_STAGES } from "../lib/domain/constants";
 import { fmtDate, fmtShort, toIso, scheduleBetween, NO_LESSON } from "../lib/domain/dates";
+import { sundayLabel } from "../lib/domain/lesson";
 import { overdueDays } from "./RunningList";
 import UpcomingList from "../components/UpcomingList";
 
@@ -146,10 +147,14 @@ export default function HomeHub({ onGo }) {
 
       <div className="eq-hub-grid">
 
-        {/* ---------- This Sunday, front and centre ----------
+        {/* ---------- the coming Sunday, front and centre ----------
             It's the one thing everyone opens the app to check, so it gets the
             full width and the biggest type rather than competing with a stats
-            card for attention. */}
+            card for attention.
+
+            The heading comes from the same function as the member feed banner
+            and the weekly email — this card said "This Sunday" for a while
+            after the other two were renamed. */}
         <button
           onClick={() => onGo?.("meetings")}
           className="eq-hub-wide"
@@ -164,7 +169,7 @@ export default function HomeHub({ onGo }) {
               fontSize: 12, fontWeight: 800, letterSpacing: "0.1em",
               textTransform: "uppercase", color: T.primary,
             }}>
-              This Sunday
+              {sundayLabel(nextSunday?.date, toIso(new Date()), !!nextSunday?.teaches)}
             </span>
           </div>
 

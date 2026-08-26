@@ -7,7 +7,7 @@ import {
   noLessonReason, NO_LESSON,
 } from "../lib/domain/dates";
 import { talkUrl } from "../presidency/Teaching";
-import { hasTalk } from "../lib/domain/lesson";
+import { hasTalk, sundayLabel } from "../lib/domain/lesson";
 
 // The coming Sunday the quorum gathers — today counts if it's Sunday.
 function nextGatheringSunday(fromIso) {
@@ -54,7 +54,6 @@ export default function ThisWeeksLesson() {
   if (state.loading || !state.sunday) return null;
 
   const { sunday, reason, row } = state;
-  const isThisSunday = sunday === toIso(new Date());
 
   // Only when a talk was actually chosen. talkUrl() falls back to a Church
   // search built from the topic, which is useful to the presidency looking
@@ -62,10 +61,9 @@ export default function ThisWeeksLesson() {
   // front of the quorum — it opens a page of search results.
   const url = hasTalk(row) ? talkUrl(row) : "";
 
-  // Matches the weekly email's heading so the app and the Monday note call the
-  // same Sunday the same thing. "LESSON" comes off when there isn't one —
-  // "NEXT SUNDAY LESSON" sitting above "no quorum lesson" contradicts itself.
-  const when = isThisSunday ? "TODAY" : reason ? "NEXT SUNDAY" : "NEXT SUNDAY LESSON";
+  // Shared with the presidency home card and the weekly email, so the three
+  // screens can't end up calling the same Sunday different things again.
+  const when = sundayLabel(sunday, toIso(new Date()), !reason).toUpperCase();
 
   const eyebrow = `${when} · ${fmtDate(sunday)
     .replace(/^\w+, /, "")

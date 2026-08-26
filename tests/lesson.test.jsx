@@ -17,9 +17,12 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
 let LESSON = null;
 let EXCEPTIONS = [];
+let TEACHING = [];
 
 function query(table) {
-  const rows = table === "public_calendar_exceptions" ? EXCEPTIONS : [];
+  const rows =
+    table === "public_calendar_exceptions" ? EXCEPTIONS :
+    table === "teaching_assignments" ? TEACHING : [];
   const result = Promise.resolve({ data: rows, error: null });
   const proxy = new Proxy(result, {
     get(t, prop) {
@@ -43,6 +46,12 @@ vi.mock("../src/lib/supabase", () => ({
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
   },
+}));
+
+// The presidency home card reads the signed-in name; the feed banner doesn't
+// touch auth at all, so this only matters for the HomeHub half.
+vi.mock("../src/lib/useAuth", () => ({
+  useAuth: () => ({ presidency: { name: "Karl Ricks" }, isPresidency: true, ready: true, signOut() {} }),
 }));
 
 // Wednesday 2 Sep 2026. The next Sunday is the 6th — a first Sunday, no
@@ -73,6 +82,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   LESSON = null;
   EXCEPTIONS = [];
+  TEACHING = [];
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); });
 
@@ -114,14 +124,38 @@ describe("the Read the talk link", () => {
     expect(readTheTalk().closest("a").getAttribute("href")).toBe(LESSON.talk_link);
   });
 
-  it("is there for a talk named without a link, pointing at the search", async () => {
-    // The teacher named the talk but didn't paste the URL. A search for that
-    // exact title is a fair place to send someone.
+  it("is there for a pasted link with nothing else filled in", async () => {
+    // A link on its own is enough — there's nothing to infer. Worth its own
+    // case because every other talk row here also has a title and a speaker,
+    // so deleting the link rule entirely still passed.
+    LESSON = {
+      date: "2026-09-06", teacher_name: "Karl Ricks",
+      talk_link: "https://www.churchofjesuschrist.org/study/general-conference/2026/04/15gilbert?lang=eng",
+    };
+    await mount();
+    expect(readTheTalk()).toBeTruthy();
+    expect(readTheTalk().closest("a").getAttribute("href")).toBe(LESSON.talk_link);
+  });
+
+  it("is there for a talk named with its speaker but no link", async () => {
+    // Title plus speaker is a conference talk identified well enough that a
+    // search finds it. The speaker is what distinguishes this from a lesson
+    // subject typed into the same box.
     LESSON = { date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home", speaker: "Clark G. Gilbert" };
     await mount();
     const href = readTheTalk().closest("a").getAttribute("href");
     expect(href).toContain("churchofjesuschrist.org/search");
     expect(decodeURIComponent(href)).toContain("Come Home");
+  });
+
+  it("is gone when the talk field holds a lesson subject", async () => {
+    // The one Drew caught: "2nd Hour Changes" typed into the talk box, no
+    // speaker, no link. talkUrl() happily built a general-conference search
+    // for that phrase, so the link rendered and found nothing.
+    LESSON = { date: "2026-09-06", teacher_name: "Andrew Curtis", talk_title: "2nd Hour Changes" };
+    const dom = await mount();
+    expect(dom.container.textContent).toContain("2nd Hour Changes");
+    expect(readTheTalk()).toBeNull();
   });
 
   it("is gone when the week has only a topic", async () => {
@@ -162,6 +196,94 @@ describe("the Read the talk link", () => {
   });
 });
 
+describe("the presidency home card heads the same Sunday", () => {
+  async function mountHub(now = WEDNESDAY) {
+    vi.setSystemTime(now);
+    const { default: HomeHub } = await import("../src/presidency/HomeHub");
+    let dom;
+    await act(async () => {
+      dom = render(<HomeHub />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    return dom;
+  }
+
+  it("says Next Sunday Lesson, not This Sunday", async () => {
+    TEACHING = [{ date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home" }];
+    const dom = await mountHub();
+    expect(dom.container.textContent).toContain("Next Sunday Lesson");
+    expect(dom.container.textContent).not.toContain("This Sunday");
+  });
+
+  it("drops LESSON on a Sunday the bishopric directs", async () => {
+    const dom = await mountHub(BEFORE_FIFTH);
+    expect(dom.container.textContent).toContain("Next Sunday");
+    expect(dom.container.textContent).not.toContain("Next Sunday Lesson");
+  });
+
+  it("uses the same words as the member feed for the same week", async () => {
+    // The point of sharing the function: whatever the two screens say, they
+    // say it together. Compare them on one week rather than asserting a
+    // literal in two places that can drift apart again.
+    TEACHING = [{ date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home" }];
+    LESSON = TEACHING[0];
+
+    const hub = await mountHub();
+    const hubSays = ["Today", "Next Sunday Lesson", "Next Sunday"]
+      .find((w) => hub.container.textContent.includes(w));
+    cleanup();
+
+    const feed = await mount();
+    const feedSays = ["TODAY", "NEXT SUNDAY LESSON", "NEXT SUNDAY"]
+      .find((w) => feed.container.textContent.includes(w));
+
+    expect(hubSays).toBeTruthy();
+    expect(feedSays).toBe(hubSays.toUpperCase());
+  });
+});
+
+describe("what counts as a talk, on its own", () => {
+  it("takes a pasted link at face value", async () => {
+    const { hasTalk } = await import("../src/lib/domain/lesson");
+    expect(hasTalk({ talk_link: "https://example.org/talk" })).toBe(true);
+    expect(hasTalk({ talk_link: "   " })).toBe(false);
+  });
+
+  it("needs a speaker before it trusts a title", async () => {
+    const { hasTalk } = await import("../src/lib/domain/lesson");
+    expect(hasTalk({ talk_title: "Come Home", speaker: "Clark G. Gilbert" })).toBe(true);
+    expect(hasTalk({ talk_title: "2nd Hour Changes" })).toBe(false);
+    expect(hasTalk({ speaker: "Clark G. Gilbert" })).toBe(false);
+  });
+
+  it("never counts a topic, and never crashes on nothing", async () => {
+    const { hasTalk } = await import("../src/lib/domain/lesson");
+    expect(hasTalk({ topic: "Ministering" })).toBe(false);
+    expect(hasTalk(null)).toBe(false);
+    expect(hasTalk({})).toBe(false);
+  });
+});
+
+describe("what the label is on its own", () => {
+  it("is Today only when the Sunday is today", async () => {
+    const { sundayLabel } = await import("../src/lib/domain/lesson");
+    expect(sundayLabel("2026-09-06", "2026-09-06", true)).toBe("Today");
+    expect(sundayLabel("2026-09-06", "2026-09-02", true)).toBe("Next Sunday Lesson");
+  });
+
+  it("keeps LESSON off a week without one", async () => {
+    const { sundayLabel } = await import("../src/lib/domain/lesson");
+    expect(sundayLabel("2026-11-29", "2026-11-25", false)).toBe("Next Sunday");
+  });
+
+  it("doesn't call a missing Sunday today", async () => {
+    // The presidency card passes undefined when nothing is scheduled at all.
+    const { sundayLabel } = await import("../src/lib/domain/lesson");
+    expect(sundayLabel(undefined, "2026-09-06", false)).toBe("Next Sunday");
+    expect(sundayLabel("", "", true)).toBe("Next Sunday Lesson");
+  });
+});
+
 describe("the banner and the email agree", () => {
   it("ask the same question about whether there's a talk", async () => {
     const { hasTalk } = await import("../src/lib/domain/lesson");
@@ -169,7 +291,8 @@ describe("the banner and the email agree", () => {
 
     const cases = [
       { teacher_name: "Karl Ricks", topic: "Ministering" },
-      { teacher_name: "Karl Ricks", talk_title: "Come Home" },
+      { teacher_name: "Karl Ricks", talk_title: "2nd Hour Changes" },
+      { teacher_name: "Karl Ricks", talk_title: "Come Home", speaker: "Clark G. Gilbert" },
       { teacher_name: "Karl Ricks", talk_link: "https://example.org/talk" },
       { teacher_name: "Karl Ricks" },
     ];
