@@ -166,10 +166,14 @@ export function buildEmailText({
       out.push(`Lesson: "${lesson.talk_title}"${lesson.speaker ? ` by ${lesson.speaker}` : ""}`);
     }
     if (lesson.topic && !lesson.talk_title) out.push(`Topic: ${lesson.topic}`);
-    // The link is the point of the email for most people — put it on its own
-    // line so it stays clickable when a mail client wraps the text.
-    if (lesson.talk_link) out.push(lesson.talk_link);
-    out.push("");
+    // Named, like the sign-up links: a bare conference URL is 90 characters
+    // of noise in the middle of a four-line block, and the formatted copy was
+    // already showing it as "Read the talk" while the plain one showed the
+    // address — so a hand-edited email came out different from a sent one.
+    if (lesson.talk_link) out.push(`Read the talk: ${lesson.talk_link}`);
+    // No blank line before this: the teacher, the lesson, the link and this
+    // are one block about one thing, and a paragraph break between each of
+    // them spread four short lines down half the screen on a phone.
     out.push("Please read the talk before Sunday.");
   } else {
     out.push("Lesson details to follow.");
@@ -253,11 +257,11 @@ export function buildEmailHtml({
         (lesson.speaker ? ` by ${escHtml(lesson.speaker)}` : ""));
     }
     if (lesson.topic && !lesson.talk_title) rows.push(`<strong>Topic:</strong> ${escHtml(lesson.topic)}`);
-    parts.push(`<p style="${P}">${rows.join("<br>")}</p>`);
     if (lesson.talk_link) {
-      parts.push(`<p style="${P}"><a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a></p>`);
+      rows.push(`<a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a>`);
     }
-    parts.push(`<p style="${P}">Please read the talk before Sunday.</p>`);
+    rows.push("Please read the talk before Sunday.");
+    parts.push(`<p style="${P}">${rows.join("<br>")}</p>`);
   } else {
     parts.push(`<p style="${P}">Lesson details to follow.</p>`);
   }
@@ -310,6 +314,17 @@ export function textToHtml(text) {
   const lines = String(text || "").split(/\r?\n/);
   const out = [`<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:560px">`];
   let bullets = [];
+  let para = [];
+
+  // Consecutive lines are one paragraph with breaks in it; a blank line starts
+  // a new one. That's how people write plain text, and it's what keeps the
+  // teacher, the lesson and "please read the talk" together as one block
+  // instead of four paragraphs with a gap between each.
+  const flushPara = () => {
+    if (!para.length) return;
+    out.push(`<p style="${P}">${para.map((l) => linkify(escHtml(l))).join("<br>")}</p>`);
+    para = [];
+  };
 
   const flush = () => {
     if (!bullets.length) return;
@@ -322,8 +337,8 @@ export function textToHtml(text) {
 
   for (const raw of lines) {
     const line = raw.trim();
-    if (!line) { flush(); continue; }
-    if (/^[—-]\s+/.test(line)) { bullets.push(line.replace(/^[—-]\s+/, "")); continue; }
+    if (!line) { flush(); flushPara(); continue; }
+    if (/^[—-]\s+/.test(line)) { flushPara(); bullets.push(line.replace(/^[—-]\s+/, "")); continue; }
     // An indented line under a bullet belongs to it — that's where the sign-up
     // link goes. Treating it as a new paragraph chopped the list in two and
     // put a stray line between every pair of events.
@@ -335,12 +350,14 @@ export function textToHtml(text) {
     // A heading is a short line in capitals, optionally with a date after a dash.
     const head = line.split("—")[0].trim();
     if (head.length > 1 && head === head.toUpperCase() && /[A-Z]/.test(head)) {
+      flushPara();
       out.push(`<div style="${H}">${escHtml(line)}</div>`);
     } else {
-      out.push(`<p style="${P}">${linkify(escHtml(line))}</p>`);
+      para.push(line);
     }
   }
   flush();
+  flushPara();
   out.push(`</div>`);
   return out.join("");
 }
