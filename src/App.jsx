@@ -70,8 +70,23 @@ function Logo() {
 // ?f=<id> — a shareable form link. Renders on its own so someone who has never
 // opened the app (or isn't in the quorum) can still fill it out.
 function sharedFormId() {
+  return param("f");
+}
+
+// ?p=<id> — a link straight to one feed post. Used by the weekly email for an
+// activity that takes an RSVP rather than a sign-up form: there's no form to
+// open, so the link has to land on the post with the "I'm in" button on it.
+//
+// Unlike a form this isn't rendered on its own — the whole feed loads and
+// scrolls to the post, which is what the Home Hub cards already do. Somebody
+// arriving from a text is then one tap from everything else.
+function sharedPostId() {
+  return param("p");
+}
+
+function param(name) {
   try {
-    return new URLSearchParams(window.location.search).get("f") || "";
+    return new URLSearchParams(window.location.search).get(name) || "";
   } catch {
     return "";
   }
@@ -80,12 +95,17 @@ function sharedFormId() {
 export default function App() {
   const { isPresidency, presidency, ready, signOut } = useAuth();
   const [sharedForm] = useState(sharedFormId);
-  const [splashDone, setSplashDone] = useState(() => !!sharedFormId());
+  const [splashDone, setSplashDone] = useState(() => !!sharedFormId() || !!sharedPostId());
   const [tab, setTab] = useState("feed");
   // Where a tab should land when you arrive from a Home Hub card — e.g.
   // { callingId } or { postId }. Cleared once the destination has used it, so
   // returning to that tab later doesn't re-scroll to the same row.
-  const [focus, setFocus] = useState(null);
+  // A ?p= link starts the feed focused on that post, exactly as if a Home Hub
+  // card had been tapped — the scrolling and highlighting already exist.
+  const [focus, setFocus] = useState(() => {
+    const postId = sharedPostId();
+    return postId ? { postId } : null;
+  });
   const go = (next, where) => { setFocus(where || null); setTab(next); window.scrollTo(0, 0); };
   const clearFocus = useCallback(() => setFocus(null), []);
   const [showSignIn, setShowSignIn] = useState(false);
