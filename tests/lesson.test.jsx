@@ -18,11 +18,13 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 let LESSON = null;
 let EXCEPTIONS = [];
 let TEACHING = [];
+let MEMBERS = [];
 
 function query(table) {
   const rows =
     table === "public_calendar_exceptions" ? EXCEPTIONS :
-    table === "teaching_assignments" ? TEACHING : [];
+    table === "teaching_assignments" ? TEACHING :
+    table === "members" ? MEMBERS : [];
   const result = Promise.resolve({ data: rows, error: null });
   const proxy = new Proxy(result, {
     get(t, prop) {
@@ -83,6 +85,7 @@ beforeEach(() => {
   LESSON = null;
   EXCEPTIONS = [];
   TEACHING = [];
+  MEMBERS = [];
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); });
 
@@ -239,6 +242,55 @@ describe("the presidency home card heads the same Sunday", () => {
 
     expect(hubSays).toBeTruthy();
     expect(feedSays).toBe(hubSays.toUpperCase());
+  });
+});
+
+describe("Quorum Stats on the presidency home", () => {
+  it("shows each band's share, not just its count", async () => {
+    // The share was already being worked out to size the bar and then thrown
+    // away. A bar says which band is biggest; it doesn't say whether that's a
+    // third of the quorum or a tenth.
+    MEMBERS = [
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `y${i}`, name: `Young ${i}`, age: 25, band: "18–35", active: true })),
+      ...Array.from({ length: 15 }, (_, i) => ({ id: `m${i}`, name: `Mid ${i}`, age: 40, band: "36–45", active: true })),
+    ];
+    vi.setSystemTime(WEDNESDAY);
+    const { default: HomeHub } = await import("../src/presidency/HomeHub");
+    let dom;
+    await act(async () => {
+      dom = render(<HomeHub />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(dom.container.textContent).toContain("20");
+    expect(dom.container.textContent).toContain("25%");
+    expect(dom.container.textContent).toContain("75%");
+  });
+
+  it("never shows a real person as 0%", async () => {
+    // One man in 300 rounds to zero. "0%" next to a name that exists reads as
+    // a bug, so a band with anybody in it never reports as none.
+    MEMBERS = [
+      { id: "one", name: "Lone Elder", age: 70, band: "65+", active: true },
+      ...Array.from({ length: 300 }, (_, i) => ({ id: `m${i}`, name: `Mid ${i}`, age: 40, band: "36–45", active: true })),
+    ];
+    vi.setSystemTime(WEDNESDAY);
+    const { default: HomeHub } = await import("../src/presidency/HomeHub");
+    let dom;
+    await act(async () => {
+      dom = render(<HomeHub />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(dom.container.textContent).toContain("<1%");
+    // Checked element by element, not on the page text: the other band rounds
+    // to 100%, and "100%" contains "0%", so a substring check here passes
+    // whatever the code does.
+    const figures = [...dom.container.querySelectorAll("span")]
+      .map((el) => el.textContent.trim())
+      .filter((t) => /^(<1|\d+)%$/.test(t));
+    expect(figures.length).toBeGreaterThan(1);
+    expect(figures, "a band with somebody in it read as 0%").not.toContain("0%");
   });
 });
 

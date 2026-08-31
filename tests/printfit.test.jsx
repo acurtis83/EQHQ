@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import AgendaPrint from "../src/components/AgendaPrint";
 import { AGENDA_CATEGORIES } from "../src/lib/domain/agendaCategories";
 import {
-  PRINTABLE_H, TIER, BODY_PT, PT, RULE_TOTAL, choosePrintPlan, writeLinesFor,
+  PRINTABLE_H, TIER, BODY_PT, FLOOR_PT, ITEM_RULES, PT, RULE_TOTAL,
+  choosePrintPlan, writeLinesFor,
 } from "../src/lib/domain/printPlan";
 
 /**
@@ -64,15 +65,47 @@ describe("the printed page", () => {
     expect(bodyPx() / PT).toBeCloseTo(12, 2);
   });
 
-  it("is twelve point on a short agenda and a long one alike", async () => {
-    // The whole point of fixing the size: the sheet looks the same every week.
+  it("steps down for a long agenda, but only to the floor", async () => {
+    // The size is no longer fixed — a busy week shrinks rather than spilling
+    // onto a second sheet. What is fixed is the range: twelve point at the top
+    // and ten at the bottom, which is a difference you have to look for, so
+    // the sheet still reads as the same document week to week.
     await act(async () => { render(sheet({ bySection: { items: ITEMS.slice(0, 2) } })); });
     const short = bodyPx();
+    expect(short / PT).toBeCloseTo(12, 2);
     cleanup();
 
     const many = Array.from({ length: 40 }, (_, i) => ({ ...ITEMS[i % 11], id: i }));
     await act(async () => { render(sheet({ bySection: { items: many } })); });
-    expect(bodyPx()).toBe(short);
+    const long = bodyPx();
+
+    expect(long, "a long agenda should shrink").toBeLessThan(short);
+    expect(long / PT, "and never below the floor").toBeCloseTo(FLOOR_PT, 2);
+  });
+
+  it("gives every item ruled space to write beside it", async () => {
+    // The right half of the sheet used to be blank margin. This is the change
+    // Drew asked for, so it's asserted rather than looked at.
+    await act(async () => { render(sheet()); });
+    const rows = document.querySelectorAll("[data-eq-item]");
+    expect(rows.length).toBe(ITEMS.length);
+
+    for (const row of rows) {
+      expect(row.children.length, "a name cell and a note cell").toBe(2);
+      const rules = row.children[1].children;
+      expect(rules.length, "two writing rules").toBe(ITEM_RULES);
+      // Real borders. A background gradient looks the same on screen and
+      // prints as nothing at all unless the person ticks "Background graphics".
+      for (const r of rules) {
+        expect(r.style.borderBottom).toMatch(/1px solid/);
+        expect(r.style.background || "").toBe("");
+      }
+    }
+  });
+
+  it("heads the note column so the space reads as deliberate", async () => {
+    await act(async () => { render(sheet()); });
+    expect(document.body.textContent).toContain("Notes");
   });
 
   it("never pins the column to a fixed page height", async () => {
