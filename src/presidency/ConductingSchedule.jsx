@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import { T, card, Btn, Select, SectionTitle } from "../components/ui";
 import { toIso } from "../lib/domain/dates";
 import {
-  HORIZON, monthsFrom, rotate, scheduleFromRows, unassignedCount,
+  HORIZON, conductingNames, monthsFrom, rotate, scheduleFromRows, unassignedCount,
 } from "../lib/domain/conducting";
 
 /**
@@ -31,12 +31,14 @@ export default function ConductingSchedule() {
   const load = useCallback(async () => {
     const [sched, pres] = await Promise.all([
       supabase.from("conducting_schedule").select("month,name"),
-      supabase.from("presidency_members").select("name,role").order("role"),
+      supabase.from("presidency_members").select("name,role"),
     ]);
     // A database that hasn't run the migration behaves like an empty schedule
     // rather than an error nobody can act on from this screen.
     if (!sched.error) setSchedule(scheduleFromRows(sched.data || []));
-    if (!pres.error) setPresidency((pres.data || []).map((p) => p.name).filter(Boolean));
+    // The rotation, not the whole presidency — the secretary doesn't conduct.
+    // Ordered President, First, Second by conductingNames rather than by SQL.
+    if (!pres.error) setPresidency(conductingNames(pres.data || []));
     setLoading(false);
   }, []);
 
@@ -119,8 +121,9 @@ export default function ConductingSchedule() {
 
       {!presidency.length ? (
         <div style={{ fontSize: 14.5, color: T.sub, lineHeight: 1.6 }}>
-          Nobody is listed in the presidency yet, so there's nobody to assign.
-          Add presidency members and this fills itself in.
+          Nobody in the presidency has a role that conducts. Conducting rotates
+          between the President and his two counselors — the secretary doesn't
+          conduct — so check the roles in <code>presidency_members</code>.
         </div>
       ) : (
         <>
@@ -170,7 +173,9 @@ export default function ConductingSchedule() {
                       has to appear, or opening this screen silently reassigns
                       their month to "nobody yet". */}
                   {schedule[m.key] && !presidency.includes(schedule[m.key]) && (
-                    <option value={schedule[m.key]}>{schedule[m.key]}</option>
+                    <option value={schedule[m.key]}>
+                      {schedule[m.key]} — no longer in the rotation
+                    </option>
                   )}
                 </Select>
               </div>
@@ -183,8 +188,9 @@ export default function ConductingSchedule() {
           }}>
             <CalendarClock size={14} style={{ flex: "0 0 auto", marginTop: 2 }} />
             <span>
-              Any Sunday can be changed on its own agenda without touching this —
-              a one-off swap doesn't rewrite the month.
+              Rotates between the President and his two counselors. Any Sunday
+              can be changed on its own agenda without touching this — a
+              one-off swap doesn't rewrite the month.
             </span>
           </div>
         </>

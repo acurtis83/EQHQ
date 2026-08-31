@@ -126,6 +126,52 @@ export function conductingFor(agenda, schedule) {
   return name ? { name, from: "schedule" } : { name: "", from: "none" };
 }
 
+/**
+ * Who is in the conducting rotation.
+ *
+ * The presidency and the rotation aren't the same list. Conducting goes round
+ * the President and his two counselors; the secretary sits in the meeting,
+ * keeps the minutes and doesn't conduct. Offering him was wrong, and offering
+ * him *by name* would be wronger — the next secretary would inherit it.
+ *
+ * Matched on role rather than on a list of names, so this stays correct
+ * through a reorganisation without anybody remembering to come back here.
+ *
+ * The exclusions are checked first and the schema's bare default `Counselor`
+ * counts, since somebody added with the default role really is a counselor.
+ */
+const NOT_CONDUCTING = /secretary|clerk|assistant|instructor/;
+const CONDUCTING = /president|counsel+or/;
+
+export function conducts(role) {
+  const r = String(role || "").toLowerCase();
+  if (!r || NOT_CONDUCTING.test(r)) return false;
+  return CONDUCTING.test(r);
+}
+
+/**
+ * The rotation, in the order it runs: President, then his counselors.
+ *
+ * Ordered here rather than in SQL because "First" sorts after "President"
+ * alphabetically and before "Second" — right by luck, and luck that breaks
+ * the day somebody types "1st Counselor".
+ */
+const ROLE_ORDER = [/president/, /first|1st/, /second|2nd/];
+
+export function conductingNames(rows = []) {
+  const rank = (role) => {
+    const r = String(role || "").toLowerCase();
+    const i = ROLE_ORDER.findIndex((re) => re.test(r));
+    return i < 0 ? ROLE_ORDER.length : i;
+  };
+  return (rows || [])
+    .filter((p) => conducts(p?.role))
+    .map((p) => ({ name: String(p.name || "").trim(), rank: rank(p.role) }))
+    .filter((p) => p.name)
+    .sort((a, b) => a.rank - b.rank)
+    .map((p) => p.name);
+}
+
 /** Rows keyed by month, as the table stores them, into a plain lookup. */
 export function scheduleFromRows(rows = []) {
   const out = {};
