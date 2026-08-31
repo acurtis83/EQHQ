@@ -564,6 +564,23 @@ alter table agendas add column if not exists category_order jsonb not null defau
 alter table agendas add column if not exists opening_prayer text;
 alter table agendas add column if not exists closing_prayer text;
 alter table agendas add column if not exists conducting text;
+
+-- ---------- Who conducts, month by month ----------
+-- Conducting rotates monthly, so the Sunday agenda was asking the same
+-- question every week. Keyed by "YYYY-MM" text rather than a date: the unit
+-- really is the month, and a date column invites the question of which day.
+create table if not exists conducting_schedule (
+  month text primary key check (month ~ '^[0-9]{4}-[0-9]{2}$'),
+  name text,
+  updated_at timestamptz not null default now()
+);
+alter table conducting_schedule enable row level security;
+-- Presidency only. Members never see who conducts; it appears on the Sunday
+-- agenda and the printed sheet, both of which are behind a sign-in.
+drop policy if exists "Presidency manages conducting" on conducting_schedule;
+create policy "Presidency manages conducting" on conducting_schedule
+  for all using (is_presidency()) with check (is_presidency());
+
 -- The weekly email, once it's been generated and possibly hand-edited. Saved
 -- so reopening Monday's agenda doesn't throw away Karl's wording.
 alter table agendas add column if not exists email_body text;
