@@ -8,6 +8,7 @@ import Feed from "./member/Feed";
 import FormFill from "./member/FormFill";
 import Roster from "./presidency/Roster";
 import QuorumSettings from "./presidency/QuorumSettings";
+import ConductingSchedule from "./presidency/ConductingSchedule";
 import Callings from "./presidency/Callings";
 import Plan from "./presidency/Plan";
 import Meetings from "./presidency/Meetings";
@@ -41,6 +42,7 @@ const PRESIDENCY_TABS = [
 // earn — it's consulted, not worked in.
 const SETTINGS_SECTIONS = [
   { key: "quorum", label: "Quorum" },
+  { key: "conducting", label: "Conducting" },
   { key: "roster", label: "Roster" },
   { key: "talks", label: "Conference Talks" },
   { key: "import", label: "Import" },
@@ -52,6 +54,7 @@ function SettingsTab() {
     <div>
       <Segmented value={section} onChange={setSection} options={SETTINGS_SECTIONS} idAttr="data-settings" />
       {section === "quorum" && <QuorumSettings />}
+      {section === "conducting" && <ConductingSchedule />}
       {section === "roster" && <Roster />}
       {section === "talks" && <TalkLibrary />}
       {section === "import" && <ImportLegacy />}

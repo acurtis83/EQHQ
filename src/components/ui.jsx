@@ -67,7 +67,7 @@ export function Input({ value, onChange, placeholder, type = "text", style, ...r
   );
 }
 
-export function Area({ value, onChange, placeholder, rows = 3, style }) {
+export function Area({ value, onChange, placeholder, rows = 3, style, ...rest }) {
   return (
     <textarea
       value={value}
@@ -79,11 +79,16 @@ export function Area({ value, onChange, placeholder, rows = 3, style }) {
         padding: "9px 11px", fontSize: 16, color: T.ink, width: "100%",
         minWidth: 0, fontFamily: "inherit", resize: "vertical", ...style,
       }}
+      {...rest}
     />
   );
 }
 
-export function Select({ value, onChange, children, style }) {
+// `...rest` so aria-label, id, disabled and the like reach the element. Without
+// it they were silently dropped, and every dropdown in the app that isn't next
+// to a <label> — the age filter, the category picker, a month of conducting —
+// was an unnamed control to a screen reader. Btn had the same hole.
+export function Select({ value, onChange, children, style, ...rest }) {
   return (
     <select
       value={value}
@@ -93,6 +98,7 @@ export function Select({ value, onChange, children, style }) {
         padding: "9px 11px", fontSize: 16, color: T.ink, width: "100%",
         minWidth: 0, fontFamily: "inherit", ...style,
       }}
+      {...rest}
     >
       {children}
     </select>

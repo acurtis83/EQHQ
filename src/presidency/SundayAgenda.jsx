@@ -9,6 +9,7 @@ import Sheet from "../components/Sheet";
 import EmailSheet from "../components/EmailSheet";
 import SecretaryEmail from "./SecretaryEmail";
 import { upcomingForSunday } from "../lib/domain/upcoming";
+import { conductingFor, monthLabel, monthKey, scheduleFromRows } from "../lib/domain/conducting";
 import PersonPick from "../components/PersonPick";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle } from "../components/ui";
@@ -41,6 +42,10 @@ export default function SundayAgenda({ onGo }) {
   const [events, setEvents] = useState([]);
   const [sustainings, setSustainings] = useState([]);
   const [members, setMembers] = useState([]);
+  // Who conducts each month, set once a year under Settings. The agenda reads
+  // it rather than storing it, so changing the schedule updates every Sunday
+  // nobody has overridden by hand.
+  const [conducting, setConducting] = useState({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [adding, setAdding] = useState(false);
@@ -55,10 +60,14 @@ export default function SundayAgenda({ onGo }) {
   const loadShell = useCallback(async () => {
     const today = toIso(new Date());
     const horizon = toIso(new Date(Date.now() + 120 * 86400000));
-    const [ex, m] = await Promise.all([
+    const [ex, m, cond] = await Promise.all([
       supabase.from("calendar_exceptions").select("date"),
       supabase.from("members").select("id,name,active").order("name"),
+      // A database that hasn't run the migration behaves like an empty
+      // schedule — the Conducting box works exactly as it did before.
+      supabase.from("conducting_schedule").select("month,name"),
     ]);
+    if (!cond.error) setConducting(scheduleFromRows(cond.data || []));
     const stake = new Set((ex.data || []).map((e) => e.date));
     const sched = scheduleBetween(today, horizon, stake).slice(0, 10);
     setSundays(sched);
@@ -233,7 +242,8 @@ export default function SundayAgenda({ onGo }) {
   const copyPlain = async () => {
     const lines = [
       `Sunday Quorum Meeting — ${fmtDate(date)}`,
-      agenda?.conducting ? `Conducting: ${agenda.conducting}` : "",
+      conductingFor(agenda, conducting).name
+        ? `Conducting: ${conductingFor(agenda, conducting).name}` : "",
       agenda?.opening_prayer ? `Opening prayer: ${agenda.opening_prayer}` : "",
       reason
         ? `No lesson — ${reason}`
@@ -300,8 +310,18 @@ export default function SundayAgenda({ onGo }) {
             <Section>
               <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                 <AgendaRow label="Conducting">
-                  <PersonPick members={members} value={agenda.conducting || ""}
-                    onChange={(v) => patchAgenda({ conducting: v || null })} />
+                  {/* The month's conductor shows through when this Sunday has
+                      no value of its own. Picking somebody writes an override
+                      for this week only; clearing it falls back to the
+                      schedule, so "reset to the usual" is emptying the box. */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+                    <PersonPick
+                      members={members}
+                      value={conductingFor(agenda, conducting).name}
+                      onChange={(v) => patchAgenda({ conducting: v || null })}
+                    />
+                    <ConductingNote agenda={agenda} schedule={conducting} />
+                  </div>
                 </AgendaRow>
                 <AgendaRow label="Opening Prayer">
                   <PersonPick members={members} value={agenda.opening_prayer || ""}
@@ -481,6 +501,10 @@ export default function SundayAgenda({ onGo }) {
         <PrintDoc
           date={date} agenda={agenda} lesson={lesson} reason={reason}
           announcements={announcements} events={events} sustainings={sustainings}
+          // Resolved here rather than in the print component. The sheet stays a
+          // pure function of what it's given, which is what lets it be
+          // rendered on its own to look at.
+          conducting={conductingFor(agenda, conducting).name}
         />
       )}
 
@@ -688,9 +712,31 @@ function PullSheet({ agendaId, startOrder, onClose, onPulled, setErr }) {
   );
 }
 
+/**
+ * Where the name in the Conducting box came from.
+ *
+ * A filled-in field with no explanation is ambiguous — somebody looking at it
+ * can't tell a decision from a default, and the difference matters when the
+ * question is "has anyone actually thought about who's conducting". So a name
+ * arriving from the monthly schedule says so, and one typed for this Sunday
+ * says that instead.
+ */
+function ConductingNote({ agenda, schedule }) {
+  const { name, from } = conductingFor(agenda, schedule);
+  if (!name) return null;
+  const month = monthLabel(monthKey(agenda?.meeting_date));
+  return (
+    <span style={{ fontSize: 12.5, color: T.faint }}>
+      {from === "schedule"
+        ? `From the ${month} schedule`
+        : "Just this Sunday — clear it to use the schedule"}
+    </span>
+  );
+}
+
 /* --------------------------------- print --------------------------------- */
 
-function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustainings = [] }) {
+function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustainings = [], conducting = "" }) {
   const sheet = (
     <div className="eq-print-root">
       {/* Same mechanism as the presidency agenda, and for the same reason:
@@ -722,7 +768,7 @@ function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustain
       <h1 style={{ fontSize: 24, margin: "2px 0" }}>Sunday Quorum Meeting</h1>
       <div style={{ fontSize: 13, color: "#444", marginBottom: 14 }}>
         {fmtDate(date)}
-        {agenda.conducting ? ` · Conducting: ${agenda.conducting}` : ""}
+        {conducting ? ` · Conducting: ${conducting}` : ""}
       </div>
 
       <PrintRow label="Opening Prayer" value={agenda.opening_prayer || "—"} />
