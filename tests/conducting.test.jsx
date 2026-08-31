@@ -77,10 +77,14 @@ vi.mock("../src/lib/useAuth", () => ({
 const NOW = new Date(2026, 8, 6, 9, 0, 0);
 
 const PRES = [
+  // Deliberately out of order, and with the secretary in it. Conducting goes
+  // round the President and his two counselors only.
+  { name: "Karl Moore", role: "Secretary" },
+  { name: "Cameron Pearson", role: "First Counselor" },
   { name: "Drew Curtis", role: "President" },
-  { name: "Cameron Pearson", role: "Counselor" },
-  { name: "Karl Ricks", role: "Counselor" },
+  { name: "Ryan Talbot", role: "Second Counselor" },
 ];
+const ROTATION = ["Drew Curtis", "Cameron Pearson", "Ryan Talbot"];
 
 async function mountSchedule() {
   vi.setSystemTime(NOW);
@@ -121,10 +125,10 @@ describe("the schedule screen", () => {
   it("saves one month without touching the others", async () => {
     await mountSchedule();
     const sep = screen.getByLabelText("Conducting in September 2026");
-    await act(async () => { fireEvent.change(sep, { target: { value: "Karl Ricks" } }); });
+    await act(async () => { fireEvent.change(sep, { target: { value: "Ryan Talbot" } }); });
 
     expect(upserts()).toHaveLength(1);
-    expect(upserts()[0].arg).toMatchObject({ month: "2026-09", name: "Karl Ricks" });
+    expect(upserts()[0].arg).toMatchObject({ month: "2026-09", name: "Ryan Talbot" });
   });
 
   it("clearing a month removes the row rather than storing a blank", async () => {
@@ -149,9 +153,38 @@ describe("the schedule screen", () => {
     expect(rows[0]).toMatchObject({ month: "2026-09", name: "Drew Curtis" });
     expect(rows[1].name).toBe("Cameron Pearson");
     // Four months each, nobody twice running.
-    for (const p of PRES) {
-      expect(rows.filter((r) => r.name === p.name)).toHaveLength(4);
+    for (const name of ROTATION) {
+      expect(rows.filter((r) => r.name === name)).toHaveLength(4);
     }
+    expect(rows.some((r) => r.name === "Karl Moore"),
+      "the secretary was dealt a month").toBe(false);
+  });
+
+  it("offers the rotation only, in the order it runs", async () => {
+    await mountSchedule();
+    const opts = [...screen.getByLabelText("Conducting in September 2026").options]
+      .map((o) => o.textContent);
+
+    expect(opts[0]).toBe("— nobody yet —");
+    expect(opts.slice(1)).toEqual(ROTATION);
+    expect(opts, "the secretary is in the list").not.toContain("Karl Moore");
+  });
+
+  it("says who the rotation is between", async () => {
+    const dom = await mountSchedule();
+    expect(dom.container.textContent).toContain("President and his two counselors");
+  });
+
+  it("flags a month still assigned to somebody who no longer conducts", async () => {
+    // Rotating before the secretary was excluded left him holding months. He
+    // has to stay visible — silently blanking his month would be worse — but
+    // the row should say why he's there.
+    SCHEDULE = [{ month: "2026-09", name: "Karl Moore" }];
+    await mountSchedule();
+    const sep = screen.getByLabelText("Conducting in September 2026");
+    expect(sep.value).toBe("Karl Moore");
+    expect(sep.textContent).toContain("no longer in the rotation");
+    expect(WRITES, "opening the screen rewrote a month").toHaveLength(0);
   });
 
   it("keeps showing somebody who has left the presidency", async () => {
@@ -164,10 +197,17 @@ describe("the schedule screen", () => {
     expect(WRITES).toHaveLength(0);
   });
 
-  it("says so when there is no presidency to assign", async () => {
+  it("says so when nobody in the presidency conducts", async () => {
+    PRESIDENCY = [{ name: "Karl Moore", role: "Secretary" }];
+    const dom = await mountSchedule();
+    expect(dom.container.textContent).toContain("Nobody in the presidency has a role that conducts");
+    expect(screen.queryByText("Rotate presidency")).toBeNull();
+  });
+
+  it("says so when the presidency is empty", async () => {
     PRESIDENCY = [];
     const dom = await mountSchedule();
-    expect(dom.container.textContent).toContain("Nobody is listed in the presidency yet");
+    expect(dom.container.textContent).toContain("Nobody in the presidency has a role that conducts");
     expect(screen.queryByText("Rotate presidency")).toBeNull();
   });
 });
