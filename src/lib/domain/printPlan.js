@@ -29,17 +29,18 @@ export const PRINTABLE_H = PAGE_H - MARGIN_Y * 2;   // 960px
 export const PRINTABLE_W = PAGE_W - MARGIN_X * 2;   // 701px (700.8)
 
 /**
- * The agenda prints at 12 point. Not "about 12" — 12.
+ * Twelve point when it can be, ten point at worst, and never smaller.
  *
- * It used to pick its own size, stepping down through eight densities until
- * the page fitted. That made every week a different shape: one meeting came
- * out at 13.5pt, the next at 9.6pt because somebody added four items, and the
- * presidency couldn't tell at a glance whether they were holding this week's
- * sheet or last week's.
+ * This has been round the houses. It first picked from eight densities and
+ * came out at 13.5pt one week and 9.6pt the next, so nobody could tell this
+ * week's sheet from last week's. It was then pinned to a flat 12pt, which is
+ * legible and predictable and simply refuses to hold a busy week.
  *
- * A fixed size is worth more than a guaranteed single page. When an agenda
- * genuinely won't fit, the screen says so before anyone prints — see
- * choosePrintPlan — rather than shrinking the type until it does.
+ * The ladder below is the middle: five steps over two points. Twelve to ten is
+ * a difference you have to look for, so the page keeps its shape week to week,
+ * and two points is worth roughly six extra items — which covers the weeks
+ * that were overflowing. Below ten it stops shrinking and prints two pages;
+ * type small enough to squint at is not a page anybody reads either.
  *
  * CSS lengths here are pixels, and print is 96 pixels to the inch against 72
  * points, so a point is 4/3 of a pixel. Setting `body: 12` directly would have
@@ -47,30 +48,113 @@ export const PRINTABLE_W = PAGE_W - MARGIN_X * 2;   // 701px (700.8)
  */
 export const PT = 96 / 72;
 export const BODY_PT = 12;
+export const FLOOR_PT = 10;
 export const pt = (n) => Math.round(n * PT * 100) / 100;
 
-export const TIER = {
-  name: "12pt",
-  body: pt(BODY_PT),        // 16px
-  note: pt(9.5),            // the category-and-date line under each item
-  rowGap: 9,
-  sectionGap: 18,
-  headGap: 9,
-};
+// The note line scales with the body but not proportionally — at 10pt a
+// proportional 7.9pt category line stops being readable, so it closes on the
+// body as the body shrinks.
+function tierAt(bodyPt) {
+  return {
+    name: `${bodyPt}pt`,
+    bodyPt,
+    body: pt(bodyPt),
+    note: pt(Math.max(8.5, bodyPt - 2.5)),
+    rowGap: bodyPt >= 11.5 ? 9 : 7,
+    sectionGap: bodyPt >= 11.5 ? 18 : 14,
+    headGap: 9,
+  };
+}
 
-// Kept as a list because the fitter and its tests are written against one, and
-// because a second entry would be the honest way to add, say, a large-print
-// copy later. There is deliberately nothing to fall back to today.
-export const TIERS = [TIER];
+export const TIERS = [12, 11.5, 11, 10.5, 10].map(tierAt);
 
-// Roughly how many characters fit on a line at a given point size. The page is
-// a single column now, so an item's name has the full width less the indent —
-// its category and date are on their own line beneath rather than beside.
-const GUTTER = 14;
-function linesFor(text, size, width = PRINTABLE_W - GUTTER) {
+/** The one everything starts at, and the one a short agenda keeps. */
+export const TIER = TIERS[0];
+
+/**
+ * The item row: what it says on the left, room to write on the right.
+ *
+ * The whole right half of the sheet used to be blank — items ran down a narrow
+ * strip and the presidency wrote on the back or on their phones. Now the row
+ * is two cells: the name and its category on the left, ruled lines on the
+ * right, so the notes land next to the thing they're about.
+ *
+ * The split is a fraction rather than a fixed width so it holds at every tier.
+ * 54% leaves the longest realistic item name on two lines at 10pt while giving
+ * the notes a usable 3.2 inches.
+ */
+export const NAME_FRAC = 0.54;
+export const COL_GAP = 14;
+export const ITEM_RULES = 2;
+
+export const nameW = () => Math.floor(PRINTABLE_W * NAME_FRAC);
+export const noteW = () => PRINTABLE_W - nameW() - COL_GAP;
+
+/**
+ * How tall one writing rule is inside an item row.
+ *
+ * Sized so that two of them come out level with the two lines of text beside
+ * them — a name and its category — because a row where the rules finish above
+ * or below the text reads as a mistake. The +1 is the border, the same way
+ * RULE_TOTAL works for the block at the bottom.
+ */
+export const itemRuleH = (tier) => Math.round(tier.body * 1.15);
+export const itemRulesH = (tier) => ITEM_RULES * (itemRuleH(tier) + 1);
+
+/**
+ * How many lines a name takes in the column beside its notes.
+ *
+ * Items wrap inside the name column now rather than across the page, which is
+ * the single biggest change to the estimate — the same text takes about twice
+ * the lines, and getting the width per character wrong is immediately a whole
+ * line out.
+ *
+ * CHAR_W is measured, not guessed. It was 0.52 by eye, which is 17% too wide
+ * for the serif this prints in: Georgia at 600 weight averages 0.446 of its
+ * font size per character over a sample of real agenda items, and holds that
+ * ratio at every tier. The wrong figure cost a phantom line on any item long
+ * enough to wrap, which the browser check caught as a 21px over-estimate.
+ *
+ * There is deliberately no extra allowance for ragged line breaks on top of
+ * that. One was tried — five per cent, to cover text breaking at the last word
+ * that fits rather than filling the line — and setting it back to zero changed
+ * no case in the browser check, which makes it padding that isn't earning its
+ * place. Rounding up to whole lines already absorbs the raggedness. The one
+ * cushion on this estimate is the explicit +6 at the end of estimateHeight,
+ * where it can be seen.
+ */
+const CHAR_W = 0.446;
+
+function linesFor(text, size, width = nameW()) {
   if (!text) return 0;
-  const perLine = Math.max(20, Math.floor(width / (size * 0.52)));
+  const perLine = Math.max(12, Math.floor(width / (size * CHAR_W)));
   return Math.max(1, Math.ceil(String(text).length / perLine));
+}
+
+/**
+ * How tall one item row is: whichever side is taller.
+ *
+ * A flex row is as tall as its tallest cell, so an item whose name wraps to
+ * three lines pushes the row past the rules, and a one-line item still gets
+ * the full two rules' worth of writing space. Charging only for the text was
+ * what left the old estimate short.
+ */
+export function itemRowH(tier, it, grouped) {
+  const LINE = 1.3;
+  const textH = linesFor(it.text, tier.body) * tier.body * LINE +
+    (hasMeta(it, grouped) ? 1 + tier.note * LINE : 0);
+  return Math.max(textH, itemRulesH(tier));
+}
+
+/**
+ * Whether the line under the name has anything on it.
+ *
+ * Grouped, the heading above has already said the category, so an item with no
+ * date has nothing to put there and the line is dropped rather than left
+ * hanging.
+ */
+export function hasMeta(it, grouped) {
+  return grouped ? !!it.due_date : !!(it.due_date || it.category || it.catLabel);
 }
 
 /**
@@ -95,7 +179,6 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
   // The details row — date, time, location, prayers.
   h += 8 + line(8) + 1 + line(10) + 9 + 1;
 
-  const textW = PRINTABLE_W - GUTTER;
   const items = sections.flatMap((s) => s.items || []);
 
   // The "Agenda Items" band.
@@ -111,12 +194,7 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
   }
 
   for (const it of items) {
-    h += tier.rowGap + linesFor(it.text, tier.body, textW) * tier.body * 1.3;
-    // Category and date, on their own line under the name. Grouped, the
-    // heading has already said the category, so an item with no date has
-    // nothing to put there and costs nothing.
-    const hasMeta = grouped ? !!it.due_date : !!(it.due_date || it.category || it.catLabel);
-    if (hasMeta) h += 1 + tier.note * 1.3;
+    h += tier.rowGap + itemRowH(tier, it, grouped);
   }
 
   // Upcoming: a tinted panel, two columns.
@@ -162,9 +240,12 @@ export const RULE_H = 22;
 export const RULE_TOTAL = RULE_H + 1;
 // Below this the block is more heading than paper, so nothing is drawn.
 export const WRITE_MIN_LINES = 2;
-export const WRITE_MAX_LINES = 16;
+// Capped lower than it was. Every item now carries its own note space, so this
+// block is for what comes out of the meeting rather than the only place to
+// write — sixteen rules under a four-item agenda was a page of empty paper.
+export const WRITE_MAX_LINES = 10;
 
-/** The "Decisions & Assignments" band: its top margin, line box, rule. */
+/** The "Follow-Up & Next Steps" band: its top margin, line box, rule. */
 export function writeHeadingHeight(tier) {
   return tier.sectionGap + 4 + tier.note * 1.35 + 4 + 2;
 }
@@ -195,23 +276,54 @@ export function writeLinesFor(tier, contentHeight) {
 }
 
 /**
- * The page, at twelve point.
+ * Pick the largest type the page will hold.
  *
- * There is no longer anything to choose: one size, one arrangement. What's
- * left is to say whether the content fits on a single sheet, and how much of
- * the leftover is worth ruling for notes.
+ * Walks down the ladder and takes the first tier that fits. If none do — an
+ * agenda long enough to beat 10pt — it returns the floor with `fits: false`,
+ * and the screen says so before anybody prints. Shrinking further would buy a
+ * single page at the cost of a page nobody can read; two honest pages is the
+ * better trade at that point.
  *
  * `fits` is about the content alone. The writing block is sized from whatever
  * is left over, so it can never be the thing that pushes the page over.
  */
 export function choosePrintPlan({ sections = [], events = [], grouped = false } = {}) {
-  const height = estimateHeight(TIER, { sections, events, grouped });
+  const heights = TIERS.map((tier) => ({
+    tier,
+    height: estimateHeight(tier, { sections, events, grouped }),
+  }));
+
+  // The largest type that holds the content *and* the Follow-Up block.
+  //
+  // The block is reserved, not left over. A busy meeting is exactly the one
+  // that produces assignments, and busy weeks were the ones losing it.
+  //
+  // Reserving it is also what keeps the size honest. Two earlier versions
+  // treated the block as optional and both produced type that got *bigger*
+  // when you added an item — at fourteen items the search shrank to hold the
+  // block, at fifteen no tier could hold it so the search gave up and jumped
+  // back to the top. A page whose type grows as the agenda grows is one nobody
+  // trusts. With one criterion instead of two there's nothing to cross over:
+  // the size only ever falls.
+  //
+  // Past the floor the block is dropped rather than the page split, because at
+  // that point the sheet is already as small as it prints and losing four
+  // ruled lines costs less than losing a whole side of paper.
+  const room = ({ tier, height }) =>
+    height + writeBlockHeight(tier, WRITE_MIN_LINES) <= PRINTABLE_H;
+
+  const chosen = heights.find(room) || heights[heights.length - 1];
+
+  const { tier, height } = chosen;
   return {
-    ...TIER,
+    ...tier,
     grouped,
     height,
     fits: height <= PRINTABLE_H,
-    writeLines: writeLinesFor(TIER, height),
+    // How far down the ladder we had to go, so the screen can mention it
+    // rather than silently handing back a smaller sheet.
+    shrunk: tier.bodyPt < BODY_PT,
+    writeLines: writeLinesFor(tier, height),
   };
 }
 

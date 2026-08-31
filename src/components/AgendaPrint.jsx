@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent,
-  RULE_H, TIER, writeLinesFor,
+  COL_GAP, ITEM_RULES, NAME_FRAC, RULE_H, itemRuleH, writeLinesFor,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
@@ -33,7 +33,7 @@ function Detail({ label, value }) {
  * There are only three of these on the page: the business, what's coming up,
  * and the space to write. Everything else is subordinate to one of them.
  */
-function Band({ children, size, right }) {
+function Band({ children, size, right, count }) {
   return (
     <div style={{
       display: "flex", alignItems: "baseline", gap: 8,
@@ -42,6 +42,13 @@ function Band({ children, size, right }) {
       borderBottom: "2px solid #111", paddingBottom: 4,
     }}>
       <span>{children}</span>
+      {count != null && (
+        <span style={{
+          fontSize: size - 1, fontWeight: 700, letterSpacing: "0.08em", color: "#a3a3a3",
+        }}>
+          {count}
+        </span>
+      )}
       {right != null && (
         <span style={{
           marginLeft: "auto", fontSize: size - 1, fontWeight: 700,
@@ -64,8 +71,11 @@ function Band({ children, size, right }) {
  * the sheet is in the DOM this measures what actually got laid out and rules
  * the leftover properly.
  *
- * It used to walk a whole ladder of type sizes here. There's one size now, so
- * there's nothing to walk: the type is 12pt whatever the agenda looks like.
+ * It does not re-pick the type size. Choosing the tier is the estimate's job
+ * and it walks the ladder before anything renders; measuring afterwards only
+ * settles how much of the leftover is worth ruling. Re-choosing here would
+ * mean a component that changes its own font size in a layout effect, which
+ * re-runs the measurement, which can change it back.
  *
  * Where there's no layout engine — jsdom in the tests, or server rendering for
  * the standalone sample — every measurement is 0 and the estimate stands.
@@ -94,7 +104,10 @@ function useMeasuredWriteLines(estimate) {
     // The footer's own top margin counts against the page too; leaving it out
     // was worth 12px, which was the difference between one page and two.
     const footerH = (footerRef.current?.getBoundingClientRect().height || 17) + FOOTER_GAP;
-    const want = writeLinesFor(TIER, contentH + footerH);
+    // The chosen tier, not a fixed one. `estimate` carries the tier's own
+    // fields, and measuring a 10pt sheet against 12pt spacing counted the
+    // heading too tall and lost a line off the bottom of every long agenda.
+    const want = writeLinesFor(estimate, contentH + footerH);
     if (want !== lines) setLines(want);
   });
 
@@ -134,38 +147,60 @@ function Head({ children, right, accent = "#111", size }) {
 }
 
 /**
- * One item, as it prints.
+ * One item, as it prints: what it is on the left, room to write on the right.
  *
- * The name, then the category and date on a line beneath it. A single column:
- * the meta used to sit right-aligned in its own column, which put a ragged
- * gutter down the middle of the sheet and left the names in a narrow strip.
+ * The right half of the sheet used to be blank. Items ran down a narrow strip
+ * and whatever got decided about them was written on the back, or not written
+ * down at all. Two cells now — the name and its category, then ruled lines
+ * beside them — so a note lands next to the item it belongs to.
+ *
+ * The row is as tall as its taller cell, which is why the rules are sized to
+ * come out level with two lines of text: an item whose name wraps to three
+ * lines simply makes the row taller and the writing space with it.
  *
  * Grouped, the heading above already names the category, so only the date
  * appears — and with nothing else on it that line is dropped rather than left
  * hanging under the name.
  *
- * Notes, owners, links and attachments are deliberately not here. Carrying
- * them meant three or four lines an item and a page that had to drop to 9pt to
- * hold a normal week. This is the sheet on the table during the meeting; the
- * detail is on the phone next to it.
+ * Owners, links and attachments are still deliberately not here. This is the
+ * sheet on the table during the meeting; the detail is on the phone next to
+ * it, and carrying it would cost the note column its width.
  */
 function PrintItem({ it, plan, showCategory }) {
   const meta = [showCategory ? it.catLabel : "", it.due_date ? fmtShort(it.due_date) : ""]
     .filter(Boolean);
+  const ruleH = itemRuleH(plan);
 
   return (
-    <div style={{ marginTop: plan.rowGap, breakInside: "avoid" }}>
-      <div style={{ fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere" }}>
-        {it.text}
-      </div>
-      {meta.length > 0 && (
-        <div style={{
-          fontFamily: SANS, fontSize: plan.note, color: "#3d3d3d",
-          lineHeight: 1.3, marginTop: 1,
-        }}>
-          {meta.join("  ·  ")}
+    <div data-eq-item style={{
+      display: "flex", gap: COL_GAP, alignItems: "stretch",
+      marginTop: plan.rowGap, breakInside: "avoid",
+    }}>
+      <div style={{ flex: `0 0 ${NAME_FRAC * 100}%`, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere" }}>
+          {it.text}
         </div>
-      )}
+        {meta.length > 0 && (
+          <div style={{
+            fontFamily: SANS, fontSize: plan.note, color: "#3d3d3d",
+            lineHeight: 1.3, marginTop: 1,
+          }}>
+            {meta.join("  ·  ")}
+          </div>
+        )}
+      </div>
+
+      {/* The rules sit at the bottom of the cell so that however tall the row
+          grows, the last line stays level with the last line of the name —
+          rules floating above a three-line item read as a rendering fault. */}
+      <div style={{
+        flex: 1, minWidth: 0, display: "flex", flexDirection: "column",
+        justifyContent: "flex-end",
+      }}>
+        {Array.from({ length: ITEM_RULES }, (_, i) => (
+          <div key={i} style={{ height: ruleH, borderBottom: "1px solid #e2e2e2" }} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -306,7 +341,11 @@ export default function AgendaPrint({
         {/* ---- business ---- */}
         {items.length > 0 && (
           <div style={{ marginTop: plan.sectionGap }}>
-            <Band size={plan.note} right={`${items.length} item${items.length === 1 ? "" : "s"}`}>
+            {/* "Notes" sits at the right edge because that's where the note
+                column starts — the band doubles as a column header, so the
+                ruled space reads as deliberate rather than as leftover. The
+                count moves in beside the title to make room for it. */}
+            <Band size={plan.note} count={items.length} right="Notes">
               Agenda Items
             </Band>
           </div>
@@ -394,7 +433,11 @@ export default function AgendaPrint({
             "Background graphics" — so on paper this was a blank void. */}
         {plan.fits && plan.writeLines > 0 && (
           <div style={{ marginTop: plan.sectionGap + 4 }}>
-            <Band size={plan.note}>Decisions &amp; Assignments</Band>
+            {/* Not "Decisions & Assignments" any more. Each item carries its
+                own note space now, so what's left over is for the things the
+                meeting produces rather than the things it discusses: what
+                somebody has to do before next week. */}
+            <Band size={plan.note}>Follow-Up &amp; Next Steps</Band>
             <div>
               {Array.from({ length: plan.writeLines }, (_, i) => (
                 <div key={i} style={{ height: RULE_H, borderBottom: "1px solid #d9d9d9" }} />

@@ -290,15 +290,17 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
     onPatchAgenda({ category_order: next });
   };
 
-  // Whether the printed copy will hold. Notes are never dropped to make room,
-  // so a very long agenda runs to a second page — better to say so here than
-  // to let the printer be the one to break the news. Measured against whichever
-  // arrangement is on screen, because that's the one that will print.
-  const printFits = choosePrintPlan({
+  // What the printed copy will look like. The type steps down from 12pt to
+  // hold a longer agenda, and stops at 10pt — past that it runs to a second
+  // page rather than shrinking to something nobody can read across a table.
+  // Better to say so here than to let the printer break the news. Measured
+  // against whichever arrangement is on screen, because that's the one that
+  // will print.
+  const printPlan = choosePrintPlan({
     sections: grouped ? groups : withItems,
     events,
     grouped,
-  }).fits;
+  });
 
   const addItem = async (section) => {
     if (!draft.text.trim()) return;
@@ -431,14 +433,27 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
         <Btn kind="plain" size="sm" onClick={onDelete}><Trash2 size={14} /></Btn>
       </div>
 
-      {!printFits && (
+      {!printPlan.fits && (
         <div style={{
           background: T.goldSoft, border: `1px solid ${T.gold}`, color: T.gold,
           borderRadius: 10, padding: "9px 12px", fontSize: 13.5,
           marginBottom: 12, lineHeight: 1.5, fontWeight: 600,
         }}>
-          This agenda is long enough to run onto a second page. Nothing is left
-          out — shorten a note or move an item to next week to bring it back to one.
+          This agenda runs onto a second page even at the smallest size it
+          prints. Nothing is left out — move an item to next week to bring it
+          back to one sheet.
+        </div>
+      )}
+
+      {/* Said plainly rather than left as a surprise at the printer. Somebody
+          who wanted a 12pt sheet can move an item off and get one back. */}
+      {printPlan.fits && printPlan.shrunk && (
+        <div style={{
+          background: T.inset, border: `1px solid ${T.line}`, color: T.sub,
+          borderRadius: 10, padding: "8px 12px", fontSize: 13,
+          marginBottom: 12, lineHeight: 1.5,
+        }}>
+          Prints at {printPlan.bodyPt}pt to fit one page.
         </div>
       )}
 

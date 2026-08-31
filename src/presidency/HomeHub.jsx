@@ -338,6 +338,21 @@ export default function HomeHub({ onGo }) {
                     <div style={{ width: `${pct}%`, height: "100%", background: T.primary, borderRadius: 999 }} />
                   </div>
                   <span style={{ fontSize: 14, fontWeight: 700, color: T.sub, width: 26, textAlign: "right" }}>{n}</span>
+                  {/* The share was already being worked out to size the bar; it
+                      just wasn't being said. A bar answers "which band is
+                      biggest" but not "is that a third of the quorum or a
+                      tenth", which is the question the numbers get quoted for.
+
+                      Rounding can land a real person on 0%, so a band with
+                      anybody in it never reads as none. The column is fixed
+                      width so the figures line up rather than drifting with
+                      the length of the number beside them. */}
+                  <span style={{
+                    fontSize: 13, fontWeight: 600, color: T.faint,
+                    width: 34, textAlign: "right", flex: "0 0 auto",
+                  }}>
+                    {pct === 0 && n > 0 ? "<1%" : `${pct}%`}
+                  </span>
                 </div>
               );
             })}
