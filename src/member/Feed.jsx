@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pin, Trash2, X } from "lucide-react";
+import { Plus, Pin, Trash2, X, History, EyeOff } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import Rsvp from "./Rsvp";
 import GroupMeCard from "./GroupMeCard";
@@ -10,7 +10,7 @@ import ThisWeeksLesson from "./ThisWeeksLesson";
 import HomeTiles from "./HomeTiles";
 import UpcomingStrip from "../components/UpcomingStrip";
 import { FlyerHeader, FlyerPicker } from "../components/Flyer";
-import { CATEGORIES, categoryMeta, sortForFeed } from "./categories";
+import { CATEGORIES, categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./categories";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
 
@@ -36,13 +36,23 @@ export default function Feed({ focus, onFocusHandled }) {
   const [draft, setDraft] = useState(null);
   const [openComments, setOpenComments] = useState({});
   const [name, setName] = useState(() => localStorage.getItem("eq_member_name") || "");
+  // Deliberately not remembered between visits. Opening the app should always
+  // show what's current; looking back is a thing you choose to do, not a state
+  // you can get stuck in without noticing.
+  const [showPast, setShowPast] = useState(false);
 
+  // Counted over the same posts the feed is showing. A tile reading
+  // "Activities 12" that opens onto three cards is worse than no number.
   const counts = useMemo(() => {
+    const today = toIso(new Date());
+    const { current } = splitByPast(posts, today, Date.now());
     const out = {};
     for (const c of CATEGORIES) out[c.key] = 0;
-    for (const p of posts) if (out[p.category] != null) out[p.category] += 1;
+    for (const p of showPast ? posts : current) {
+      if (out[p.category] != null) out[p.category] += 1;
+    }
     return out;
-  }, [posts]);
+  }, [posts, showPast]);
 
   const load = useCallback(async () => {
     const [p, c, sl, cl, lk] = await Promise.all([
@@ -67,7 +77,12 @@ export default function Feed({ focus, onFocusHandled }) {
   useEffect(() => {
     const id = focus?.postId;
     if (!id || loading) return;
-    if (!posts.some((p) => p.id === id)) { onFocusHandled?.(); return; }
+    const target = posts.find((p) => p.id === id);
+    if (!target) { onFocusHandled?.(); return; }
+    // A link from the weekly email can point at something that has since gone
+    // past. Scrolling to a post that isn't rendered lands nowhere and looks
+    // like a broken link, so a deep link opens the past for itself.
+    if (isPast(target, toIso(new Date()), Date.now())) setShowPast(true);
     setFocusId(id);
     const t = setTimeout(() => {
       document.getElementById(`post-${id}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" });
@@ -90,11 +105,18 @@ export default function Feed({ focus, onFocusHandled }) {
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 
-  const visible = useMemo(() => {
+  // Split before sorting, so the count on the toggle is the number of posts
+  // it would actually reveal under the filter you're looking at — not the
+  // number in the whole feed, which would say "12 past" over an empty screen.
+  const { visible, pastCount } = useMemo(() => {
     const today = toIso(new Date());
     const list = filter === "all" ? posts : posts.filter((p) => p.category === filter);
-    return sortForFeed(list, today);
-  }, [posts, filter]);
+    const { current, past } = splitByPast(list, today, Date.now());
+    return {
+      visible: sortForFeed(showPast ? list : current, today, Date.now()),
+      pastCount: past.length,
+    };
+  }, [posts, filter, showPast]);
 
   // Everything dated and still ahead, soonest first — regardless of which
   // category it's filed under.
@@ -167,12 +189,40 @@ export default function Feed({ focus, onFocusHandled }) {
         />
       </div>
 
-      {filter !== "all" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
-            {categoryMeta(filter).label}
-          </span>
-          <Btn size="sm" kind="plain" onClick={() => setFilter("all")}>Show all</Btn>
+      {(filter !== "all" || pastCount > 0 || showPast) && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap",
+        }}>
+          {filter !== "all" && (
+            <>
+              <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
+                {categoryMeta(filter).label}
+              </span>
+              <Btn size="sm" kind="plain" onClick={() => setFilter("all")}>Show all</Btn>
+            </>
+          )}
+
+          {/* Nothing is deleted — it's still all here, one tap away. The count
+              is on the button so the choice is informed: "12 earlier" is worth
+              a look, "1 earlier" usually isn't. Only shown when there is
+              something to reveal, or something already revealed to put back. */}
+          {(pastCount > 0 || showPast) && (
+            <Btn
+              size="sm"
+              kind={showPast ? "soft" : "plain"}
+              style={{ marginLeft: "auto" }}
+              aria-pressed={showPast}
+              onClick={() => setShowPast((v) => !v)}
+            >
+              {showPast ? <EyeOff size={14} /> : <History size={14} />}
+              {showPast ? "Hide earlier" : `Show ${pastCount} earlier`}
+              {showPast && (
+                <span style={{ fontWeight: 500, color: T.faint, marginLeft: 4 }}>
+                  {`· past dates and notices over ${STALE_DAYS} days old`}
+                </span>
+              )}
+            </Btn>
+          )}
         </div>
       )}
 
@@ -186,8 +236,17 @@ export default function Feed({ focus, onFocusHandled }) {
         <div style={{ color: T.sub, fontSize: 15, padding: 30, textAlign: "center" }}>Loading…</div>
       ) : !visible.length ? (
         <Empty
-          title="Nothing Here Yet"
-          hint={isPresidency ? "Tap the + button to post the first announcement." : "Check back soon."}
+          // An empty feed with a dozen past posts behind it isn't empty, and
+          // "check back soon" over a full archive reads as a fault. The reason
+          // it's empty decides what to say about it.
+          title={pastCount > 0 ? "Nothing Current" : "Nothing Here Yet"}
+          hint={
+            pastCount > 0
+              ? `Nothing coming up${filter === "all" ? "" : " in this category"} right now — ${pastCount} earlier ${pastCount === 1 ? "post is" : "posts are"} behind the button above.`
+              : isPresidency
+                ? "Tap the + button to post the first announcement."
+                : "Check back soon."
+          }
         />
       ) : (
         <div className="eq-feed-grid">
