@@ -569,6 +569,26 @@ alter table agendas add column if not exists conducting text;
 -- Conducting rotates monthly, so the Sunday agenda was asking the same
 -- question every week. Keyed by "YYYY-MM" text rather than a date: the unit
 -- really is the month, and a date column invites the question of which day.
+-- ---------- The standing teaching rotation ----------
+-- Who teaches on the 1st, 2nd, 3rd, 4th Sunday by default. A suggestion the
+-- Teaching screen offers, not an assignment — nothing reads this to tell the
+-- quorum who is teaching. Four slots: a 5th Sunday is bishopric-directed and
+-- has no quorum lesson.
+--
+-- `name` is free text, not a member reference. "Invite/Presidency" is a real
+-- answer and is not a person on the roster.
+create table if not exists teaching_rotation (
+  slot int primary key check (slot between 1 and 4),
+  name text,
+  updated_at timestamptz not null default now()
+);
+alter table teaching_rotation enable row level security;
+-- Presidency only. It's a planning aid; members see the Teaching schedule's
+-- confirmed assignments, never the defaults behind them.
+drop policy if exists "Presidency manages teaching rotation" on teaching_rotation;
+create policy "Presidency manages teaching rotation" on teaching_rotation
+  for all using (is_presidency()) with check (is_presidency());
+
 create table if not exists conducting_schedule (
   month text primary key check (month ~ '^[0-9]{4}-[0-9]{2}$'),
   name text,
