@@ -6,7 +6,7 @@ import { fmtDate, toIso, isoParts, scheduleBetween, NO_LESSON } from "../lib/dom
 import { GC_TALKS } from "../lib/domain/talks";
 import {
   SLOTS, slotLabel, rotationFromRows, teacherFor, pendingRotation, memberFor,
-  emptySlots,
+  emptySlots, assignmentFields,
 } from "../lib/domain/teachingRotation";
 
 // Prefer the real direct link. The search URL is only a fallback for talks
@@ -39,6 +39,15 @@ export default function Teaching() {
   // an assignment, because the email and the feed read assignments.
   const [rotation, setRotation] = useState({});
   const [applying, setApplying] = useState(false);
+  // Set when the rotation table isn't there yet. Swallowing this made a
+  // database that hadn't run the migration look exactly like a rotation
+  // nobody had filled in — so the card offered an Edit button that then
+  // failed on save, which is the worst of both.
+  const [rotationMissing, setRotationMissing] = useState(false);
+  // Off by default: the safe Apply fills gaps and can't undo a decision.
+  // Turned on when the rotation itself has changed and the schedule should
+  // move to it.
+  const [replaceTeachers, setReplaceTeachers] = useState(false);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2400); };
 
@@ -79,7 +88,12 @@ export default function Teaching() {
       // rotation — the screen works exactly as it did before this existed.
       supabase.from("teaching_rotation").select("slot,name"),
     ]);
-    if (!rot.error) setRotation(rotationFromRows(rot.data || []));
+    if (rot.error) {
+      setRotationMissing(/does not exist|schema cache/i.test(rot.error.message));
+    } else {
+      setRotationMissing(false);
+      setRotation(rotationFromRows(rot.data || []));
+    }
     if (t.error) setErr(t.error.message);
     else setRows(t.data || []);
     if (!m.error) setMembers(m.data || []);
@@ -150,7 +164,7 @@ export default function Teaching() {
   // Only Sundays with a suggestion and no teacher. Applying must never
   // overwrite a decision somebody already made, and a button reading
   // "Apply rotation to 5" has to mean five.
-  const pending = pendingRotation(teachable, byDate, rotation);
+  const pending = pendingRotation(teachable, byDate, rotation, { replace: replaceTeachers });
 
   /**
    * Turn every suggestion into a real assignment.
@@ -166,8 +180,10 @@ export default function Teaching() {
     let error = null;
     for (const p of pending) {
       if (error) break;
-      const who = memberFor(p.name, members);
-      const fields = { teacher_id: who?.id || null, teacher_name: p.name, no_lesson_reason: null };
+      // Only the teacher. An update patches the columns it's given, so the
+      // talk, topic, speaker, link and notes on that Sunday survive a replace
+      // untouched — which is the whole reason this is safe to offer.
+      const fields = assignmentFields(p.name, memberFor(p.name, members));
       const existing = byDate[p.date];
       ({ error } = existing
         ? await supabase.from("teaching_assignments").update(fields).eq("id", existing.id)
@@ -175,7 +191,11 @@ export default function Teaching() {
     }
     setApplying(false);
     if (error) { setErr(error.message); return; }
-    flash(`Assigned ${pending.length} Sunday${pending.length === 1 ? "" : "s"} from the rotation.`);
+    const changed = pending.filter((p) => p.was).length;
+    flash(
+      `Assigned ${pending.length} Sunday${pending.length === 1 ? "" : "s"} from the rotation` +
+      (changed ? ` — ${changed} teacher${changed === 1 ? "" : "s"} replaced, talks kept.` : ".")
+    );
     load();
   };
 
@@ -203,6 +223,13 @@ export default function Teaching() {
         pending={pending.length}
         applying={applying}
         onApply={applyRotation}
+        missing={rotationMissing}
+        assignedAhead={teachable.length - unassigned}
+        teachableAhead={teachable.length}
+        replace={replaceTeachers}
+        onReplaceChange={setReplaceTeachers}
+        canReplace={pendingRotation(teachable, byDate, rotation, { replace: true }).length}
+        replacing={pending.filter((p) => p.was).length}
       />
 
       {err && (
@@ -276,7 +303,7 @@ export default function Teaching() {
  * rotation, this one is read *while* looking at the Sundays it fills in, and
  * the Apply button only makes sense next to what it's applying to.
  */
-function RotationCard({ rotation, members, onSet, pending, applying, onApply }) {
+function RotationCard({ rotation, members, onSet, pending, applying, onApply, missing, assignedAhead, teachableAhead, replace, onReplaceChange, canReplace, replacing }) {
   const [open, setOpen] = useState(false);
   const blank = emptySlots(rotation);
   const active = members.filter((m) => m.active !== false);
@@ -285,6 +312,30 @@ function RotationCard({ rotation, members, onSet, pending, applying, onApply }) 
     .map((n) => rotation[n])
     .filter(Boolean)
     .join(" · ");
+  const anySet = blank < SLOTS.length;
+
+  /**
+   * Why there's no Apply button.
+   *
+   * There are three reasons it can be absent and they need different actions,
+   * so an unexplained gap where a button should be is the one thing this card
+   * must not do. Returns null when the button *is* showing.
+   */
+  const noApplyBecause = () => {
+    if (pending > 0) return null;
+    if (missing) {
+      return "The database needs updating before the rotation can be saved — run supabase/catch-up.sql, then reload.";
+    }
+    if (!anySet) return "Set a teacher for a Sunday above and this will offer to fill the schedule in.";
+    if (teachableAhead === 0) return "No teaching Sundays in range — try unchecking “Hide past Sundays”.";
+    if (assignedAhead === teachableAhead) {
+      return canReplace
+        ? `Every one of the ${teachableAhead} teaching Sundays ahead already has a teacher. Tick “replace teachers already assigned” to move them onto the rotation — the talks stay as they are.`
+        : `Every one of the ${teachableAhead} teaching Sundays ahead already has the teacher the rotation names.`;
+    }
+    return "The Sundays without a teacher fall on slots nobody is set for.";
+  };
+  const why = noApplyBecause();
 
   return (
     <div style={{ ...card, padding: 13, marginBottom: 12 }}>
@@ -335,23 +386,65 @@ function RotationCard({ rotation, members, onSet, pending, applying, onApply }) 
         </div>
       )}
 
-      {pending > 0 && (
+      {(canReplace > 0 || pending > 0) && (
         <div style={{
-          display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap",
           marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.lineSoft}`,
         }}>
-          <span style={{ fontSize: 13.5, color: T.sub, flex: 1, minWidth: 140 }}>
-            {pending} Sunday{pending === 1 ? "" : "s"} ahead {pending === 1 ? "matches" : "match"} the
-            rotation and {pending === 1 ? "has" : "have"} nobody assigned.
-          </span>
-          <Btn size="sm" kind="primary" onClick={onApply} disabled={applying}>
-            <Check size={14} />
-            {applying ? "Assigning…" : `Apply rotation to ${pending}`}
-          </Btn>
+          {/* Off by default. Filling gaps can't undo anything; replacing can,
+              so it's a deliberate tick rather than a second button somebody
+              presses by accident. */}
+          <label style={{
+            display: "flex", alignItems: "flex-start", gap: 8,
+            fontSize: 13.5, color: T.sub, lineHeight: 1.5, cursor: "pointer",
+            marginBottom: 9,
+          }}>
+            <input
+              type="checkbox"
+              checked={replace}
+              onChange={(e) => onReplaceChange(e.target.checked)}
+              style={{ marginTop: 2 }}
+            />
+            <span>
+              Replace teachers already assigned
+              <span style={{ color: T.faint }}>
+                {" — only the teacher changes; the talk, topic and notes stay."}
+              </span>
+            </span>
+          </label>
+
+          {/* No button when there's nothing to press. A greyed-out
+              "Apply to 0" reads as broken rather than as finished. */}
+          {pending > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13.5, color: T.sub, flex: 1, minWidth: 140 }}>
+                {replacing > 0
+                  ? `${pending} Sunday${pending === 1 ? "" : "s"} to set, ${replacing} of them replacing somebody.`
+                  : `${pending} Sunday${pending === 1 ? "" : "s"} ahead ${pending === 1 ? "matches" : "match"} the rotation and ${pending === 1 ? "has" : "have"} nobody assigned.`}
+              </span>
+              <Btn size="sm" kind="primary" onClick={onApply} disabled={applying}>
+                <Check size={14} />
+                {applying
+                  ? "Assigning…"
+                  : replacing > 0
+                    ? `Apply to ${pending}, replacing ${replacing}`
+                    : `Apply rotation to ${pending}`}
+              </Btn>
+            </div>
+          )}
         </div>
       )}
 
-      {blank > 0 && !open && (
+      {why && (
+        <div data-no-apply-why style={{
+          fontSize: 13, color: missing ? T.gold : T.faint,
+          marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.lineSoft}`,
+          lineHeight: 1.55,
+        }}>
+          {why}
+        </div>
+      )}
+
+      {blank > 0 && !open && !missing && (
         <div style={{ fontSize: 13, color: T.faint, marginTop: 8 }}>
           {blank} of {SLOTS.length} slots still open.
         </div>

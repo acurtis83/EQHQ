@@ -90,23 +90,59 @@ export function teacherFor(row, rotation, iso) {
 /**
  * The Sundays that Apply would actually change.
  *
- * Only ones with a suggestion and no teacher: applying must never overwrite a
- * decision somebody already made, and a button that says "Apply rotation to 5"
- * has to mean five.
+ * Two modes, because there are two real jobs:
+ *
+ *   filling in  — Sundays with a suggestion and nobody assigned. The default,
+ *                 and the safe one: it can't undo a decision.
+ *   replacing   — a rotation has *changed*, and the whole schedule should move
+ *                 to it. Only the teacher changes; the talk, topic, speaker,
+ *                 link and notes on that Sunday are somebody's work and are
+ *                 not the rotation's business.
+ *
+ * Either way, a Sunday already showing the right name is left alone — there's
+ * nothing to write, and counting it would make the button overstate itself.
+ *
+ * `was` carries the teacher being replaced, so the screen can say what it's
+ * about to undo rather than just how many rows it will touch.
  *
  * @param {object[]} sundays  [{ date, teaches }] from the teaching schedule
  * @param {object}   byDate   existing assignment rows keyed by date
  * @param {object}   rotation slot -> name
+ * @param {object}   opts     { replace } — overwrite teachers already set
  */
-export function pendingRotation(sundays = [], byDate = {}, rotation = {}) {
+export function pendingRotation(sundays = [], byDate = {}, rotation = {}, opts = {}) {
+  const replace = !!opts.replace;
   const out = [];
   for (const s of sundays) {
     if (!s?.teaches) continue;                       // conference, 5th Sunday
-    if (String(byDate[s.date]?.teacher_name || "").trim()) continue;
     const name = rotationFor(rotation, s.date);
-    if (name) out.push({ date: s.date, name, slot: slotForDate(s.date) });
+    if (!name) continue;
+
+    const was = String(byDate[s.date]?.teacher_name || "").trim();
+    if (was) {
+      if (!replace) continue;                        // never overwrite by default
+      if (was === name) continue;                    // already the right man
+    }
+    out.push({ date: s.date, name, slot: slotForDate(s.date), was });
   }
   return out;
+}
+
+/**
+ * The fields Apply writes.
+ *
+ * Named here rather than built inline so it's obvious what a replace does and
+ * does not touch. `talk_title`, `topic`, `speaker`, `talk_link` and `notes`
+ * are deliberately absent: Supabase patches only the columns it's given, and
+ * a rotation that quietly wiped a talk somebody had chosen would be a worse
+ * bug than the one it fixed.
+ */
+export function assignmentFields(name, member) {
+  return {
+    teacher_id: member?.id || null,
+    teacher_name: name,
+    no_lesson_reason: null,
+  };
 }
 
 /**
