@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Wand2, X, ExternalLink, CalendarOff, Search } from "lucide-react";
+import { Wand2, X, ExternalLink, CalendarOff, Search, Repeat, Check } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui";
 import { fmtDate, toIso, isoParts, scheduleBetween, NO_LESSON } from "../lib/domain/dates";
 import { GC_TALKS } from "../lib/domain/talks";
+import {
+  SLOTS, slotLabel, rotationFromRows, teacherFor, pendingRotation, memberFor,
+  emptySlots,
+} from "../lib/domain/teachingRotation";
 
 // Prefer the real direct link. The search URL is only a fallback for talks
 // typed in by hand, where we have a title but no link.
@@ -30,16 +34,52 @@ export default function Teaching() {
   const [genOpen, setGenOpen] = useState(false);
   const [hidePast, setHidePast] = useState(true);
   const [toast, setToast] = useState("");
+  // The standing arrangement: who teaches on the 1st, 2nd, 3rd, 4th Sunday.
+  // A suggestion for Sundays nobody has answered for — never a substitute for
+  // an assignment, because the email and the feed read assignments.
+  const [rotation, setRotation] = useState({});
+  const [applying, setApplying] = useState(false);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2400); };
 
+  /**
+   * Write one slot of the rotation.
+   *
+   * Upsert, because a slot has no row until somebody fills it in — an update
+   * matching nothing succeeds silently, which looks exactly like saving and
+   * then losing it. Clearing deletes the row rather than storing "", so an
+   * empty slot is one state and not two.
+   */
+  const saveSlot = async (slot, name) => {
+    const next = { ...rotation };
+    if (name) next[slot] = name; else delete next[slot];
+    setRotation(next);
+
+    const { error } = name
+      ? await supabase.from("teaching_rotation")
+          .upsert({ slot, name, updated_at: new Date().toISOString() }, { onConflict: "slot" })
+      : await supabase.from("teaching_rotation").delete().eq("slot", slot);
+
+    if (error) {
+      setErr(/does not exist|schema cache/i.test(error.message)
+        ? "The database needs updating before this can be saved — run supabase/catch-up.sql."
+        : error.message);
+      return;
+    }
+    setErr("");
+  };
+
   const load = useCallback(async () => {
-    const [t, m, x, k] = await Promise.all([
+    const [t, m, x, k, rot] = await Promise.all([
       supabase.from("teaching_assignments").select("*").order("date", { ascending: true }),
       supabase.from("members").select("id,name,active").order("name"),
       supabase.from("calendar_exceptions").select("*"),
       supabase.from("talks").select("*").order("year", { ascending: false }).order("month", { ascending: false }),
+      // A database that hasn't run the migration behaves like an empty
+      // rotation — the screen works exactly as it did before this existed.
+      supabase.from("teaching_rotation").select("slot,name"),
     ]);
+    if (!rot.error) setRotation(rotationFromRows(rot.data || []));
     if (t.error) setErr(t.error.message);
     else setRows(t.data || []);
     if (!m.error) setMembers(m.data || []);
@@ -107,6 +147,37 @@ export default function Teaching() {
 
   const teachable = sundays.filter((s) => s.teaches);
   const unassigned = teachable.filter((s) => !byDate[s.date]?.teacher_name).length;
+  // Only Sundays with a suggestion and no teacher. Applying must never
+  // overwrite a decision somebody already made, and a button reading
+  // "Apply rotation to 5" has to mean five.
+  const pending = pendingRotation(teachable, byDate, rotation);
+
+  /**
+   * Turn every suggestion into a real assignment.
+   *
+   * A slot naming somebody on the roster carries their id through, so an
+   * applied Sunday links up the same way a hand-made one does. A slot holding
+   * a standing arrangement — "Invite/Presidency" — carries the text alone,
+   * which is exactly what a person would have typed.
+   */
+  const applyRotation = async () => {
+    if (!pending.length) return;
+    setApplying(true);
+    let error = null;
+    for (const p of pending) {
+      if (error) break;
+      const who = memberFor(p.name, members);
+      const fields = { teacher_id: who?.id || null, teacher_name: p.name, no_lesson_reason: null };
+      const existing = byDate[p.date];
+      ({ error } = existing
+        ? await supabase.from("teaching_assignments").update(fields).eq("id", existing.id)
+        : await supabase.from("teaching_assignments").insert({ date: p.date, ...fields }));
+    }
+    setApplying(false);
+    if (error) { setErr(error.message); return; }
+    flash(`Assigned ${pending.length} Sunday${pending.length === 1 ? "" : "s"} from the rotation.`);
+    load();
+  };
 
   return (
     <div>
@@ -124,6 +195,15 @@ export default function Teaching() {
           <Wand2 size={15} />Generate
         </Btn>
       </div>
+
+      <RotationCard
+        rotation={rotation}
+        members={members}
+        onSet={saveSlot}
+        pending={pending.length}
+        applying={applying}
+        onApply={applyRotation}
+      />
 
       {err && (
         <div style={{ ...card, background: T.redSoft, borderColor: T.red, color: T.red, marginBottom: 12, fontSize: 14.5 }}>
@@ -150,6 +230,7 @@ export default function Teaching() {
               key={s.date}
               sunday={s}
               row={byDate[s.date]}
+              rotation={rotation}
               onOpen={() => setEditing(s)}
             />
           ))}
@@ -162,6 +243,7 @@ export default function Teaching() {
           row={byDate[editing.date]}
           members={members}
           talks={talks}
+          rotation={rotation}
           isStakeConf={stakeConf.has(editing.date)}
           onClose={() => setEditing(null)}
           onSave={(fields) => saveAssignment(editing.date, fields)}
@@ -183,9 +265,105 @@ export default function Teaching() {
   );
 }
 
-function SundayCard({ sunday, row, onOpen }) {
+/**
+ * The standing arrangement: who teaches on which Sunday of the month.
+ *
+ * Each slot takes a name from the roster or anything typed. "Invite/
+ * Presidency" is a real answer and isn't a person, so a dropdown alone would
+ * refuse the most common slot on the list.
+ *
+ * Sits above the schedule rather than in Settings — unlike the conducting
+ * rotation, this one is read *while* looking at the Sundays it fills in, and
+ * the Apply button only makes sense next to what it's applying to.
+ */
+function RotationCard({ rotation, members, onSet, pending, applying, onApply }) {
+  const [open, setOpen] = useState(false);
+  const blank = emptySlots(rotation);
+  const active = members.filter((m) => m.active !== false);
+
+  const summary = SLOTS
+    .map((n) => rotation[n])
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div style={{ ...card, padding: 13, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+        <Repeat size={15} style={{ color: T.sub, flex: "0 0 auto" }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15.5, fontWeight: 700, color: T.ink }}>Rotation</div>
+          <div style={{ fontSize: 13.5, color: T.sub, marginTop: 1 }}>
+            {summary || "Nobody set — a default teacher for each Sunday of the month."}
+          </div>
+        </div>
+        <Btn size="sm" kind="plain" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? "Done" : "Edit"}
+        </Btn>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
+          {SLOTS.map((n) => (
+            <div key={n} style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+              <span style={{
+                flex: "0 0 92px", fontSize: 14.5, fontWeight: 600,
+                color: rotation[n] ? T.ink : T.faint,
+              }}>
+                {slotLabel(n)}
+              </span>
+              <Input
+                value={rotation[n] || ""}
+                onChange={(v) => onSet(n, v.trim())}
+                placeholder="Nobody yet"
+                list={`rotation-names-${n}`}
+                aria-label={`Teacher on the ${slotLabel(n)}`}
+                style={{ flex: 1, minWidth: 140 }}
+              />
+              {/* A datalist rather than a select: it suggests the roster while
+                  still accepting "Invite/Presidency", which no dropdown of
+                  members could ever offer. */}
+              <datalist id={`rotation-names-${n}`}>
+                {active.map((m) => <option key={m.id} value={m.name} />)}
+                <option value="Invite/Presidency" />
+              </datalist>
+            </div>
+          ))}
+          <div style={{ fontSize: 13, color: T.faint, lineHeight: 1.55, marginTop: 2 }}>
+            A 5th Sunday is bishopric-directed, so it has no slot. Type any name
+            or leave a slot empty.
+          </div>
+        </div>
+      )}
+
+      {pending > 0 && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap",
+          marginTop: 11, paddingTop: 11, borderTop: `1px solid ${T.lineSoft}`,
+        }}>
+          <span style={{ fontSize: 13.5, color: T.sub, flex: 1, minWidth: 140 }}>
+            {pending} Sunday{pending === 1 ? "" : "s"} ahead {pending === 1 ? "matches" : "match"} the
+            rotation and {pending === 1 ? "has" : "have"} nobody assigned.
+          </span>
+          <Btn size="sm" kind="primary" onClick={onApply} disabled={applying}>
+            <Check size={14} />
+            {applying ? "Assigning…" : `Apply rotation to ${pending}`}
+          </Btn>
+        </div>
+      )}
+
+      {blank > 0 && !open && (
+        <div style={{ fontSize: 13, color: T.faint, marginTop: 8 }}>
+          {blank} of {SLOTS.length} slots still open.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SundayCard({ sunday, row, rotation, onOpen }) {
   const teaches = sunday.teaches;
   const url = talkUrl(row);
+  const who = teacherFor(row, rotation, sunday.date);
 
   let accent = T.line;
   if (teaches) accent = row?.teacher_name ? T.green : T.gold;
@@ -217,6 +395,18 @@ function SundayCard({ sunday, row, onOpen }) {
             {row.speaker ? ` (${row.speaker})` : ""}
           </div>
         )}
+
+        {/* The rotation's answer for a Sunday nobody has answered for. Greyed
+            and italic, and labelled: it has to be obviously a suggestion, or
+            the schedule looks assigned when it isn't and nobody gets asked. */}
+        {teaches && who.from === "rotation" && (
+          <div style={{ fontSize: 14.5, color: T.faint, marginTop: 5, fontStyle: "italic" }}>
+            {who.name}
+            <span style={{ fontStyle: "normal", fontSize: 13 }}>
+              {` — suggested, ${slotLabel(who.slot).toLowerCase()}`}
+            </span>
+          </div>
+        )}
         {row?.notes && (
           <div style={{ fontSize: 14, color: T.faint, marginTop: 4, lineHeight: 1.5 }}>{row.notes}</div>
         )}
@@ -237,9 +427,17 @@ function SundayCard({ sunday, row, onOpen }) {
   );
 }
 
-function AssignSheet({ sunday, row, members, talks, isStakeConf, onClose, onSave, onClear, onToggleStakeConf }) {
-  const [teacherName, setTeacherName] = useState(row?.teacher_name || "");
-  const [teacherId, setTeacherId] = useState(row?.teacher_id || "");
+function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClose, onSave, onClear, onToggleStakeConf }) {
+  // Opens on the rotation's answer when nobody has been assigned, so the
+  // common case is "open it, glance at the name, save". A slot naming somebody
+  // on the roster brings their id with it; "Invite/Presidency" brings none,
+  // which is right — it isn't a person.
+  const suggested = teacherFor(row, rotation, sunday.date);
+  const fromRotation = suggested.from === "rotation";
+  const [teacherName, setTeacherName] = useState(suggested.name);
+  const [teacherId, setTeacherId] = useState(
+    row?.teacher_id || (fromRotation ? memberFor(suggested.name, members)?.id || "" : "")
+  );
   const [topic, setTopic] = useState(row?.topic || "");
   const [talkTitle, setTalkTitle] = useState(row?.talk_title || "");
   const [speaker, setSpeaker] = useState(row?.speaker || "");
@@ -292,6 +490,16 @@ function AssignSheet({ sunday, row, members, talks, isStakeConf, onClose, onSave
           <Lbl label="Or type a name">
             <Input value={teacherName} onChange={(v) => { setTeacherName(v); setTeacherId(""); }} placeholder="Anyone not on the roster" />
           </Lbl>
+
+          {/* Said out loud. A prefilled box looks like a decision somebody
+              made, and the whole point of the rotation is that this one
+              hasn't been made yet — nobody has asked him. */}
+          {fromRotation && teacherName === suggested.name && (
+            <div style={{ fontSize: 13, color: T.faint, marginTop: -4, lineHeight: 1.5 }}>
+              Suggested by the {slotLabel(suggested.slot).toLowerCase()} rotation —
+              saving is what makes it an assignment.
+            </div>
+          )}
 
           <div style={{ borderTop: `1px solid ${T.lineSoft}`, paddingTop: 12, marginTop: 4 }}>
             <Lbl label="Find a conference talk">
