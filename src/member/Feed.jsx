@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pin, Trash2, X, History, EyeOff } from "lucide-react";
+import { Plus, Pin, Trash2, X, History, EyeOff, MessageSquare } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import Rsvp from "./Rsvp";
 import GroupMeCard from "./GroupMeCard";
@@ -7,10 +7,10 @@ import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui";
 import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
-import HomeTiles from "./HomeTiles";
-import UpcomingStrip from "../components/UpcomingStrip";
+import Upcoming from "./Upcoming";
 import { FlyerHeader, FlyerPicker } from "../components/Flyer";
-import { CATEGORIES, categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./categories";
+import { categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./categories";
+import { upcomingFrom } from "../lib/domain/upcomingAction";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
 
@@ -30,7 +30,6 @@ export default function Feed({ focus, onFocusHandled }) {
   const [slots, setSlots] = useState([]);
   const [claims, setClaims] = useState([]);
   const [links, setLinks] = useState([]);
-  const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [draft, setDraft] = useState(null);
@@ -40,19 +39,6 @@ export default function Feed({ focus, onFocusHandled }) {
   // show what's current; looking back is a thing you choose to do, not a state
   // you can get stuck in without noticing.
   const [showPast, setShowPast] = useState(false);
-
-  // Counted over the same posts the feed is showing. A tile reading
-  // "Activities 12" that opens onto three cards is worse than no number.
-  const counts = useMemo(() => {
-    const today = toIso(new Date());
-    const { current } = splitByPast(posts, today, Date.now());
-    const out = {};
-    for (const c of CATEGORIES) out[c.key] = 0;
-    for (const p of showPast ? posts : current) {
-      if (out[p.category] != null) out[p.category] += 1;
-    }
-    return out;
-  }, [posts, showPast]);
 
   const load = useCallback(async () => {
     const [p, c, sl, cl, lk] = await Promise.all([
@@ -105,27 +91,29 @@ export default function Feed({ focus, onFocusHandled }) {
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 
-  // Split before sorting, so the count on the toggle is the number of posts
-  // it would actually reveal under the filter you're looking at — not the
-  // number in the whole feed, which would say "12 past" over an empty screen.
+  // Split before sorting, so the count on the toggle is the number of posts it
+  // would actually reveal.
+  //
+  // There used to be a category filter here, driven by the tiles above. The
+  // tiles went when Upcoming started separating the dated things out on its
+  // own — there was nothing left for a filter to reveal — and the state went
+  // with them rather than being left behind with no way to set it.
   const { visible, pastCount } = useMemo(() => {
     const today = toIso(new Date());
-    const list = filter === "all" ? posts : posts.filter((p) => p.category === filter);
-    const { current, past } = splitByPast(list, today, Date.now());
+    const { current, past } = splitByPast(posts, today, Date.now());
     return {
-      visible: sortForFeed(showPast ? list : current, today, Date.now()),
+      visible: sortForFeed(showPast ? posts : current, today, Date.now()),
       pastCount: past.length,
     };
-  }, [posts, filter, showPast]);
+  }, [posts, showPast]);
 
   // Everything dated and still ahead, soonest first — regardless of which
-  // category it's filed under.
-  const upcoming = useMemo(() => {
-    const today = toIso(new Date());
-    return posts
-      .filter((p) => p.event_date && p.event_date >= today)
-      .sort((a, b) => a.event_date.localeCompare(b.event_date));
-  }, [posts]);
+  // category it's filed under — Upcoming is the calendar, and a calendar that
+  // shows only one kind of thing isn't one.
+  const upcoming = useMemo(
+    () => upcomingFrom(posts, toIso(new Date())),
+    [posts]
+  );
 
   const commentsFor = (id) => comments.filter((c) => c.post_id === id);
 
@@ -164,44 +152,38 @@ export default function Feed({ focus, onFocusHandled }) {
       {/* Always first, driven by the teaching schedule — no weekly posting needed. */}
       <ThisWeeksLesson />
 
-      {/* Tiles on the left, what's coming up on the right — the same list the
-          Sunday agenda and the Presidency Home use. */}
-      <div className="eq-feed-top">
-        <HomeTiles counts={counts} active={filter} onPick={setFilter} />
+      {/* Three sections, in the order somebody opening the app wants them:
+          what's on this Sunday, what's coming up and what to do about it,
+          then everything people have been saying.
 
-        {/* A standing invitation rather than news, so it sits up here with the
-            tiles instead of down among the posts. Renders nothing at all until
-            the presidency has set a link — no element, so the flex gap above
-            Upcoming doesn't double. */}
-        <GroupMeCard />
+          The category tiles used to sit here. They were a filter over a feed
+          that now separates the dated things out on its own, so there was
+          nothing left for them to reveal. */}
+      <GroupMeCard />
 
-        <UpcomingStrip
-          empty="Nothing on the calendar yet."
-          items={upcoming.slice(0, 6).map((p) => ({
-            id: p.id,
-            when: p.event_date,
-            title: p.title,
-            meta: [p.event_time, p.event_location].filter(Boolean).join(" · "),
-            // Only a form counts as a sign-up here; a plain details link
-            // isn't something to sign up for.
-            signUpHref: /[?&]f=/.test(p.link_url || "") ? p.link_url : null,
-          }))}
-        />
+      <Upcoming
+        posts={upcoming}
+        name={name}
+        setName={setName}
+        onOpen={(id) => setFocusId(id)}
+      />
+
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, marginTop: 4, marginBottom: 8,
+      }}>
+        <MessageSquare size={15} style={{ color: T.sub, flex: "0 0 auto" }} />
+        <span style={{
+          fontSize: 12.5, fontWeight: 800, letterSpacing: "0.08em",
+          textTransform: "uppercase", color: T.sub,
+        }}>
+          Recent Activity
+        </span>
       </div>
 
-      {(filter !== "all" || pastCount > 0 || showPast) && (
+      {(pastCount > 0 || showPast) && (
         <div style={{
           display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap",
         }}>
-          {filter !== "all" && (
-            <>
-              <span style={{ fontSize: 14.5, fontWeight: 700, color: T.ink }}>
-                {categoryMeta(filter).label}
-              </span>
-              <Btn size="sm" kind="plain" onClick={() => setFilter("all")}>Show all</Btn>
-            </>
-          )}
-
           {/* Nothing is deleted — it's still all here, one tap away. The count
               is on the button so the choice is informed: "12 earlier" is worth
               a look, "1 earlier" usually isn't. Only shown when there is
@@ -242,7 +224,7 @@ export default function Feed({ focus, onFocusHandled }) {
           title={pastCount > 0 ? "Nothing Current" : "Nothing Here Yet"}
           hint={
             pastCount > 0
-              ? `Nothing coming up${filter === "all" ? "" : " in this category"} right now — ${pastCount} earlier ${pastCount === 1 ? "post is" : "posts are"} behind the button above.`
+              ? `Nothing recent right now — ${pastCount} earlier ${pastCount === 1 ? "post is" : "posts are"} behind the button above.`
               : isPresidency
                 ? "Tap the + button to post the first announcement."
                 : "Check back soon."

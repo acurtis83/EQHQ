@@ -30,7 +30,14 @@ function forget(postId) {
 /**
  * One-tap "I'm in" for an activity, instead of a whole sign-up form.
  */
-export default function Rsvp({ postId, name, setName }) {
+/**
+ * @param {boolean} compact  A row in Upcoming rather than a block on a post:
+ *   the button and a headcount on one line, the name prompt underneath when
+ *   it's needed, and no list of names. Same component either way — an RSVP
+ *   made from the Upcoming list and one made on the post are the same RSVP,
+ *   and two implementations would eventually disagree about that.
+ */
+export default function Rsvp({ postId, name, setName, compact = false }) {
   const [names, setNames] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -75,24 +82,29 @@ export default function Rsvp({ postId, name, setName }) {
   };
 
   return (
-    <div style={{
+    <div style={compact ? {
+      display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end",
+    } : {
       marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.lineSoft}`,
       display: "flex", flexDirection: "column", gap: 8,
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
         {myId ? (
-          <Btn kind="soft" size="sm" onClick={leave} disabled={busy}>
-            <Check size={14} />You’re In — Tap To Cancel
+          <Btn kind="soft" size="sm" onClick={leave} disabled={busy}
+            aria-label={`Cancel your RSVP`}>
+            <Check size={14} />{compact ? "You’re In" : "You’re In — Tap To Cancel"}
           </Btn>
         ) : (
           <Btn kind="primary" size="sm" onClick={join} disabled={busy}>
             I’m In
           </Btn>
         )}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13.5, color: T.sub }}>
-          <Users size={13} />
-          {names.length ? `${names.length} coming` : "Nobody yet"}
-        </span>
+        {!compact && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13.5, color: T.sub }}>
+            <Users size={13} />
+            {names.length ? `${names.length} coming` : "Nobody yet"}
+          </span>
+        )}
       </div>
 
       {asking && !myId && (
@@ -102,11 +114,18 @@ export default function Rsvp({ postId, name, setName }) {
         </div>
       )}
 
-      {names.length > 0 && (
+      {/* On a post, everyone who's coming. In a row, a count — the list
+          belongs with the post it's about, and a row of fifteen names is a
+          row nobody can read past. */}
+      {names.length > 0 && (compact ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, color: T.faint }}>
+          <Users size={12} />{names.length} coming
+        </span>
+      ) : (
         <div style={{ fontSize: 13.5, color: T.sub, lineHeight: 1.5 }}>
           {names.join(", ")}
         </div>
-      )}
+      ))}
 
       {err && <div style={{ fontSize: 13, color: T.red }}>{err}</div>}
     </div>
