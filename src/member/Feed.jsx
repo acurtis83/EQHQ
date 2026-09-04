@@ -15,6 +15,16 @@ import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
 
 
+/**
+ * The space between the hubs at the top of the feed — lesson, GroupMe,
+ * Upcoming — and between the last of them and Recent Activity.
+ *
+ * One number for all of it. The cards are three separate files and when each
+ * carried its own bottom margin they drifted apart (14, then none, then 12),
+ * which is how the GroupMe card came to sit flush against Upcoming.
+ */
+const HUB_GAP = 18;
+
 const emptyDraft = {
   category: "announcement", title: "", body: "", link_url: "", link_label: "",
   event_date: "", event_time: "", event_location: "", pinned: false,
@@ -149,27 +159,40 @@ export default function Feed({ focus, onFocusHandled }) {
 
   return (
     <div>
-      {/* Always first, driven by the teaching schedule — no weekly posting needed. */}
-      <ThisWeeksLesson />
-
-      {/* Three sections, in the order somebody opening the app wants them:
+      {/* The three hubs, in the order somebody opening the app wants them:
           what's on this Sunday, what's coming up and what to do about it,
           then everything people have been saying.
+
+          The gap between them lives here rather than as a marginBottom on each
+          card, and that's the whole point: it used to be spread across three
+          files, drifted to 14 / 0 / 12, and the GroupMe card ended up flush
+          against Upcoming because the rule that had been spacing it was
+          deleted with the old two-column top block. One number, one place.
+
+          A flex gap also handles the card that isn't there. GroupMeCard
+          returns null until a link is set, and a gap only appears between
+          elements that exist — a marginBottom would have left a hole.
 
           The category tiles used to sit here. They were a filter over a feed
           that now separates the dated things out on its own, so there was
           nothing left for them to reveal. */}
-      <GroupMeCard />
+      <div style={{
+        display: "flex", flexDirection: "column", gap: HUB_GAP, marginBottom: HUB_GAP,
+      }}>
+        <ThisWeeksLesson />
 
-      <Upcoming
-        posts={upcoming}
-        name={name}
-        setName={setName}
-        onOpen={(id) => setFocusId(id)}
-      />
+        <GroupMeCard />
+
+        <Upcoming
+          posts={upcoming}
+          name={name}
+          setName={setName}
+          onOpen={(id) => setFocusId(id)}
+        />
+      </div>
 
       <div style={{
-        display: "flex", alignItems: "center", gap: 8, marginTop: 4, marginBottom: 8,
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
       }}>
         <MessageSquare size={15} style={{ color: T.sub, flex: "0 0 auto" }} />
         <span style={{

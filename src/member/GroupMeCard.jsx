@@ -7,15 +7,20 @@ import { useSettings, SETTING_KEYS, safeUrl } from "../lib/useSettings";
 /**
  * Join the quorum's GroupMe.
  *
- * Sits with the tiles at the top of the feed, above Upcoming Events, rather
+ * Sits between the lesson banner and Upcoming at the top of the feed, rather
  * than among the posts: it's not news, it's a standing invitation, and as a
  * post it would scroll away behind three weeks of announcements exactly when
  * a new brother goes looking for it.
  *
- * No bottom margin of its own — the feed's top block spaces its children, and
- * a margin here would double the gap above Upcoming Events. Returning null
- * rather than an empty div matters for the same reason: an unset link leaves
- * no element, so it contributes no gap either.
+ * No bottom margin of its own — the feed spaces the hubs with a single flex
+ * gap (HUB_GAP in Feed.jsx), and a margin here would sit on top of it. This
+ * card had none back when a two-column top block supplied the gap; that block
+ * was deleted with the tiles and nothing replaced it, so the card spent a
+ * while flush against Upcoming. The gap is one number in one file now.
+ *
+ * Returning null rather than an empty div matters to that gap: a flex gap
+ * only appears between elements that exist, so a ward with no GroupMe link
+ * gets no card and no hole where one would have been.
  *
  * Compact by default — the code is a tap away rather than taking a third of
  * the screen every time anybody opens the feed. Shows nothing at all until

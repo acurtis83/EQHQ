@@ -114,8 +114,10 @@ export default function Upcoming({ posts = [], name, setName, onOpen }) {
   const shown = all ? posts : posts.slice(0, SHOWN);
   const more = posts.length - shown.length;
 
+  // No bottom margin of its own: the feed spaces the hubs with one flex gap so
+  // the three cards can't drift apart. See HUB_GAP in Feed.jsx.
   return (
-    <div style={{ ...card, padding: "12px 13px 4px", marginBottom: 12 }}>
+    <div style={{ ...card, padding: "12px 13px 4px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 8 }}>
         <CalendarDays size={15} style={{ color: T.sub, flex: "0 0 auto" }} />
         <span style={{

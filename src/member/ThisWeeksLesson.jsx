@@ -98,7 +98,8 @@ export default function ThisWeeksLesson() {
         background: INK,
         borderRadius: 18,
         padding: "16px 17px",
-        marginBottom: 14,
+        // No bottom margin: the feed spaces the hubs with one flex gap so the
+        // three cards can't drift apart. See HUB_GAP in Feed.jsx.
         minWidth: 0,
       }}
     >

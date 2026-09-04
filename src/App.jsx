@@ -3,13 +3,14 @@ import {
   Home, ClipboardList, HeartHandshake, LayoutGrid, Settings, LogOut, Lock, LayoutDashboard, CalendarClock, ChevronLeft,
 } from "lucide-react";
 import { useAuth } from "./lib/useAuth";
-import { T, Btn, Stub } from "./components/ui";
+import { T, Btn } from "./components/ui";
 import Feed from "./member/Feed";
 import FormFill from "./member/FormFill";
 import Roster from "./presidency/Roster";
 import QuorumSettings from "./presidency/QuorumSettings";
 import ConductingSchedule from "./presidency/ConductingSchedule";
 import Callings from "./presidency/Callings";
+import Ministering from "./presidency/Ministering";
 import Plan from "./presidency/Plan";
 import Meetings from "./presidency/Meetings";
 import HomeHub from "./presidency/HomeHub";
@@ -230,9 +231,7 @@ export default function App() {
         {tab === "meetings" && <Meetings onGo={go} />}
         {tab === "plan" && <Plan focus={focus} onFocusHandled={clearFocus} />}
         {tab === "callings" && <Callings focus={focus} onFocusHandled={clearFocus} />}
-        {tab === "ministering" && (
-          <Stub title="Ministering" note="Districts, companionships, households, and quarterly interviews. Presidency-only, enforced in the database." />
-        )}
+        {tab === "ministering" && <Ministering />}
       </main>
 
       {isPresidency && (
