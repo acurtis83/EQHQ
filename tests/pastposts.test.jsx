@@ -174,36 +174,22 @@ describe("pinning", () => {
   });
 });
 
-describe("the numbers agree with the cards", () => {
-  it("the tiles count only what's showing", async () => {
+describe("the count on the button", () => {
+  it("is the number of posts it would reveal", async () => {
+    // The category tiles used to carry counts of their own and this checked
+    // those. They went with the filter; what's left to keep honest is the one
+    // number still on screen.
     await mount();
-    // The tile's accessible name carries the count, which is a firmer thing to
-    // assert than its text — "Activities" also appears as a chip on every
-    // activity card.
-    expect(screen.getByLabelText(/^Activities: /).getAttribute("aria-label"))
-      .toBe("Activities: 2");
-
+    expect(screen.getByText("Show 2 earlier")).toBeTruthy();
     await act(async () => { fireEvent.click(screen.getByText("Show 2 earlier")); });
-    expect(screen.getByLabelText(/^Activities: /).getAttribute("aria-label"))
-      .toBe("Activities: 3");
-  });
-
-  it("the count follows the category filter", async () => {
-    await mount();
-    // Announcements: one current, one stale.
-    await act(async () => { fireEvent.click(screen.getByLabelText(/^Announcements: /)); });
-    expect(screen.getByText("Show 1 earlier")).toBeTruthy();
+    expect(cards()).toHaveLength(5);
   });
 });
 
-describe("a category with nothing current", () => {
+describe("a feed with nothing current", () => {
   it("says so rather than looking broken", async () => {
-    POSTS = [
-      { id: "up", category: "activity", title: "Temple Trip", event_date: "2026-09-12", created_at: daysAgo(1) },
-      { id: "stale", category: "announcement", title: "Old Notice", created_at: daysAgo(60) },
-    ];
+    POSTS = [{ id: "stale", category: "announcement", title: "Old Notice", created_at: daysAgo(60) }];
     await mount();
-    await act(async () => { fireEvent.click(screen.getByLabelText(/^Announcements: /)); });
 
     expect(screen.getByText("Nothing Current")).toBeTruthy();
     expect(document.body.textContent).toContain("1 earlier post is behind the button");
