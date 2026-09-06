@@ -25,8 +25,8 @@ function shortDate(iso) {
  * In" from this list and one from the card below are the same record; there is
  * no second implementation to fall out of step.
  */
-function UpcomingRow({ post, name, setName, onOpen }) {
-  const meta = categoryMeta(post.category);
+function UpcomingRow({ post, name, setName, onOpen, categories }) {
+  const meta = categoryMeta(post.category, categories);
   const action = actionFor(post);
   const when = [shortDate(post.event_date), post.event_time].filter(Boolean).join("  •  ");
 
@@ -113,7 +113,7 @@ function UpcomingRow({ post, name, setName, onOpen }) {
  * The count is worked out in domain/upcomingAction.js so it can be checked
  * against a calendar without a browser; this only slices.
  */
-export default function Upcoming({ posts = [], name, setName, onOpen, todayIso }) {
+export default function Upcoming({ posts = [], name, setName, onOpen, todayIso, categories }) {
   const [all, setAll] = useState(false);
   const today = todayIso || toIso(new Date());
   const count = useMemo(() => shownCount(posts, today), [posts, today]);
@@ -145,7 +145,8 @@ export default function Upcoming({ posts = [], name, setName, onOpen, todayIso }
         </div>
       ) : (
         shown.map((p) => (
-          <UpcomingRow key={p.id} post={p} name={name} setName={setName} onOpen={onOpen} />
+          <UpcomingRow key={p.id} post={p} name={name} setName={setName} onOpen={onOpen}
+            categories={categories} />
         ))
       )}
     </div>

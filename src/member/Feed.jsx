@@ -9,14 +9,15 @@ import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
 import Upcoming from "./Upcoming";
 import { FlyerHeader, FlyerPicker } from "../components/Flyer";
-// CATEGORIES is still needed even though the tiles are gone — it fills the
-// composer's category dropdown. It was dropped from this line when the tiles
-// were removed, which crashed the composer the moment anybody pressed +, and
-// went unnoticed because every feed test until now signed in as a member and
-// members never see that button.
-import {
-  CATEGORIES, categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS,
-} from "./categories";
+// categoryMeta fills the chip on every post; the list itself fills the
+// composer's dropdown. Both come from the database now — see useCategories —
+// so the composer takes it as a prop rather than importing a constant. The
+// constant went missing from this line once already and crashed the composer
+// for everyone who pressed +; a prop the component can't render without is
+// harder to lose quietly.
+import { categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./categories";
+import { useCategories } from "../lib/useCategories";
+import { activeCategories } from "../lib/domain/categories";
 import { upcomingFrom } from "../lib/domain/upcomingAction";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
@@ -40,6 +41,7 @@ const emptyDraft = {
 
 export default function Feed({ focus, onFocusHandled }) {
   const { isPresidency, presidency } = useAuth();
+  const { rows: categories } = useCategories();
   const [posts, setPosts] = useState([]);
   // Set when a Home Hub card sent you to a specific post.
   const [focusId, setFocusId] = useState(null);
@@ -195,6 +197,7 @@ export default function Feed({ focus, onFocusHandled }) {
           name={name}
           setName={setName}
           todayIso={toIso(new Date())}
+          categories={categories}
           onOpen={(id) => setFocusId(id)}
         />
       </div>
@@ -277,6 +280,7 @@ export default function Feed({ focus, onFocusHandled }) {
               setName={setName}
               onComment={addComment}
               isPresidency={isPresidency}
+              categories={categories}
               onReload={load}
               highlight={focusId === post.id}
             />
@@ -304,6 +308,7 @@ export default function Feed({ focus, onFocusHandled }) {
         <Composer
           draft={draft}
           setDraft={setDraft}
+          categories={activeCategories(categories)}
           onPublish={publish}
           onClose={() => setDraft(null)}
         />
@@ -312,8 +317,8 @@ export default function Feed({ focus, onFocusHandled }) {
   );
 }
 
-function PostCard({ post, comments, slots, claims, links, open, onToggle, name, setName, onComment, isPresidency, onReload, highlight }) {
-  const m = categoryMeta(post.category);
+function PostCard({ post, comments, slots, claims, links, open, onToggle, name, setName, onComment, isPresidency, onReload, highlight, categories }) {
+  const m = categoryMeta(post.category, categories);
   const [body, setBody] = useState("");
 
   const togglePin = async () => {
@@ -440,7 +445,7 @@ function PostCard({ post, comments, slots, claims, links, open, onToggle, name, 
   );
 }
 
-function Composer({ draft, setDraft, onPublish, onClose }) {
+function Composer({ draft, setDraft, categories = [], onPublish, onClose }) {
   const set = (k) => (v) => setDraft({ ...draft, [k]: v });
   const isEvent = draft.category === "activity" || draft.category === "temple";
 
@@ -466,7 +471,7 @@ function Composer({ draft, setDraft, onPublish, onClose }) {
 
         <Lbl label="Category">
           <Select value={draft.category} onChange={set("category")}>
-            {CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            {categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
           </Select>
         </Lbl>
 

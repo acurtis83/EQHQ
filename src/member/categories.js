@@ -1,48 +1,32 @@
-// The home-screen tiles and the post categories are the same list, so the feed
-// and the shortcuts can never drift apart. Order here is tile order, and it
-// matches the planner: what you file as an assignment arrives as an assignment.
+// Feed ordering, and the bridge to the category list.
 //
-// "lesson" is deliberately not a category — this Sunday's lesson comes from the
-// teaching schedule via the hero card, not from a post someone has to remember
-// to write.
+// The four categories used to be defined here as a literal. They live in the
+// database now so the presidency can add their own, and the rules about them
+// are in lib/domain/categories.js. What's left in this file is the feed's
+// sort order, which is about dates and pins and has nothing to do with which
+// categories exist.
+//
+// SEED and metaFor are re-exported so callers that only need "what colour is
+// this post" have one import, and so the old names keep working.
+//
+// "lesson" is deliberately not a category — this Sunday's lesson comes from
+// the teaching schedule via the hero card, not from a post someone has to
+// remember to write.
+export { SEED, UNKNOWN, metaFor, activeCategories, planningCategories }
+  from "../lib/domain/categories.js";
 
-export const CATEGORIES = [
-  {
-    key: "announcement",
-    label: "Announcements",
-    short: "Announcements",
-    icon: "bell",
-    accent: "var(--primary-deep)",
-    soft: "var(--primary-soft)",
-  },
-  {
-    key: "activity",
-    label: "Activities",
-    short: "Activities",
-    icon: "calendar",
-    accent: "var(--green)",
-    soft: "var(--green-soft)",
-  },
-  {
-    key: "assignment",
-    label: "Assignments",
-    short: "Assignments",
-    icon: "clipboard",
-    accent: "var(--red)",
-    soft: "var(--red-soft)",
-  },
-  {
-    key: "temple",
-    label: "Temple Trips",
-    short: "Temple Trips",
-    icon: "temple",
-    accent: "var(--gold)",
-    soft: "var(--gold-soft)",
-  },
-];
+import { metaFor, SEED } from "../lib/domain/categories.js";
 
-export function categoryMeta(key) {
-  return CATEGORIES.find((c) => c.key === key) || CATEGORIES[0];
+/**
+ * What colour and label a post's chip gets.
+ *
+ * Takes the loaded list. It used to close over a module constant, which was
+ * simpler right up until the list stopped being constant — a component that
+ * forgets to pass `rows` now gets the shipped four rather than silently
+ * getting whatever was cached, which is the failure mode worth having.
+ */
+export function categoryMeta(key, rows) {
+  return metaFor(key, rows && rows.length ? rows : SEED);
 }
 
 /**

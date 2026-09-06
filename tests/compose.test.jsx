@@ -95,14 +95,14 @@ describe("the + button", () => {
 
   it("offers every category, by name", async () => {
     await openComposer();
-    const { CATEGORIES } = await import("../src/member/categories");
-    const select = screen.getByText("Category").closest("label, div")
-      .querySelector("select") || document.querySelector("select");
-    const options = [...select.options].map((o) => o.value);
-    // Compared against the real list rather than a hardcoded four: the whole
+    // The list comes from the database now; with no rows mocked here the
+    // store falls back to SEED, which is the same four this ward has today.
+    // Compared against the real list rather than a hardcoded four — the whole
     // bug was the composer losing its grip on that list.
-    for (const c of CATEGORIES) expect(options).toContain(c.key);
-    expect(options.length).toBe(CATEGORIES.length);
+    const { SEED } = await import("../src/lib/domain/categories");
+    const options = [...document.querySelector("select").options].map((o) => o.value);
+    for (const c of SEED) expect(options).toContain(c.key);
+    expect(options.length).toBe(SEED.length);
   });
 });
 

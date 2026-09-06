@@ -11,6 +11,7 @@ import QuorumSettings from "./presidency/QuorumSettings";
 import ConductingSchedule from "./presidency/ConductingSchedule";
 import Callings from "./presidency/Callings";
 import Ministering from "./presidency/Ministering";
+import CategorySettings from "./presidency/CategorySettings";
 import Plan from "./presidency/Plan";
 import Meetings from "./presidency/Meetings";
 import HomeHub from "./presidency/HomeHub";
@@ -43,6 +44,7 @@ const PRESIDENCY_TABS = [
 // earn — it's consulted, not worked in.
 const SETTINGS_SECTIONS = [
   { key: "quorum", label: "Quorum" },
+  { key: "categories", label: "Categories" },
   { key: "conducting", label: "Conducting" },
   { key: "roster", label: "Roster" },
   { key: "talks", label: "Conference Talks" },
@@ -55,6 +57,7 @@ function SettingsTab() {
     <div>
       <Segmented value={section} onChange={setSection} options={SETTINGS_SECTIONS} idAttr="data-settings" />
       {section === "quorum" && <QuorumSettings />}
+      {section === "categories" && <CategorySettings />}
       {section === "conducting" && <ConductingSchedule />}
       {section === "roster" && <Roster />}
       {section === "talks" && <TalkLibrary />}

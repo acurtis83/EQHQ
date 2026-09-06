@@ -8,33 +8,31 @@ import AttachSheet from "../components/AttachSheet";
 import { FlyerHeader, FlyerPicker } from "../components/Flyer";
 import { fmtShort, toIso } from "../lib/domain/dates";
 import { REPEAT_RULES, repeats, nextOccurrence, describeRepeat, slotLabel } from "../lib/domain/repeat";
+import { useCategories } from "../lib/useCategories";
+import { singular, kindsFrom, kindMeta, EVENT_KINDS } from "../lib/domain/planning";
 
-// The three things the presidency plans. Assignments are deliberately last and
-// deliberately unpublishable — they're coordination, not announcements.
-export const EVENT_KINDS = [
-  {
-    key: "activity", label: "Activities", one: "Activity",
-    hint: "Pickleball, basketball, the quorum BBQ.",
-    publishes: true,
-    category: "activity",
-  },
-  {
-    key: "temple", label: "Temple Trips", one: "Temple Trip",
-    hint: "Sessions the quorum is going to together.",
-    publishes: true,
-    category: "temple",
-  },
-  {
-    key: "assignment", label: "Assignments", one: "Assignment",
-    hint: "Temple cleaning, youth camp, the rodeo — jobs the quorum takes on.",
-    // Carries through as an assignment, matching the tile on the feed — what
-    // you file as an assignment arrives as one. Private notes stay behind.
-    publishes: true,
-    category: "assignment",
-  },
-];
+// What the presidency plans.
+//
+// This was three hardcoded entries. It's derived from the category list now,
+// so adding "Service" in Settings gives it a planner section here with the
+// same dates, repeats, sign-ups and publishing as the others — that's what
+// makes a custom category a real one rather than just a coloured label.
+//
+// The planner's `kind` and the post's `category` are the same string. They
+// were separate fields that happened to hold the same values, mapped through
+// a table; keeping them identical means a renamed category can't leave the
+// planner pointing at a category that no longer answers to that name.
+//
+// Announcements have no section: there's nothing to plan about a notice, you
+// write it straight onto the feed. That's the `plans` flag in the table.
 
-export const kindMeta = (k) => EVENT_KINDS.find((x) => x.key === k) || EVENT_KINDS[0];
+// singular() and kindsFrom() moved to lib/domain/planning.js so the
+// arithmetic suite can actually import them — see the note there.
+export { singular, kindsFrom, kindMeta, EVENT_KINDS } from "../lib/domain/planning";
+
+
+
+
 
 // Empty strings are fine for text columns but Postgres rejects "" for a date,
 // which is what "invalid input syntax for type date" was. A new row now sends
@@ -107,7 +105,10 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     return nextOccurrence(row, fromIso);
   }, [datesFor]);
 
-  const meta = kindMeta(kind);
+  const { rows: categories } = useCategories();
+  // Live list, falling back to the shipped four until it loads.
+  const kinds = useMemo(() => kindsFrom(categories), [categories]);
+  const meta = kindMeta(kind, kinds);
 
   const { upcoming, past } = useMemo(() => {
     const today = toIso(new Date());
@@ -125,13 +126,13 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
   const counts = useMemo(() => {
     const today = toIso(new Date());
     const out = {};
-    for (const k of EVENT_KINDS) {
+    for (const k of kinds) {
       out[k.key] = rows.filter(
         (r) => r.kind === k.key && ((!r.event_date && !datesFor(r).length) || !!nextFor(r, today))
       ).length;
     }
     return out;
-  }, [rows, datesFor, nextFor]);
+  }, [rows, kinds, datesFor, nextFor]);
 
   const addNew = async () => {
     const { data, error } = await supabase
@@ -184,7 +185,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     }
 
     const payload = {
-      category: kindMeta(row.kind).category || "activity",
+      category: kindMeta(row.kind, kinds).category || "activity",
       title: row.title,
       body: lines.length ? lines.join("\n") : null,
       link_url: signUp || row.link_url || null,
@@ -275,7 +276,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
 
       {!kindProp && (
         <div role="tablist" style={{ display: "flex", gap: 4, background: T.inset, borderRadius: 12, padding: 4, marginBottom: 12 }}>
-          {EVENT_KINDS.map((k) => (
+          {kinds.map((k) => (
             <button
               key={k.key} role="tab" aria-selected={kind === k.key}
               data-kind={k.key}
@@ -360,6 +361,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
           members={members}
           forms={forms}
           eventDates={datesFor(editing)}
+          kinds={kinds}
           onClose={() => setEditing(null)}
           onSaved={load}
           onRemove={remove}
@@ -519,7 +521,8 @@ function EventRow({ row, meta, past, highlight, busy, onOpen, onPublish, onUnpub
   );
 }
 
-function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove, onAttach, setErr }) {
+function EditSheet({ row, members, forms, eventDates, kinds = EVENT_KINDS,
+  onClose, onSaved, onRemove, onAttach, setErr }) {
   const [d, setD] = useState({
     kind: row.kind,
     title: row.title || "",
@@ -534,7 +537,7 @@ function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove
     details: row.details || "",
     rsvp: !!row.rsvp,
   });
-  const meta = kindMeta(d.kind);
+  const meta = kindMeta(d.kind, kinds);
 
   const save = async () => {
     const { error } = await supabase.from("events").update({
@@ -565,7 +568,7 @@ function EditSheet({ row, members, forms, eventDates, onClose, onSaved, onRemove
 
       <Lbl label="Type">
         <Select value={d.kind} onChange={(v) => setD({ ...d, kind: v })}>
-          {EVENT_KINDS.map((k) => <option key={k.key} value={k.key}>{k.one}</option>)}
+          {kinds.map((k) => <option key={k.key} value={k.key}>{k.one}</option>)}
         </Select>
       </Lbl>
 
