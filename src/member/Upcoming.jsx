@@ -1,12 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { T, card, Btn } from "../components/ui";
 import Rsvp from "./Rsvp";
 import { categoryMeta } from "./categories";
-import { DOW, MON, isoParts } from "../lib/domain/dates";
-import { ACTION, actionFor } from "../lib/domain/upcomingAction";
+import { DOW, MON, isoParts, toIso } from "../lib/domain/dates";
+import { ACTION, actionFor, shownCount } from "../lib/domain/upcomingAction";
 
-const SHOWN = 3;
 
 /** "Sat, Sep 20" — the same shape the rest of the app uses for a short date. */
 function shortDate(iso) {
@@ -105,13 +104,20 @@ function UpcomingRow({ post, name, setName, onOpen }) {
 /**
  * What's coming up, and what to do about it.
  *
- * Three at a time. The point of this block is the next thing happening; a
- * month of temple cleaning shifts pushes Recent Activity off the screen, and
- * the feed is the other half of why anybody opens the app.
+ * Shows everything in the next fortnight, with a floor of three so a quiet
+ * stretch still looks like a list. The rest go behind "See all" — the point
+ * of this block is the next thing happening, and a month of temple cleaning
+ * shifts would push Recent Activity off the screen, which is the other half
+ * of why anybody opens the app.
+ *
+ * The count is worked out in domain/upcomingAction.js so it can be checked
+ * against a calendar without a browser; this only slices.
  */
-export default function Upcoming({ posts = [], name, setName, onOpen }) {
+export default function Upcoming({ posts = [], name, setName, onOpen, todayIso }) {
   const [all, setAll] = useState(false);
-  const shown = all ? posts : posts.slice(0, SHOWN);
+  const today = todayIso || toIso(new Date());
+  const count = useMemo(() => shownCount(posts, today), [posts, today]);
+  const shown = all ? posts : posts.slice(0, count);
   const more = posts.length - shown.length;
 
   // No bottom margin of its own: the feed spaces the hubs with one flex gap so

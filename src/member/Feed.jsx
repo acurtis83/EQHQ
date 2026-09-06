@@ -187,6 +187,7 @@ export default function Feed({ focus, onFocusHandled }) {
           posts={upcoming}
           name={name}
           setName={setName}
+          todayIso={toIso(new Date())}
           onOpen={(id) => setFocusId(id)}
         />
       </div>
