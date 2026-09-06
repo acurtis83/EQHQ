@@ -90,11 +90,10 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); cleanup(); });
 
 describe("what the banner calls the day", () => {
-  it("says NEXT SUNDAY LESSON, the same as the weekly email", async () => {
+  it("says THIS WEEK'S LESSON when the Sunday is this week", async () => {
     LESSON = { date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home" };
     const dom = await mount();
-    expect(dom.container.textContent).toContain("NEXT SUNDAY LESSON");
-    // The old wording, which the email had already moved on from.
+    expect(dom.container.textContent).toContain("THIS WEEK'S LESSON");
     expect(dom.container.textContent).not.toContain("THIS SUNDAY");
   });
 
@@ -102,16 +101,15 @@ describe("what the banner calls the day", () => {
     LESSON = { date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home" };
     const dom = await mount(SUNDAY);
     expect(dom.container.textContent).toContain("TODAY");
-    expect(dom.container.textContent).not.toContain("NEXT SUNDAY");
+    expect(dom.container.textContent).not.toContain("THIS WEEK");
   });
 
   it("drops the word LESSON when there isn't one", async () => {
-    // A fifth Sunday. "NEXT SUNDAY LESSON" over "no quorum lesson" contradicts
-    // itself, so the eyebrow shortens rather than lying.
+    // A fifth Sunday. Any heading with LESSON in it over "no quorum lesson"
+    // contradicts itself, so the eyebrow shortens rather than lying.
     const dom = await mount(BEFORE_FIFTH);
     expect(dom.container.textContent).toContain("no quorum lesson");
-    expect(dom.container.textContent).toContain("NEXT SUNDAY");
-    expect(dom.container.textContent).not.toContain("NEXT SUNDAY LESSON");
+    expect(dom.container.textContent).not.toContain("LESSON ·");
   });
 });
 
@@ -211,17 +209,16 @@ describe("the presidency home card heads the same Sunday", () => {
     return dom;
   }
 
-  it("says Next Sunday Lesson, not This Sunday", async () => {
+  it("says This Week's Lesson, not This Sunday", async () => {
     TEACHING = [{ date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home" }];
     const dom = await mountHub();
-    expect(dom.container.textContent).toContain("Next Sunday Lesson");
+    expect(dom.container.textContent).toContain("This Week's Lesson");
     expect(dom.container.textContent).not.toContain("This Sunday");
   });
 
   it("drops LESSON on a Sunday the bishopric directs", async () => {
     const dom = await mountHub(BEFORE_FIFTH);
-    expect(dom.container.textContent).toContain("Next Sunday");
-    expect(dom.container.textContent).not.toContain("Next Sunday Lesson");
+    expect(dom.container.textContent).not.toContain("Lesson");
   });
 
   it("uses the same words as the member feed for the same week", async () => {
@@ -232,12 +229,12 @@ describe("the presidency home card heads the same Sunday", () => {
     LESSON = TEACHING[0];
 
     const hub = await mountHub();
-    const hubSays = ["Today", "Next Sunday Lesson", "Next Sunday"]
+    const hubSays = ["Today", "This Week's Lesson", "This Week", "Next Lesson", "Next Sunday"]
       .find((w) => hub.container.textContent.includes(w));
     cleanup();
 
     const feed = await mount();
-    const feedSays = ["TODAY", "NEXT SUNDAY LESSON", "NEXT SUNDAY"]
+    const feedSays = ["TODAY", "THIS WEEK'S LESSON", "THIS WEEK", "NEXT LESSON", "NEXT SUNDAY"]
       .find((w) => feed.container.textContent.includes(w));
 
     expect(hubSays).toBeTruthy();
@@ -320,19 +317,22 @@ describe("what the label is on its own", () => {
   it("is Today only when the Sunday is today", async () => {
     const { sundayLabel } = await import("../src/lib/domain/lesson");
     expect(sundayLabel("2026-09-06", "2026-09-06", true)).toBe("Today");
-    expect(sundayLabel("2026-09-06", "2026-09-02", true)).toBe("Next Sunday Lesson");
+    expect(sundayLabel("2026-09-06", "2026-09-02", true)).toBe("This Week's Lesson");
   });
 
   it("keeps LESSON off a week without one", async () => {
     const { sundayLabel } = await import("../src/lib/domain/lesson");
-    expect(sundayLabel("2026-11-29", "2026-11-25", false)).toBe("Next Sunday");
+    expect(sundayLabel("2026-11-29", "2026-11-25", false)).toBe("This Week");
+    // ...and beyond the week, where it also mustn't promise a lesson.
+    expect(sundayLabel("2026-12-13", "2026-11-25", false)).toBe("Next Sunday");
   });
 
   it("doesn't call a missing Sunday today", async () => {
     // The presidency card passes undefined when nothing is scheduled at all.
     const { sundayLabel } = await import("../src/lib/domain/lesson");
+    // With no date there's nothing to call "this week", so it falls back.
     expect(sundayLabel(undefined, "2026-09-06", false)).toBe("Next Sunday");
-    expect(sundayLabel("", "", true)).toBe("Next Sunday Lesson");
+    expect(sundayLabel("", "", true)).toBe("Next Lesson");
   });
 });
 
