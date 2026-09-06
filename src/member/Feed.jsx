@@ -9,7 +9,14 @@ import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
 import Upcoming from "./Upcoming";
 import { FlyerHeader, FlyerPicker } from "../components/Flyer";
-import { categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./categories";
+// CATEGORIES is still needed even though the tiles are gone — it fills the
+// composer's category dropdown. It was dropped from this line when the tiles
+// were removed, which crashed the composer the moment anybody pressed +, and
+// went unnoticed because every feed test until now signed in as a member and
+// members never see that button.
+import {
+  CATEGORIES, categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS,
+} from "./categories";
 import { upcomingFrom } from "../lib/domain/upcomingAction";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
