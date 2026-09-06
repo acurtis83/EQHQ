@@ -222,6 +222,12 @@ function PrintItem({ it, plan, showCategory }) {
  */
 export default function AgendaPrint({
   agenda = {}, sections: SECTIONS = [], bySection = {}, events = [], categories = [],
+  // Deliberately a second prop. `categories` above is the agenda-item list
+  // (Brothers in Need, Follow-Up and so on); this is the post/event category
+  // list that decides the headings over Upcoming. They are different lists
+  // that both happen to be called categories, and passing one where the other
+  // belongs would print plausible-looking nonsense.
+  eventKinds = [],
   grouped = false, categoryOrder = [],
 }) {
   const withItems = SECTIONS
@@ -240,9 +246,9 @@ export default function AgendaPrint({
         ...g, items: flattenItems([g], categories),
       }))
     : [];
-  const eventGroups = groupEvents(events);
+  const eventGroups = groupEvents(events, eventKinds);
   const estimate = choosePrintPlan({
-    sections: grouped ? groups : withItems, events, grouped,
+    sections: grouped ? groups : withItems, events, grouped, categories: eventKinds,
   });
   // The estimate opens; the browser's own layout settles the ruled lines.
   const { lines, contentRef, footerRef } = useMeasuredWriteLines(estimate);

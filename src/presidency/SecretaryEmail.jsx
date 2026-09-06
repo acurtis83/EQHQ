@@ -73,7 +73,9 @@ export default function SecretaryEmail({ compact, onGo }) {
         ? supabase.from("agenda_items").select("*").eq("agenda_id", found.data.id).order("sort_order")
         : Promise.resolve({ data: [] }),
       supabase.from("teaching_assignments").select("*").eq("date", date).maybeSingle(),
-      supabase.from("events").select("*").in("kind", ["activity", "temple", "assignment"]).order("event_date"),
+      // No kind filter — see the note in SundayAgenda: a hardcoded list here
+      // silently dropped custom categories from the weekly email.
+      supabase.from("events").select("*").order("event_date"),
       supabase.from("event_dates").select("*").order("event_date"),
     ]);
 

@@ -94,12 +94,34 @@ describe("a category the ward added", () => {
   });
 
   it("gets its own section under Plan", async () => {
-    const dom = await mount("../src/presidency/Planning");
-    const tabs = [...dom.container.querySelectorAll("[data-kind]")].map((b) => b.dataset.kind);
+    // Mounted as Plan, not Planning. Planning has tabs of its own and they
+    // were derived correctly — but they only render when it's mounted
+    // WITHOUT a kind, and the app always passes one. Testing Planning
+    // directly exercised a configuration nothing ships, so this passed while
+    // there was no Service tab anywhere in the running app.
+    const dom = await mount("../src/presidency/Plan");
+    const tabs = [...dom.container.querySelectorAll("[data-plan]")]
+      .map((b) => b.dataset.plan);
     expect(tabs).toContain("service");
     // Announcements have nothing to plan, and a retired one is gone.
     expect(tabs).not.toContain("announcement");
     expect(tabs).not.toContain("gone");
+    // Teaching and Forms still live here.
+    expect(tabs).toContain("teaching");
+    expect(tabs).toContain("forms");
+  });
+
+  it("and opening that section shows the planner, not Forms", async () => {
+    // The other half of the same bug: Plan decided what to render from a
+    // hardcoded list of three kinds, so an unrecognised section fell through
+    // to Forms. A Service tab that opened the forms screen would look like
+    // the planner had simply lost the events.
+    const dom = await mount("../src/presidency/Plan");
+    const tab = [...dom.container.querySelectorAll("[data-plan]")]
+      .find((b) => b.dataset.plan === "service");
+    await act(async () => { fireEvent.click(tab); await new Promise((r) => setTimeout(r, 40)); });
+    expect(dom.container.textContent).toContain("Yard clean-ups");   // the Service hint
+    expect(dom.container.textContent).toContain("New");
   });
 });
 

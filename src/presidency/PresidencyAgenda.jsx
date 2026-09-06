@@ -15,6 +15,7 @@ import ViewToggle from "../components/ViewToggle";
 import { useViewMode, VIEWS } from "../lib/useViewMode";
 import AgendaPrint from "../components/AgendaPrint";
 import { choosePrintPlan, groupByCategory } from "../lib/domain/printPlan";
+import { useCategories } from "../lib/useCategories";
 import { upcomingForSunday } from "../lib/domain/upcoming";
 
 // One section. There used to be a second, "Ministering Checks", which was a
@@ -72,7 +73,9 @@ export default function PresidencyAgenda({ onGo }) {
     // both land on their next real date.
     const [ev, ed] = await Promise.all([
       supabase.from("events").select("*")
-        .in("kind", ["activity", "temple", "assignment"]).order("event_date"),
+        // No kind filter — a hardcoded list silently dropped custom
+        // categories from the printed agenda.
+        .order("event_date"),
       supabase.from("event_dates").select("*").order("event_date"),
     ]);
     setEvents(upcomingForSunday({
@@ -215,6 +218,14 @@ async function swapOrder(a, b) {
 // means clicking a row, which makes a test about the grouped view mostly a
 // test of the list — and this is the component the blank-screen bugs landed in.
 export function AgendaDetail({ agenda, items, agendas, members, events = [], onBack, onReloadItems, onPatchAgenda, onDelete, flash, toast, err, onGoCalling }) {
+  // The post/event categories, for the headings over Upcoming on the printed
+  // agenda. NOT the same list as `printCategories` further down, which is the
+  // agenda-item categories — two different lists, both called categories.
+  //
+  // Declared here rather than in PresidencyAgenda because this is the
+  // component that prints, and it's mounted directly by the tests. The store
+  // caches at module scope, so asking for it twice costs one fetch.
+  const { rows: eventKinds } = useCategories();
   const [adding, setAdding] = useState(null); // section key
   const [draft, setDraft] = useState(blankItem);
   const [editing, setEditing] = useState(null);
@@ -300,6 +311,7 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
     sections: grouped ? groups : withItems,
     events,
     grouped,
+    categories: eventKinds,
   });
 
   const addItem = async (section) => {
@@ -622,7 +634,7 @@ export function AgendaDetail({ agenda, items, agendas, members, events = [], onB
       {printing && (
         <AgendaPrint
           agenda={agenda} sections={SECTIONS} bySection={bySection}
-          events={events} categories={printCategories} grouped={grouped}
+          events={events} categories={printCategories} eventKinds={eventKinds} grouped={grouped}
           categoryOrder={categoryOrder}
         />
       )}

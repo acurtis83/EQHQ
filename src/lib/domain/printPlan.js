@@ -166,7 +166,7 @@ export function hasMeta(it, grouped) {
  * @param {object[]} opts.events    upcoming activities, assignments, temple trips
  * @param {boolean}  opts.grouped   a heading per category, or one flat run
  */
-export function estimateHeight(tier, { sections = [], events = [], grouped = false }) {
+export function estimateHeight(tier, { sections = [], events = [], grouped = false, categories = [] }) {
   // Every term below mirrors a real rule in AgendaPrint. An earlier version
   // padded each one "to be safe", and the padding compounded: a page it called
   // 96% full printed at about 74%. The margin for error is one number at the
@@ -200,9 +200,9 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
   // Upcoming: a tinted panel, two columns.
   const withDates = (events || []).filter((e) => e.when || e.event_date);
   if (withDates.length) {
-    const kinds = EVENT_KIND_LABELS
-      .map(([kind]) => withDates.filter((e) => (e.kind || "activity") === kind))
-      .filter((list) => list.length);
+    // Same grouping the renderer uses, so the height estimate can't count a
+    // different number of blocks than the page ends up drawing.
+    const kinds = groupEvents(withDates, categories).map((g) => g.items);
 
     const blocks = kinds.map((list) =>
       line(tier.note - 0.5) + 2 +
@@ -287,10 +287,10 @@ export function writeLinesFor(tier, contentHeight) {
  * `fits` is about the content alone. The writing block is sized from whatever
  * is left over, so it can never be the thing that pushes the page over.
  */
-export function choosePrintPlan({ sections = [], events = [], grouped = false } = {}) {
+export function choosePrintPlan({ sections = [], events = [], grouped = false, categories = [] } = {}) {
   const heights = TIERS.map((tier) => ({
     tier,
-    height: estimateHeight(tier, { sections, events, grouped }),
+    height: estimateHeight(tier, { sections, events, grouped, categories }),
   }));
 
   // The largest type that holds the content *and* the Follow-Up block.
@@ -470,18 +470,46 @@ export function printAccent(categories, label) {
   return (cat && PRINT_ACCENTS[cat.key]) || PRINT_ACCENT_DEFAULT;
 }
 
-/** Upcoming events, split into the three kinds, in a fixed order. */
+/**
+ * The shipped kinds and their headings, used when no category list is handed
+ * in — printing has to work before the list has loaded, and for a database
+ * that hasn't run categories.sql.
+ */
 export const EVENT_KIND_LABELS = [
   ["activity", "Activities"],
   ["assignment", "Assignments"],
   ["temple", "Temple Trips"],
 ];
 
-export function groupEvents(events = []) {
-  return EVENT_KIND_LABELS
+/**
+ * kind -> heading, from the live category list when there is one.
+ *
+ * A hardcoded map silently dropped a custom category off the printed agenda:
+ * the events were fetched, matched no kind, and vanished with no gap to
+ * notice. Anything unrecognised now gets its own group at the end rather than
+ * disappearing.
+ */
+export function kindLabels(categories) {
+  const live = (categories || [])
+    .filter((c) => c && c.plans && !c.retired)
+    .sort((a, b) => (a.sort_order ?? 100) - (b.sort_order ?? 100))
+    .map((c) => [c.key, c.label]);
+  return live.length ? live : EVENT_KIND_LABELS;
+}
+
+export function groupEvents(events = [], categories) {
+  const dated = (events || []).filter((e) => e.when || e.event_date);
+  const pairs = kindLabels(categories);
+  const known = new Set(pairs.map(([k]) => k));
+  const groups = pairs
     .map(([kind, label]) => ({
       label,
-      items: (events || []).filter((e) => (e.kind || "activity") === kind && (e.when || e.event_date)),
+      items: dated.filter((e) => (e.kind || "activity") === kind),
     }))
     .filter((g) => g.items.length);
+
+  // Whatever matched nothing. Better an "Other" heading than a silent hole.
+  const orphans = dated.filter((e) => !known.has(e.kind || "activity"));
+  if (orphans.length) groups.push({ label: "Other", items: orphans });
+  return groups;
 }

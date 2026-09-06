@@ -136,7 +136,10 @@ export default function MinisteringMap({
     })();
 
     return () => { dead = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately keyed on the COUNT, not the array. `placed` is rebuilt on
+    // every render, so depending on it would tear down and recreate the map
+    // continuously. Setup only needs to rerun when there is or isn't
+    // something to show; the redraw below handles the contents.
   }, [placed.length]);
 
   // Redraw when the data or the colouring changes. Separate from setup so
@@ -144,7 +147,9 @@ export default function MinisteringMap({
   useEffect(() => {
     if (!ready || !map.current) return;
     import("leaflet").then(({ default: L }) => draw(L));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // draw() is redefined every render and is not in the deps on purpose —
+    // including it would redraw on every render rather than when the data or
+    // the colouring changes.
   }, [ready, colorBy, placed, spots]);
 
   function draw(L) {

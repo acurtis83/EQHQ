@@ -113,7 +113,10 @@ export default function SundayAgenda({ onGo }) {
       // series is running. The filtering happens below against the Sunday
       // being planned.
       supabase.from("events").select("*")
-        .in("kind", ["activity", "temple", "assignment"])
+      // No .in("kind", [...]) filter. It used to list the three shipped kinds,
+      // which meant a category the ward added was silently missing from here
+      // — no error, just absent. The events table only ever holds planner
+      // rows, so there is nothing to filter out.
         .order("event_date"),
       // Anything extended but not yet sustained, and anything waiting to be
       // released. Read straight from the tracker so nobody has to remember to
