@@ -488,28 +488,45 @@ insert into post_categories (key, label, accent, soft, sort_order, plans, hint) 
    'Sessions the quorum is going to together.')
 on conflict (key) do nothing;
 
--- ---------- let posts hold a category that didn't exist yesterday ----------
--- The CHECK constraint listed the four by name, so any new category would be
--- rejected by the database no matter what the app allowed. It goes.
+-- -------- let posts and events hold a category that didn't exist yesterday --
+-- TWO constraints, not one, and missing the second is what made the first
+-- version of this migration only half work: adding a category gave it a
+-- planner section, and then saving anything into it failed with
 --
--- Deliberately NOT replaced with a foreign key to post_categories. A foreign
--- key would block retiring a category that still has posts, and retiring one
--- with history is exactly the case this is built for. The app resolves an
--- unknown key to a neutral chip rather than crashing — see categoryMeta().
+--   new row for relation "events" violates check constraint "events_kind_check"
+--
+-- posts.category is what the feed files a post under. events.kind is what the
+-- planner files a planned event under. They hold the same values and they had
+-- separate constraints, each listing the categories by name.
+--
+-- Deliberately NOT replaced with foreign keys to post_categories. A foreign
+-- key would block retiring a category that still has posts or events, and
+-- retiring one with history is exactly the case this is built for. The app
+-- resolves an unknown key to a neutral chip rather than crashing — see
+-- metaFor().
+--
+-- The other CHECK constraints in this schema are left alone on purpose:
+-- forms.kind, agendas.kind and ministering_contacts.kind are fixed app
+-- concepts, not lists the ward edits.
 alter table posts drop constraint if exists posts_category_check;
+alter table events drop constraint if exists events_kind_check;
 
 do $$
-declare c text;
+declare t text; c text;
 begin
-  -- The constraint has been created under a couple of names over the life of
-  -- this database. Drop whatever is actually there rather than guessing.
-  for c in
-    select conname from pg_constraint
-    where conrelid = 'posts'::regclass
-      and contype = 'c'
-      and pg_get_constraintdef(oid) ilike '%category%'
-  loop
-    execute format('alter table posts drop constraint %I', c);
+  -- These have been created under more than one name over the life of the
+  -- database. Drop whatever is actually there rather than guessing at it.
+  foreach t in array array['posts', 'events'] loop
+    if to_regclass(t) is null then continue; end if;
+    for c in
+      select conname from pg_constraint
+      where conrelid = t::regclass
+        and contype = 'c'
+        and (pg_get_constraintdef(oid) ilike '%category%'
+          or pg_get_constraintdef(oid) ilike '%kind%')
+    loop
+      execute format('alter table %I drop constraint %I', t, c);
+    end loop;
   end loop;
 end
 $$;
