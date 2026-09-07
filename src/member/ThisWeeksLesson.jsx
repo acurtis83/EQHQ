@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, CalendarRange } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T } from "../components/ui";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../lib/domain/dates";
 import { talkUrl } from "../presidency/Teaching";
 import { hasTalk, sundayLabel } from "../lib/domain/lesson";
+import TeachingSchedule from "./TeachingSchedule";
 
 // The coming Sunday the quorum gathers — today counts if it's Sunday.
 function nextGatheringSunday(fromIso) {
@@ -27,6 +28,7 @@ const ON_INK_SOFT = "#a6abb4";
 const ON_INK_ACCENT = "#8ab6e8";
 
 export default function ThisWeeksLesson() {
+  const [showSchedule, setShowSchedule] = useState(false);
   const [state, setState] = useState({ loading: true });
 
   useEffect(() => {
@@ -153,6 +155,27 @@ export default function ThisWeeksLesson() {
           <ArrowUpRight size={15} />
         </a>
       )}
+
+      {/* The way in to the full schedule.
+          Members have no navigation of their own — the feed is the whole app
+          for them — so this is the only place a teacher could reasonably find
+          it, and it's the card they already look at to see what's on. Sits
+          under the talk link rather than beside it: the talk is what most
+          people came for. */}
+      <button
+        onClick={() => setShowSchedule(true)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          marginTop: reason || !url ? 12 : 10,
+          background: "none", border: "none", padding: 0, cursor: "pointer",
+          fontSize: 13.5, fontWeight: 600, color: ON_INK_SOFT,
+        }}
+      >
+        <CalendarRange size={14} />
+        Who&rsquo;s teaching, next 6 months
+      </button>
+
+      {showSchedule && <TeachingSchedule onClose={() => setShowSchedule(false)} />}
     </div>
   );
 }
