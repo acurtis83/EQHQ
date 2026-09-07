@@ -27,6 +27,34 @@ const ON_INK = "#ffffff";
 const ON_INK_SOFT = "#a6abb4";
 const ON_INK_ACCENT = "#8ab6e8";
 
+/**
+ * The same button the Upcoming rows use for Sign Up.
+ *
+ * Written out rather than imported because Upcoming builds its own inline —
+ * the two are meant to match, and this comment is the only thing holding them
+ * together. If either changes, change both.
+ *
+ * T.primary and --on-primary both flip with the theme, and the pair stays
+ * legible on this card either way: a blue button with white text in light
+ * mode, a pale blue button with near-black text in dark. The card itself is
+ * fixed dark in both, so it's worth having checked.
+ */
+const PILL = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  background: T.primary,
+  color: "var(--on-primary)",
+  border: `1px solid ${T.primary}`,
+  borderRadius: 10,
+  padding: "7px 11px",
+  fontSize: 14,
+  fontWeight: 600,
+  textDecoration: "none",
+  lineHeight: 1.2,
+  whiteSpace: "nowrap",
+};
+
 export default function ThisWeeksLesson() {
   const [showSchedule, setShowSchedule] = useState(false);
   const [state, setState] = useState({ loading: true });
@@ -148,45 +176,38 @@ export default function ThisWeeksLesson() {
         </div>
       )}
 
-      {!reason && url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 5,
-            marginTop: 12,
-            fontSize: 14.5,
-            fontWeight: 700,
-            color: ON_INK_ACCENT,
-            textDecoration: "none",
-          }}
-        >
-          Read the talk
-          <ArrowUpRight size={15} />
-        </a>
-      )}
+      {/* Both actions as buttons, matching the Sign Up button in Upcoming.
+          They were two text links of different sizes and colours, which read
+          as small print under the lesson rather than as things to press — and
+          the schedule, which is the only way a teacher can check when their
+          turn is, was the fainter of the two.
 
-      {/* The way in to the full schedule.
-          Members have no navigation of their own — the feed is the whole app
-          for them — so this is the only place a teacher could reasonably find
-          it, and it's the card they already look at to see what's on. Sits
-          under the talk link rather than beside it: the talk is what most
-          people came for. */}
-      <button
-        onClick={() => setShowSchedule(true)}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 5,
-          marginTop: reason || !url ? 12 : 10,
-          background: "none", border: "none", padding: 0, cursor: "pointer",
-          fontSize: 13.5, fontWeight: 600, color: ON_INK_SOFT,
-        }}
-      >
-        <CalendarRange size={14} />
-        Upcoming Lessons
-      </button>
+          Side by side rather than stacked: on the narrowest phone they wrap,
+          and wrapping is better than permanently spending two lines. */}
+      <div style={{
+        display: "flex", flexWrap: "wrap", gap: 8, marginTop: 13,
+      }}>
+        {!reason && url && (
+          // A real anchor, as in Upcoming: it leaves the app, so long-press,
+          // open-in-new-tab and "copy link" all have to work, and a screen
+          // reader should call it a link rather than a button.
+          <a href={url} target="_blank" rel="noreferrer" style={PILL}>
+            Read the talk
+            <ArrowUpRight size={15} />
+          </a>
+        )}
+
+        {/* The way in to the full schedule. Members have no navigation of
+            their own — the feed is the whole app for them — so this is the
+            only place a teacher could reasonably find it. */}
+        <button
+          onClick={() => setShowSchedule(true)}
+          style={{ ...PILL, cursor: "pointer", font: "inherit", fontSize: 14, fontWeight: 600 }}
+        >
+          <CalendarRange size={14} />
+          Upcoming Lessons
+        </button>
+      </div>
 
       {showSchedule && <TeachingSchedule onClose={() => setShowSchedule(false)} />}
     </div>

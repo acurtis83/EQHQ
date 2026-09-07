@@ -113,6 +113,53 @@ describe("what the banner calls the day", () => {
   });
 });
 
+describe("the two actions look like buttons", () => {
+  const LESSON_WITH_TALK = {
+    date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home",
+    talk_link: "https://www.churchofjesuschrist.org/study/x?lang=eng",
+  };
+
+  it("Read the talk is filled in, not a text link", async () => {
+    LESSON = { ...LESSON_WITH_TALK };
+    const dom = await mount();
+    const style = readTheTalk().closest("a").getAttribute("style") || "";
+    // A background is what separates a button from a coloured word. These
+    // were 14.5px text links under the lesson and read as small print.
+    expect(style).toContain("var(--primary)");
+    expect(style).toContain("var(--on-primary)");
+    expect(style).toMatch(/border-radius/);
+    expect(dom).toBeTruthy();
+  });
+
+  it("and so does Upcoming Lessons", async () => {
+    LESSON = { ...LESSON_WITH_TALK };
+    await mount();
+    const btn = screen.getByText("Upcoming Lessons").closest("button");
+    const style = btn.getAttribute("style") || "";
+    expect(style).toContain("var(--primary)");
+    expect(style).toContain("var(--on-primary)");
+    expect(style).toMatch(/border-radius/);
+  });
+
+  it("the talk stays a real link, so it can be opened in a new tab", async () => {
+    LESSON = { ...LESSON_WITH_TALK };
+    await mount();
+    const a = readTheTalk().closest("a");
+    expect(a.tagName).toBe("A");
+    expect(a.getAttribute("target")).toBe("_blank");
+    expect(a.getAttribute("rel")).toContain("noreferrer");
+  });
+
+  it("and the schedule button survives a week with no talk", async () => {
+    // Conference or a fifth Sunday: Read the talk isn't rendered at all, and
+    // the row must not collapse and take the schedule with it — that's a
+    // teacher's only way to check when their turn is.
+    const dom = await mount(BEFORE_FIFTH);
+    expect(readTheTalk()).toBeNull();
+    expect(dom.container.textContent).toContain("Upcoming Lessons");
+  });
+});
+
 describe("the Read the talk link", () => {
   it("is there when a talk has been chosen", async () => {
     LESSON = {
