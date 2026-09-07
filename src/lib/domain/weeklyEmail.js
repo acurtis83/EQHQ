@@ -8,6 +8,7 @@
 // the email is pure text assembly and worth testing on its own.
 import { fmtDate, fmtShort } from "./dates.js";
 import { hasTalk } from "./lesson.js";
+import { signUpHref } from "./upcomingAction.js";
 
 const dash = "—";
 
@@ -130,7 +131,11 @@ export function eventLink(e, siteUrl) {
   }
   const url = (e?.link_url || "").trim();
   if (!url) return null;
-  const signup = /[?&]f=/.test(url);
+  // The same rule the feed's Sign Up button uses, called rather than copied.
+  // These two had drifted apart once already: an outside sign-up link showed
+  // as "Details" in both places, and fixing it in one would have left the
+  // email quietly disagreeing with the button people had just tapped.
+  const signup = !!signUpHref(e);
   return {
     label: signup ? named("Sign up for", "Sign up") : named("Details for", "Details"),
     short: signup ? "Sign up" : "Details",
@@ -191,6 +196,24 @@ export function buildEmailText({
     out.push("Lesson details to follow.");
   }
 
+  // --- the push to the site ---
+  // "The most important part of the email is the This Weeks Lesson, Teacher,
+  //  Talk link at the top and then the push for everyone to visit the website
+  //  for updates, announcements, and information."
+  //
+  // This used to be the last line, under the signature block, which is the
+  // part of an email people scroll past. Directly under the lesson it lands
+  // on the one thing everybody reads — and it reads as a follow-on from it:
+  // here's Sunday, everything else is over there.
+  //
+  // It stays a single line rather than a bordered call-to-action. This is a
+  // note from the presidency to the quorum, and a marketing button in the
+  // middle of it would change what the email sounds like.
+  if (siteUrl) {
+    out.push("");
+    out.push(`${APP_LINE}: ${String(siteUrl).replace(/\/+$/, "")}`);
+  }
+
   // --- announcements ---
   const notes = announcements.map(asNote).filter((n) => n.text);
   if (notes.length) {
@@ -225,15 +248,15 @@ export function buildEmailText({
 
   // The closing line, before the signature. Written as "sentence: url" like
   // the event links, so a plain-text reader can still get there — the HTML
-  // pass puts the link on the app's name and drops the address.
-  if (siteUrl) {
-    out.push("");
-    out.push(`${APP_LINE}: ${String(siteUrl).replace(/\/+$/, "")}`);
-  }
+  // pass puts the link on the group's name and drops the address.
+  //
+  // The site link is no longer repeated down here. It's near the top now, and
+  // saying it twice in a short email makes the second one look like a mistake.
+  //
   // Only when the presidency has set one. A ward that doesn't use GroupMe
   // shouldn't get a sentence about joining a group that doesn't exist.
   if (groupMeUrl) {
-    if (!siteUrl) out.push("");
+    out.push("");
     out.push(`${GROUPME_LINE}: ${groupMeUrl}`);
   }
 
@@ -288,6 +311,18 @@ export function buildEmailHtml({
     parts.push(`<p style="${P}">Lesson details to follow.</p>`);
   }
 
+  // Straight after the lesson, matching the plain-text build. The two have to
+  // agree: the secretary can hand-edit the plain text and send that instead,
+  // and an email whose shape depended on which button he pressed would be a
+  // difference nobody could explain.
+  if (siteUrl) {
+    const home = String(siteUrl).replace(/\/+$/, "");
+    const [before, after] = APP_LINE.split(APP_NAME);
+    parts.push(`<p style="${P};margin-top:16px">${escHtml(before)}` +
+      `<a href="${escHtml(home)}" style="color:#0063d6">${escHtml(APP_NAME)}</a>` +
+      `${escHtml(after)}</p>`);
+  }
+
   const notes = announcements.map(asNote).filter((n) => n.text);
   if (notes.length) {
     parts.push(`<div style="${H}">Announcements</div>`);
@@ -311,16 +346,11 @@ export function buildEmailHtml({
       }).join("") + `</ul>`);
   }
 
-  if (siteUrl) {
-    const home = String(siteUrl).replace(/\/+$/, "");
-    const [before, after] = APP_LINE.split(APP_NAME);
-    parts.push(`<p style="${P};margin-top:18px${groupMeUrl ? ";margin-bottom:4px" : ""}">${escHtml(before)}` +
-      `<a href="${escHtml(home)}" style="color:#0063d6">${escHtml(APP_NAME)}</a>` +
-      `${escHtml(after)}</p>`);
-  }
+  // The site link has moved up under the lesson, so GroupMe is on its own
+  // down here and always carries the top margin that used to be conditional.
   if (groupMeUrl) {
     const [before, after] = GROUPME_LINE.split(GROUPME_NAME);
-    parts.push(`<p style="${P}${siteUrl ? "" : ";margin-top:18px"}">${escHtml(before)}` +
+    parts.push(`<p style="${P};margin-top:18px">${escHtml(before)}` +
       `<a href="${escHtml(groupMeUrl)}" style="color:#0063d6">${escHtml(GROUPME_NAME)}</a>` +
       `${escHtml(after)}</p>`);
   }

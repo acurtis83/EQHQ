@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { Mail, Plus, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Mail, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Chip, Select } from "../components/ui";
 import EmailSheet from "../components/EmailSheet";
 import { toIso, fmtDate, scheduleBetween, noLessonReason } from "../lib/domain/dates";
 import { upcomingForSunday } from "../lib/domain/upcoming";
+import { announcementWarnings } from "../lib/domain/announcements";
 import { useAuth } from "../lib/useAuth";
 
 const SECTION = "announcements";
@@ -41,6 +42,7 @@ export default function SecretaryEmail({ compact, onGo }) {
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [feedNotices, setFeedNotices] = useState([]);
 
   const loadShell = useCallback(async () => {
     const today = toIso(new Date());
@@ -68,7 +70,7 @@ export default function SecretaryEmail({ compact, onGo }) {
     if (found.error) { setErr(found.error.message); return; }
     setAgenda(found.data || null);
 
-    const [its, tl, ev, ed] = await Promise.all([
+    const [its, tl, ev, ed, notices] = await Promise.all([
       found.data
         ? supabase.from("agenda_items").select("*").eq("agenda_id", found.data.id).order("sort_order")
         : Promise.resolve({ data: [] }),
@@ -77,9 +79,19 @@ export default function SecretaryEmail({ compact, onGo }) {
       // silently dropped custom categories from the weekly email.
       supabase.from("events").select("*").order("event_date"),
       supabase.from("event_dates").select("*").order("event_date"),
+      // Announcements posted straight to the feed. Not used to BUILD the
+      // email — the agenda is the source for that — but needed to notice one
+      // that never reached the agenda and so would go out to nobody.
+      supabase.from("posts").select("id,title,body,event_date,created_at")
+        .eq("category", "announcement").order("created_at", { ascending: false }),
     ]);
 
     setItems(its.data || []);
+    // Still current on the Sunday in question: a notice whose date has passed
+    // isn't missing from the agenda, it's over.
+    setFeedNotices((notices.data || []).filter(
+      (p) => !p.event_date || String(p.event_date) >= String(date)
+    ));
     setLesson(tl.data || null);
     setEvents(upcomingForSunday({
       events: ev.data || [], eventDates: ed.data || [],
@@ -90,6 +102,25 @@ export default function SecretaryEmail({ compact, onGo }) {
   useEffect(() => { load(); }, [load]);
 
   const announcements = items.filter((i) => i.section === SECTION);
+
+  // "theres a few spots for announcements and dont want duplicates or to be
+  //  missing anything on the email."
+  //
+  // Worth being precise about what this can and can't catch. This screen and
+  // the Sunday agenda read the SAME rows — both are agenda_items in the
+  // announcements section for this date — so those two can never disagree,
+  // and no check is needed between them. What can go wrong is a notice posted
+  // straight to the feed that nobody added to the agenda, and the same thing
+  // said twice once a carried-forward announcement is retyped.
+  //
+  // Advisory only. Nothing here blocks sending: the secretary can see the
+  // whole email and is a better judge than a word-overlap score.
+  const warnings = useMemo(
+    () => announcementWarnings({
+      agendaItems: announcements, feedPosts: feedNotices, events,
+    }),
+    [announcements, feedNotices, events]
+  );
   const chosen = sundays.find((s) => s.date === date);
   const reason = chosen && !chosen.teaches
     ? readableReason(chosen.reason)
@@ -192,6 +223,46 @@ export default function SecretaryEmail({ compact, onGo }) {
 
       {err && (
         <div style={{ fontSize: 13.5, color: T.red, marginTop: 9, lineHeight: 1.5 }}>{err}</div>
+      )}
+
+      {/* Shown before the Weekly Email button, not after it — the whole value
+          is catching this while it's still a two-second fix rather than after
+          the email has gone to the quorum. Amber, not red: none of these is an
+          error, and a red block over a working screen teaches you to click
+          past it. */}
+      {warnings.length > 0 && (
+        <div
+          data-announcement-warnings={warnings.length}
+          style={{
+            marginTop: 11, padding: "10px 11px", borderRadius: 10,
+            background: T.inset, border: `1px solid ${T.gold}`,
+          }}
+        >
+          <div style={{
+            display: "flex", alignItems: "center", gap: 7, marginBottom: 7,
+            fontSize: 13.5, fontWeight: 700, color: T.ink,
+          }}>
+            <AlertTriangle size={14} style={{ color: T.gold }} />
+            Worth a look before you send
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {warnings.map((w) => (
+              <div key={w.id} data-warning={w.kind} style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                <span style={{ color: T.ink, fontWeight: 600 }}>
+                  {/* Quoted so it's obvious which words came from the
+                      announcement and which are ours. */}
+                  &ldquo;{w.text}&rdquo;
+                </span>
+                <span style={{ color: T.sub }}> — {w.detail}</span>
+                {w.other && (
+                  <div style={{ color: T.faint, marginTop: 2 }}>
+                    Compare: &ldquo;{w.other}&rdquo;
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div style={{

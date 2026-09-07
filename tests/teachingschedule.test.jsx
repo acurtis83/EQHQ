@@ -170,7 +170,7 @@ describe("finding it", () => {
       dom = render(<ThisWeeksLesson />);
       await new Promise((r) => setTimeout(r, 60));
     });
-    const opener = screen.getByText(/teaching, next 6 months/i);
+    const opener = screen.getByText(/upcoming lessons/i);
     expect(opener).toBeTruthy();
     await act(async () => {
       fireEvent.click(opener);

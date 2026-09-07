@@ -16,10 +16,36 @@ export const ACTION = {
   NONE: "none",       // nothing to do but read it
 };
 
-/** A sign-up link is one that opens a form: /?f=<id>. */
+/**
+ * Words a presidency member uses when the thing behind the link is a sign-up.
+ *
+ * Deliberately narrow. "Details", "Info", "Flyer" and "Read more" all describe
+ * something you go and look at, and giving those a Sign Up button would be
+ * promising an action the page doesn't offer.
+ */
+const SIGNUP_WORDS = /\b(sign[\s-]?ups?|signup|volunteer(ing)?|rsvp)\b/i;
+
+/**
+ * The link that signs you up, or "".
+ *
+ * Two kinds count. The app's own forms are recognisable from the URL alone
+ * (/?f=<id>), and they were the only kind this knew about — which is why a
+ * blood drive pointing at the stake's own page got a "Details" link when it
+ * plainly wanted a Sign Up button.
+ *
+ * The second kind is any outside link the presidency LABELLED as a sign-up.
+ * The label is the one place somebody has already said what the link is for:
+ * Planning sets it to "Sign Up" automatically when a row has a sign-up link,
+ * and whoever types one by hand is answering the same question. Reading intent
+ * off the label beats guessing from the hostname, which would mean keeping a
+ * list of form providers and getting it wrong every time the stake used a new
+ * one.
+ */
 export function signUpHref(post) {
   const url = String(post?.link_url || "").trim();
-  return /[?&]f=/.test(url) ? url : "";
+  if (!url) return "";
+  if (/[?&]f=/.test(url)) return url;
+  return SIGNUP_WORDS.test(String(post?.link_label || "")) ? url : "";
 }
 
 /**

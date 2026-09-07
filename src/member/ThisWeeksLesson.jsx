@@ -67,10 +67,10 @@ export default function ThisWeeksLesson() {
   // screens can't end up calling the same Sunday different things again.
   const when = sundayLabel(sunday, toIso(new Date()), !reason).toUpperCase();
 
-  const eyebrow = `${when} · ${fmtDate(sunday)
+  const dateLabel = fmtDate(sunday)
     .replace(/^\w+, /, "")
     .replace(/, \d{4}$/, "")
-    .toUpperCase()}`;
+    .toUpperCase();
 
   let title;
   let sub;
@@ -105,15 +105,28 @@ export default function ThisWeeksLesson() {
         minWidth: 0,
       }}
     >
+      {/* "TODAY · SEP 6", and big enough to be the first thing read.
+          It was 11px with wide tracking — a caption above the headline. But
+          which Sunday this card is talking about is the question people
+          actually arrive with, especially on a Wednesday when "this week's
+          lesson" could mean the one just gone. The lesson title stays larger
+          still, so there's one headline rather than two competing for it. */}
       <div
         style={{
-          fontSize: 11,
-          letterSpacing: "0.14em",
-          fontWeight: 700,
-          color: ON_INK_ACCENT,
+          display: "flex",
+          alignItems: "baseline",
+          flexWrap: "wrap",
+          gap: 7,
+          fontSize: 15,
+          letterSpacing: "0.06em",
+          fontWeight: 800,
+          lineHeight: 1.2,
         }}
       >
-        {eyebrow}
+        <span style={{ color: ON_INK_ACCENT }}>{when}</span>
+        {/* Softer, so at this size the label still leads and the date reads as
+            what it is — the answer to "which Sunday", not a second heading. */}
+        <span style={{ color: ON_INK_SOFT, fontWeight: 700 }}>{dateLabel}</span>
       </div>
 
       <div
@@ -123,7 +136,7 @@ export default function ThisWeeksLesson() {
           color: ON_INK,
           letterSpacing: "-0.02em",
           lineHeight: 1.25,
-          marginTop: 6,
+          marginTop: 8,
         }}
       >
         {title}
@@ -172,7 +185,7 @@ export default function ThisWeeksLesson() {
         }}
       >
         <CalendarRange size={14} />
-        Who&rsquo;s teaching, next 6 months
+        Upcoming Lessons
       </button>
 
       {showSchedule && <TeachingSchedule onClose={() => setShowSchedule(false)} />}

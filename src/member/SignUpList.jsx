@@ -3,6 +3,7 @@ import { Check, Plus, Trash2, X, ClipboardList } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, Btn, Input, Chip } from "../components/ui";
 import { SIGNUP_TEMPLATES, slotStatus, signupSummary } from "./signupTemplates";
+import { signUpHref } from "../lib/domain/upcomingAction";
 
 export default function SignUpList({
   post, slots, claims, name, setName, isPresidency, onReload,
@@ -18,7 +19,10 @@ export default function SignUpList({
   // A post that already has a way to respond doesn't need the inline slot
   // builder as well — two competing ways to sign up for the same thing is
   // worse than one. Either the link on the post is the sign-up, or "I'm in" is.
-  const linksToForm = /[?&]f=/.test(post.link_url || "");
+  // Any sign-up link counts, not just one of our own forms. A blood drive
+  // pointing at the stake's own page is still somewhere you sign up, and
+  // offering our sheet underneath it would split one list across two places.
+  const linksToForm = !!signUpHref(post);
   const hasRsvp = !!post.rsvp;
 
   if (!mySlots.length) {

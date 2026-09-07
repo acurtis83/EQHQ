@@ -8,6 +8,7 @@ import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui
 import { fmtShort, timeAgo, toIso } from "../lib/domain/dates";
 import ThisWeeksLesson from "./ThisWeeksLesson";
 import Upcoming from "./Upcoming";
+import Announcements from "./Announcements";
 import { FlyerHeader, FlyerPicker } from "../components/Flyer";
 // categoryMeta fills the chip on every post; the list itself fills the
 // composer's dropdown. Both come from the database now — see useCategories —
@@ -216,6 +217,13 @@ export default function Feed({ focus, onFocusHandled }) {
           categories={categories}
           onOpen={goToPost}
         />
+
+        {/* Last, and below Upcoming on purpose. What's coming up is the thing
+            people open the app to check; announcements are what they'd have
+            heard on Sunday, so they answer "what did I miss" rather than
+            "what's next". This card removes itself when there's nothing to
+            show, and the flex gap closes behind it. */}
+        <Announcements />
       </div>
 
       <div style={{

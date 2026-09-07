@@ -13,10 +13,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 
 let POSTS = [];
 let RSVPS = [];
+let NOTICES = [];
 let WRITES = [];
 
 function query(table) {
-  const rows = table === "posts" ? POSTS : table === "public_rsvps" ? RSVPS : [];
+  const rows = table === "posts" ? POSTS
+    : table === "public_rsvps" ? RSVPS
+    : table === "sunday_announcements_public" ? NOTICES
+    : [];
   const capture = (op) => (arg) => {
     WRITES.push({ table, op, arg });
     return chain({ data: [], error: null });
@@ -91,6 +95,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   POSTS = DEFAULTS.map((p) => ({ ...p }));
   RSVPS = [];
+  NOTICES = [];
   WRITES = [];
   localStorage.clear();
 });
@@ -122,6 +127,40 @@ describe("the three sections, in order", () => {
   it("still lists the posts underneath", async () => {
     const dom = await mount();
     expect(dom.container.querySelectorAll("[id^='post-']").length).toBe(POSTS.length);
+  });
+
+  /**
+   * The announcements hub, mounted through the Feed rather than on its own.
+   *
+   * Its own tests render <Announcements /> directly, which proves the card
+   * works but not that anything shows it — deleting it from the Feed left
+   * every one of them passing. That is the same shape of hole as the Plan
+   * screen's hardcoded section list: a component tested in a configuration
+   * the app never ships.
+   */
+  it("and the announcements hub is on the feed, below Upcoming", async () => {
+    NOTICES = [{
+      meeting_date: "2026-09-06", text: "Temple recommend interviews after church.",
+      sort_order: 0,
+    }];
+    const dom = await mount();
+    expect(dom.container.textContent).toContain("Temple recommend interviews");
+
+    // Compared by position in the document, not by index into textContent:
+    // the heading is uppercased with CSS, so the text still reads
+    // "Announcements" and searching for the shouted version finds nothing.
+    const notice = dom.container.querySelector("[data-announcement-row]");
+    const event = dom.container.querySelector("[data-upcoming-row]");
+    expect(notice, "the hub isn't on the feed at all").toBeTruthy();
+    expect(
+      event.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING,
+      "announcements came out above what's coming up"
+    ).toBeTruthy();
+  });
+
+  it("and takes its space back when nothing was announced", async () => {
+    const dom = await mount();   // NOTICES is empty
+    expect(dom.container.textContent).not.toContain("From Sun");
   });
 });
 
@@ -199,6 +238,45 @@ describe("the action on each row", () => {
     expect(row.querySelector("a"), "a details link became an action").toBeNull();
     // Only the row's own title button, nothing to act on.
     expect(row.querySelectorAll("button")).toHaveLength(1);
+  });
+
+  /**
+   * "im not sure why the service events dont show the Sign Up button like the
+   *  Assignement or Activity"
+   *
+   * They didn't because the rule only recognised our own forms (/?f=). A blood
+   * drive on the stake's site, or a Google form for a day of service, got the
+   * same treatment as a link to a map. What separates the two is what the
+   * presidency called the link.
+   */
+  it("an outside link labelled as a sign-up gets the button", async () => {
+    POSTS = [{
+      id: "blood", category: "service", title: "Stake Blood Drive",
+      event_date: "2026-09-11", link_url: "https://redcrossblood.org/drive/8th",
+      link_label: "Sign up", created_at: daysAgo(1),
+    }];
+    await mount();
+    const link = rowFor("blood").querySelector("a");
+    expect(link, "an outside sign-up link got no button").toBeTruthy();
+    expect(link.getAttribute("href")).toBe("https://redcrossblood.org/drive/8th");
+    expect(link.textContent).toContain("Sign Up");
+    // Opens the stake's site, so it must behave like a link out.
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
+
+  it("but an outside link labelled anything else still doesn't", async () => {
+    // The counterweight. Without this the rule could be "any link at all is a
+    // sign-up", which passes the test above and puts a Sign Up button on a
+    // flyer, a map and a stake calendar.
+    POSTS = [{
+      id: "flyer", category: "service", title: "9/11 Day of Service",
+      event_date: "2026-09-12", link_url: "https://example.org/flyer.pdf",
+      link_label: "Details", created_at: daysAgo(1),
+    }];
+    await mount();
+    const row = rowFor("flyer");
+    expect(row.textContent, "a flyer got a Sign Up button").not.toContain("Sign Up");
+    expect(row.querySelector("a")).toBeNull();
   });
 });
 
