@@ -106,6 +106,75 @@ describe("the + button", () => {
   });
 });
 
+describe("the composer's date fields", () => {
+  it("are there for anything with a planner section", async () => {
+    // Was `category === "activity" || category === "temple"`, hardcoded. An
+    // Assignment or a Service post written here got no date field, and
+    // without a date it can never reach Upcoming — which looked like
+    // Upcoming ignoring those posts rather than the composer never letting
+    // you give them one.
+    const dom = await openComposer();
+    for (const key of ["activity", "assignment", "temple"]) {
+      await act(async () => {
+        fireEvent.change(document.querySelector("select"), { target: { value: key } });
+        await new Promise((r) => setTimeout(r, 20));
+      });
+      expect(dom.container.querySelector('input[type="date"]')).toBeTruthy();
+    }
+  });
+
+  it("but not for an announcement, which has no date", async () => {
+    const dom = await openComposer();
+    await act(async () => {
+      fireEvent.change(document.querySelector("select"), { target: { value: "announcement" } });
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(dom.container.querySelector('input[type="date"]')).toBeNull();
+  });
+});
+
+describe("tapping a row in Upcoming", () => {
+  it("goes to the post rather than doing nothing", async () => {
+    const seen = [];
+    Element.prototype.scrollIntoView = function scrollIntoView() { seen.push(this.id); };
+
+    POSTS = [
+      { id: "later", category: "activity", title: "Ward BBQ",
+        event_date: "2026-09-26", created_at: "2026-09-01T00:00:00Z" },
+      ...Array.from({ length: 8 }, (_, i) => ({
+        id: `filler${i}`, category: "announcement", title: `Notice ${i}`,
+        created_at: "2026-09-08T00:00:00Z",
+      })),
+    ];
+    const dom = await mount();
+
+    const row = dom.container.querySelector("[data-upcoming-row]");
+    expect(row).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(row.querySelector("button"));
+      await new Promise((r) => setTimeout(r, 150));
+    });
+
+    // The whole bug: onOpen only set a highlight flag. The scroll lived in a
+    // different effect, keyed on the Home Hub's deep-link route, which
+    // Upcoming never used — so on a feed longer than a screen the tap
+    // appeared to do nothing at all.
+    expect(seen).toContain("post-later");
+
+    // ...and the post is picked out, the same way a link from the email
+    // picks one out — a ring round the card. Scrolling to it without
+    // marking it leaves you looking at a wall of posts.
+    const card = document.getElementById("post-later");
+    expect(card).toBeTruthy();
+    expect(card.getAttribute("style")).toContain("0 0 0 3px");
+  });
+
+  // The other route in — a link from the Home Hub or the weekly email — is
+  // covered in share.test.jsx, which asserts the highlight ring rather than
+  // spying on scrollIntoView. That's the sturdier signal and it already
+  // exists, so it isn't repeated here.
+});
+
 describe("publishing", () => {
   it("writes a post with what was typed", async () => {
     await openComposer();

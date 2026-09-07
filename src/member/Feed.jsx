@@ -78,24 +78,40 @@ export default function Feed({ focus, onFocusHandled }) {
     setLoading(false);
   }, []);
 
+  /**
+   * Take somebody to a post: reveal it if it's behind the past toggle,
+   * highlight it, and scroll it into view.
+   *
+   * Shared, because there are two ways in and they used to disagree. A link
+   * from the Home Hub or the weekly email ran all three steps. Tapping a row
+   * in Upcoming only set the highlight — no scroll, and no reveal — so on a
+   * feed longer than a screen it looked like the tap did nothing at all,
+   * which is what it did.
+   *
+   * The reveal matters as much as the scroll: a post that's gone past isn't
+   * rendered, so there is nothing to scroll to and nothing to highlight.
+   */
+  const goToPost = useCallback((id) => {
+    if (!id) return;
+    const target = posts.find((p) => p.id === id);
+    if (!target) return;
+    if (isPast(target, toIso(new Date()), Date.now())) setShowPast(true);
+    setFocusId(id);
+    // One frame for the reveal to render before scrolling at it.
+    setTimeout(() => {
+      document.getElementById(`post-${id}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }, 60);
+    setTimeout(() => setFocusId(null), 2600);
+  }, [posts]);
+
   // Jump to the post the Home Hub pointed at, once it's actually rendered.
   useEffect(() => {
     const id = focus?.postId;
     if (!id || loading) return;
-    const target = posts.find((p) => p.id === id);
-    if (!target) { onFocusHandled?.(); return; }
-    // A link from the weekly email can point at something that has since gone
-    // past. Scrolling to a post that isn't rendered lands nowhere and looks
-    // like a broken link, so a deep link opens the past for itself.
-    if (isPast(target, toIso(new Date()), Date.now())) setShowPast(true);
-    setFocusId(id);
-    const t = setTimeout(() => {
-      document.getElementById(`post-${id}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-    }, 60);
-    const clear = setTimeout(() => setFocusId(null), 2600);
+    if (!posts.some((p) => p.id === id)) { onFocusHandled?.(); return; }
+    goToPost(id);
     onFocusHandled?.();
-    return () => { clearTimeout(t); clearTimeout(clear); };
-  }, [focus, loading, posts, onFocusHandled]);
+  }, [focus, loading, posts, goToPost, onFocusHandled]);
 
   useEffect(() => {
     load();
@@ -198,7 +214,7 @@ export default function Feed({ focus, onFocusHandled }) {
           setName={setName}
           todayIso={toIso(new Date())}
           categories={categories}
-          onOpen={(id) => setFocusId(id)}
+          onOpen={goToPost}
         />
       </div>
 
@@ -447,7 +463,21 @@ function PostCard({ post, comments, slots, claims, links, open, onToggle, name, 
 
 function Composer({ draft, setDraft, categories = [], onPublish, onClose }) {
   const set = (k) => (v) => setDraft({ ...draft, [k]: v });
-  const isEvent = draft.category === "activity" || draft.category === "temple";
+  /**
+   * Does this category have a date?
+   *
+   * Read off the category rather than compared against two names. It was
+   * `category === "activity" || category === "temple"`, which meant an
+   * Assignment or a Service post written here got no date field at all — and
+   * without a date it can never appear in Upcoming, because Upcoming is the
+   * calendar. It looked like Upcoming was ignoring those posts; it was the
+   * composer never letting you give them a date.
+   *
+   * `plans` is the right signal: a category with a planner section is a
+   * category of things that happen on a day. Announcements don't plan and
+   * don't have dates, which is the distinction this was reaching for.
+   */
+  const isEvent = !!categories.find((c) => c.key === draft.category)?.plans;
 
   return (
     <div
