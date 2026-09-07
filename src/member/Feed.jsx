@@ -209,6 +209,16 @@ export default function Feed({ focus, onFocusHandled }) {
 
         <GroupMeCard />
 
+        {/* Above Upcoming, at Drew's call. Announcements are the perishable
+            half: they were said once, on a Sunday, to whoever was in the room,
+            and anybody who missed that has no other way to get them. What's
+            coming up keeps — it has dates on it and it's still there tomorrow.
+            So the thing with no second chance goes first.
+
+            This card removes itself when there's nothing to show, and the flex
+            gap closes behind it. */}
+        <Announcements />
+
         <Upcoming
           posts={upcoming}
           name={name}
@@ -217,13 +227,6 @@ export default function Feed({ focus, onFocusHandled }) {
           categories={categories}
           onOpen={goToPost}
         />
-
-        {/* Last, and below Upcoming on purpose. What's coming up is the thing
-            people open the app to check; announcements are what they'd have
-            heard on Sunday, so they answer "what did I miss" rather than
-            "what's next". This card removes itself when there's nothing to
-            show, and the flex gap closes behind it. */}
-        <Announcements />
       </div>
 
       <div style={{

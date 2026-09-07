@@ -138,7 +138,7 @@ describe("the three sections, in order", () => {
    * screen's hardcoded section list: a component tested in a configuration
    * the app never ships.
    */
-  it("and the announcements hub is on the feed, below Upcoming", async () => {
+  it("and the announcements hub is on the feed, above Upcoming", async () => {
     NOTICES = [{
       meeting_date: "2026-09-06", text: "Temple recommend interviews after church.",
       sort_order: 0,
@@ -153,8 +153,8 @@ describe("the three sections, in order", () => {
     const event = dom.container.querySelector("[data-upcoming-row]");
     expect(notice, "the hub isn't on the feed at all").toBeTruthy();
     expect(
-      event.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING,
-      "announcements came out above what's coming up"
+      notice.compareDocumentPosition(event) & Node.DOCUMENT_POSITION_FOLLOWING,
+      "what's coming up came out above the announcements"
     ).toBeTruthy();
   });
 

@@ -9,7 +9,7 @@ import { FlyerHeader, FlyerPicker } from "../components/Flyer";
 import { fmtShort, toIso } from "../lib/domain/dates";
 import { REPEAT_RULES, repeats, nextOccurrence, describeRepeat, slotLabel } from "../lib/domain/repeat";
 import { useCategories } from "../lib/useCategories";
-import { singular, kindsFrom, kindMeta, EVENT_KINDS } from "../lib/domain/planning";
+import { singular, kindsFrom, kindMeta, EVENT_KINDS, publishedLink } from "../lib/domain/planning";
 
 // What the presidency plans.
 //
@@ -168,6 +168,7 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
     // date; a per-date form only applies when there's a single date left.
     const formId = row.form_id || (own.length === 1 ? own[0].form_id : null);
     const signUp = formId ? `${origin}/?f=${formId}` : null;
+    const published = publishedLink(row, signUp);
 
     // Body: what's needed, then the dates as a plain list. No URLs in here —
     // a wall of links is unreadable, and the post already carries one Sign Up
@@ -188,8 +189,8 @@ export default function Planning({ focus, onFocusHandled, kind: kindProp, onKind
       category: kindMeta(row.kind, kinds).category || "activity",
       title: row.title,
       body: lines.length ? lines.join("\n") : null,
-      link_url: signUp || row.link_url || null,
-      link_label: signUp ? "Sign Up" : row.link_url ? "Details" : null,
+      link_url: published.url,
+      link_label: published.label,
       event_date: when,
       event_time: time || null,
       event_location: row.location || null,
@@ -536,6 +537,7 @@ function EditSheet({ row, members, forms, eventDates, kinds = EVENT_KINDS,
     form_id: row.form_id || "",
     details: row.details || "",
     rsvp: !!row.rsvp,
+    link_is_signup: !!row.link_is_signup,
   });
   const meta = kindMeta(d.kind, kinds);
 
@@ -554,6 +556,7 @@ function EditSheet({ row, members, forms, eventDates, kinds = EVENT_KINDS,
       form_id: d.form_id || null,
       details: d.details.trim() || null,
       rsvp: !!d.rsvp,
+      link_is_signup: !!d.link_is_signup,
     }).eq("id", row.id);
     if (error) { setErr(error.message); return; }
     onSaved();
@@ -678,6 +681,36 @@ function EditSheet({ row, members, forms, eventDates, kinds = EVENT_KINDS,
       <Btn kind="ghost" onClick={() => { onAttach(row); onClose(); }}>
         <Paperclip size={14} />Link Or File
       </Btn>
+
+      {/* Only once there's a link to describe, and not when one of our own
+          forms is attached — that's already a sign-up, and offering the choice
+          would imply it might not be.
+
+          This is the one thing about a link that can't be worked out from the
+          link. A blood drive on the stake's site and a map of the stake centre
+          are both just URLs; what separates them is what happens when you get
+          there, which only the person attaching it knows. Without this, the
+          Planner labelled every outside link "Details" and the feed had
+          nothing to go on. */}
+      {row.link_url && !d.form_id && (
+        <label style={{
+          display: "flex", alignItems: "flex-start", gap: 8, fontSize: 14.5,
+          color: T.ink, lineHeight: 1.45, cursor: "pointer",
+        }}>
+          <input
+            type="checkbox"
+            checked={!!d.link_is_signup}
+            onChange={(e) => setD({ ...d, link_is_signup: e.target.checked })}
+            style={{ marginTop: 2, flex: "0 0 auto" }}
+          />
+          <span>
+            That link is where people sign up
+            <span style={{ display: "block", fontSize: 13, color: T.sub, marginTop: 1 }}>
+              Puts a Sign Up button on the feed post instead of a details link.
+            </span>
+          </span>
+        </label>
+      )}
 
       <Btn kind="primary" size="lg" style={{ justifyContent: "center" }} onClick={save}>Save</Btn>
       <Btn kind="plain" onClick={() => onRemove(row)}><Trash2 size={14} />Remove</Btn>

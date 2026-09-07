@@ -50,3 +50,29 @@ export const kindMeta = (k, kinds) => {
   const list = kinds && kinds.length ? kinds : EVENT_KINDS;
   return list.find((x) => x.key === k) || list[0];
 };
+
+/**
+ * The link a published post carries, and what to call it.
+ *
+ * Pulled out of Planning.jsx because it's the join between two screens: what
+ * the Planner writes here is exactly what the feed and the weekly email read
+ * back when deciding between a Sign Up button and a details link. It was three
+ * nested ternaries inside a payload object, which is a hard place to check and
+ * an easy place to get a case wrong.
+ *
+ * `signUpUrl` is the link to one of our own forms, already built by the
+ * caller, or "" when there isn't one.
+ */
+export function publishedLink(row, signUpUrl) {
+  // Our own form wins. It IS a sign-up, and an event with both a form and an
+  // outside link should send people to the one that records who's coming.
+  if (signUpUrl) return { url: signUpUrl, label: "Sign Up" };
+
+  const url = String(row?.link_url || "").trim();
+  if (!url) return { url: null, label: null };
+
+  // An outside link is a sign-up only if somebody said so on the row. The URL
+  // is no help: a stake blood-drive booking page and a map of the stake centre
+  // are both just addresses.
+  return { url, label: row?.link_is_signup ? "Sign Up" : "Details" };
+}

@@ -6,6 +6,7 @@ import {
 } from "../src/lib/domain/announcements";
 import { buildEmailText, buildEmailHtml } from "../src/lib/domain/weeklyEmail";
 import { signUpHref, actionFor, ACTION } from "../src/lib/domain/upcomingAction";
+import { publishedLink } from "../src/lib/domain/planning";
 
 /**
  * Announcements, in the three places they show up.
@@ -358,6 +359,47 @@ describe("the sign-up rule is one rule", () => {
     for (const label of ["Details", "Flyer", "Map", "Read more", "Calendar", ""]) {
       expect(signUpHref({ link_url: "https://example.org/x", link_label: label }), label).toBe("");
     }
+  });
+
+  /**
+   * The Planner end of it.
+   *
+   * The label rule above can only work if something sets a truthful label, and
+   * the Planner sets it for every event published from PLAN. It used to write
+   * "Details" for any link that wasn't one of our own forms — so a blood drive
+   * pointing at the stake's booking page was labelled "Details" before the
+   * feed ever saw it, and no amount of reading labels downstream could help.
+   */
+  it("the Planner marks an outside sign-up link as one", () => {
+    const { url, label } = publishedLink(
+      { link_url: "https://redcrossblood.org/drive", link_is_signup: true }, null
+    );
+    expect(label).toBe("Sign Up");
+    // ...and that's exactly what the feed needs to show the button.
+    expect(actionFor({ link_url: url, link_label: label }).kind).toBe(ACTION.SIGNUP);
+  });
+
+  it("and leaves an ordinary link alone", () => {
+    const { label } = publishedLink(
+      { link_url: "https://maps.example/timp", link_is_signup: false }, null
+    );
+    expect(label).toBe("Details");
+    expect(actionFor({ link_url: "https://maps.example/timp", link_label: label }).kind)
+      .toBe(ACTION.NONE);
+  });
+
+  it("our own form still wins over an outside link", () => {
+    // An event with both should send people where the response is recorded.
+    const { url, label } = publishedLink(
+      { link_url: "https://example.org/flyer", link_is_signup: true },
+      "https://eqhq.netlify.app/?f=abc"
+    );
+    expect(url).toBe("https://eqhq.netlify.app/?f=abc");
+    expect(label).toBe("Sign Up");
+  });
+
+  it("and an event with no link publishes none", () => {
+    expect(publishedLink({}, null)).toEqual({ url: null, label: null });
   });
 
   it("and the email calls it the same thing the button does", () => {
