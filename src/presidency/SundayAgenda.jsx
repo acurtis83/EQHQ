@@ -14,8 +14,9 @@ import PersonPick from "../components/PersonPick";
 import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Area, Select, Chip, SectionTitle } from "../components/ui";
 import {
-  fmtDate, fmtShort, toIso, scheduleBetween, noLessonReason, NO_LESSON, DOW, MON, isoParts,
+  fmtDate, fmtShort, toIso, noLessonReason, NO_LESSON, DOW, MON, isoParts,
 } from "../lib/domain/dates";
+import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
 import { buildEmailText, buildEmailHtml, textToHtml, emailSubject } from "../lib/domain/weeklyEmail";
 import { carryable, carriedRow } from "../lib/domain/carryOver";
 import UpcomingList from "../components/UpcomingList";
@@ -59,7 +60,6 @@ export default function SundayAgenda({ onGo }) {
   // can't offer a Sunday that doesn't exist.
   const loadShell = useCallback(async () => {
     const today = toIso(new Date());
-    const horizon = toIso(new Date(Date.now() + 120 * 86400000));
     const [ex, m, cond] = await Promise.all([
       supabase.from("calendar_exceptions").select("date"),
       supabase.from("members").select("id,name,active").order("name"),
@@ -69,10 +69,12 @@ export default function SundayAgenda({ onGo }) {
     ]);
     if (!cond.error) setConducting(scheduleFromRows(cond.data || []));
     const stake = new Set((ex.data || []).map((e) => e.date));
-    const sched = scheduleBetween(today, horizon, stake).slice(0, 10);
+    // Recent Sundays too, so a past agenda can be opened and its
+    // announcements corrected — those are what the feed shows the quorum.
+    const sched = sundayOptions(today, stake, { ahead: 10 });
     setSundays(sched);
     if (!m.error) setMembers(m.data || []);
-    setDate((d) => d || sched.find((s) => s.teaches)?.date || sched[0]?.date || "");
+    setDate((d) => d || defaultSunday(sched, today));
     setLoading(false);
   }, []);
 
@@ -132,7 +134,13 @@ export default function SundayAgenda({ onGo }) {
 
     // Roll last Sunday's announcements forward, once. `carried_over` is what
     // stops a deliberately deleted announcement reappearing every visit.
-    if (!row.carried_over) {
+    //
+    // Never into a meeting that has already happened. Now that past Sundays
+    // can be opened, looking at one would otherwise have written announcements
+    // into it — changing the record of what was actually announced that day,
+    // and, if it were the most recent past Sunday, changing what the whole
+    // quorum reads on the feed. Opening an old agenda has to be a read.
+    if (!row.carried_over && date >= toIso(new Date())) {
       const carried = await carryForward(row, date);
       if (carried) loaded = carried;
     }
@@ -286,7 +294,9 @@ export default function SundayAgenda({ onGo }) {
             <Select value={date} onChange={setDate}>
               {sundays.map((s) => (
                 <option key={s.date} value={s.date}>
-                  {fmtDate(s.date)}{s.teaches ? "" : " — no lesson"}
+                  {fmtDate(s.date)}
+                  {s.past ? " — past" : ""}
+                  {s.teaches ? "" : " — no lesson"}
                 </option>
               ))}
             </Select>

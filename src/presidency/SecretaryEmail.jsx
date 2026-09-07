@@ -3,7 +3,8 @@ import { Mail, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Chip, Select } from "../components/ui";
 import EmailSheet from "../components/EmailSheet";
-import { toIso, fmtDate, scheduleBetween, noLessonReason } from "../lib/domain/dates";
+import { toIso, fmtDate, noLessonReason } from "../lib/domain/dates";
+import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
 import { upcomingForSunday } from "../lib/domain/upcoming";
 import { announcementWarnings } from "../lib/domain/announcements";
 import { useAuth } from "../lib/useAuth";
@@ -46,12 +47,14 @@ export default function SecretaryEmail({ compact, onGo }) {
 
   const loadShell = useCallback(async () => {
     const today = toIso(new Date());
-    const horizon = toIso(new Date(Date.now() + 120 * 86400000));
     const ex = await supabase.from("calendar_exceptions").select("date");
     const stake = new Set((ex.data || []).map((e) => e.date));
-    const sched = scheduleBetween(today, horizon, stake).slice(0, 8);
+    // Recent Sundays as well as coming ones, so an announcement can be fixed
+    // after the fact — the feed shows the last meeting's announcements to the
+    // whole quorum, and that page was previously unreachable.
+    const sched = sundayOptions(today, stake, { ahead: 8 });
     setSundays(sched);
-    setDate((d) => d || sched.find((s) => s.teaches)?.date || sched[0]?.date || "");
+    setDate((d) => d || defaultSunday(sched, today));
     setLoading(false);
   }, []);
 
@@ -176,7 +179,9 @@ export default function SecretaryEmail({ compact, onGo }) {
       <Select value={date} onChange={setDate}>
         {sundays.map((s) => (
           <option key={s.date} value={s.date}>
-            {fmtDate(s.date)}{s.teaches ? "" : " — no quorum lesson"}
+            {fmtDate(s.date)}
+            {s.past ? " — past" : ""}
+            {s.teaches ? "" : " — no quorum lesson"}
           </option>
         ))}
       </Select>

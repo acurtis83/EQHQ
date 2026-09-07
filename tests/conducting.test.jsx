@@ -224,6 +224,44 @@ describe("the Sunday agenda reading the schedule", () => {
     return dom;
   }
 
+  /**
+   * Opening an old agenda has to be a read.
+   *
+   * Past Sundays are selectable now, so the presidency can correct an
+   * announcement after the fact. But the agenda screen rolls the previous
+   * week's announcements forward on first visit — and pointed at a meeting
+   * that already happened, that would write announcements INTO it: changing
+   * the record of what was said that day, and, when it's the most recent past
+   * Sunday, changing what the whole quorum reads on the feed.
+   */
+  it("doesn't carry announcements into a Sunday that has already happened", async () => {
+    SCHEDULE = [];
+    AGENDA = { id: "old", kind: "sunday", meeting_date: "2026-08-23", carried_over: false };
+    const dom = await mountAgenda();
+
+    // Opening on today's Sunday DOES carry forward, which is the point of the
+    // feature — so the writes are cleared and only what a past selection
+    // causes is measured. Without this step the test passes either way, since
+    // the screen never leaves the current Sunday on its own.
+    WRITES = [];
+
+    const picker = dom.container.querySelector("select");
+    expect([...picker.options].some((o) => o.value === "2026-08-23"),
+      "past Sundays aren't selectable at all").toBe(true);
+
+    await act(async () => {
+      fireEvent.change(picker, { target: { value: "2026-08-23" } });
+      await new Promise((r) => setTimeout(r, 30));
+    });
+
+    const wrote = WRITES.filter((w) => w.table === "agenda_items" && w.op === "insert");
+    expect(wrote, "opening a past agenda rewrote what was announced").toHaveLength(0);
+    const marked = WRITES.filter(
+      (w) => w.table === "agendas" && w.op === "update" && "carried_over" in (w.arg || {})
+    );
+    expect(marked, "it marked a past agenda as carried").toHaveLength(0);
+  });
+
   it("fills Conducting from the month, and says where it came from", async () => {
     SCHEDULE = [{ month: "2026-09", name: "Cameron Pearson" }];
     AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", conducting: null };
