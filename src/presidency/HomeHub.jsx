@@ -10,6 +10,7 @@ import { fmtDate, fmtShort, toIso, scheduleBetween, NO_LESSON } from "../lib/dom
 import { sundayLabel } from "../lib/domain/lesson";
 import { overdueDays } from "./RunningList";
 import UpcomingList from "../components/UpcomingList";
+import { openEvents } from "../lib/domain/upcoming";
 
 // How many upcoming items the Upcoming panel lists. Capping by count rather
 // than by a date window: a 45-day horizon silently hid an assignment five days
@@ -17,8 +18,11 @@ import UpcomingList from "../components/UpcomingList";
 const UPCOMING_SHOWN = 5;
 
 // Date · time · where · who — whichever of those exist.
+// `when` is the next date it actually happens, resolved by openEvents — a
+// repeating activity's own event_date is the first one it ever had, so
+// printing that would date basketball to August for ever.
 const eventMeta = (e) =>
-  [e.event_date ? fmtShort(e.event_date) : "No date yet", e.event_time, e.location, e.assigned_to]
+  [e.when ? fmtShort(e.when) : "No date yet", e.event_time, e.location, e.assigned_to]
     .filter(Boolean).join(" · ");
 
 // Activities and temple trips can be announced; showing which ones haven't been
@@ -35,16 +39,25 @@ export default function HomeHub({ onGo }) {
   const load = useCallback(async () => {
     const today = toIso(new Date());
 
-    const [events, members, announcements, callings, groups, running, agendaItems, teaching, exceptions, pres] =
+    const [events, eventDates, members, announcements, callings, groups, running, agendaItems, teaching, exceptions, pres] =
       await Promise.all([
         // Planned items, not feed posts — so the hub shows things that haven't
         // been announced yet, which is exactly what the presidency needs to
-        // see. Undated rows count as upcoming: they're still being planned.
-        // Everything still ahead, with no upper bound — temple cleaning is
-        // scheduled months out and belongs in the count.
+        // see.
+        //
+        // No date filter in the query. It used to say
+        // `event_date.is.null or event_date.gte.today`, which loses every
+        // repeating event whose first occurrence has passed — basketball has
+        // run every Thursday since August and kept its August date, so the
+        // whole series vanished from the counts and from Upcoming Events.
+        // Whether an event is still open depends on its repeat rule and its
+        // explicit dates, neither of which a column comparison can see; the
+        // filtering happens in openEvents() instead.
         supabase.from("events").select("*")
-          .or(`event_date.is.null,event_date.gte.${today}`)
           .order("event_date", { ascending: true, nullsFirst: false }),
+        // The explicit dates, which this screen never loaded — so an event
+        // whose real dates live here was being judged on the row's own date.
+        supabase.from("event_dates").select("*").order("event_date"),
         supabase.from("members").select("id,name,age,active"),
         // Announcements live on posts, not the planning table — they're
         // written straight to the feed.
@@ -64,6 +77,7 @@ export default function HomeHub({ onGo }) {
 
     setD({
       events: events.data || [],
+      eventDates: eventDates.data || [],
       members: (members.data || []).filter((m) => m.active !== false),
       announcements: announcements.data || [],
       callings: callings.data || [],
@@ -120,16 +134,22 @@ export default function HomeHub({ onGo }) {
     return <div style={{ color: T.sub, fontSize: 15, padding: 24, textAlign: "center" }}>Loading…</div>;
   }
 
-  const activities = d.events.filter((e) => e.kind === "activity");
-  const temple = d.events.filter((e) => e.kind === "temple");
-  const assignments = d.events.filter((e) => e.kind === "assignment" && !e.done);
-  // An announcement counts as current until its date passes; undated ones
-  // stand until they're deleted.
+  // Still open as of today, with repeats and explicit dates resolved. The
+  // counts and the Upcoming list both read this, so a series can't be in one
+  // and missing from the other.
+  const open = openEvents({
+    events: d.events, eventDates: d.eventDates, todayIso: toIso(new Date()),
+  });
+  const activities = open.filter((e) => e.kind === "activity");
+  const temple = open.filter((e) => e.kind === "temple");
+  const assignments = open.filter((e) => e.kind === "assignment");
   // Activities and temple trips together, soonest first — one list, because
-  // "what's coming up" isn't two questions.
+  // "what's coming up" isn't two questions. Sorted by when it NEXT happens,
+  // not by the row's stored date, or a weekly activity would sit at the
+  // bottom under the date it started on.
   const upcoming = [...activities, ...temple]
-    .filter((e) => e.event_date)
-    .sort((a, b) => a.event_date.localeCompare(b.event_date));
+    .filter((e) => e.when)
+    .sort((a, b) => a.when.localeCompare(b.when));
   const notices = d.announcements.filter(
     (p) => !p.event_date || p.event_date >= toIso(new Date())
   );
@@ -234,7 +254,14 @@ export default function HomeHub({ onGo }) {
             is a lot of screen for an absence. As tiles they read at a glance
             and stay the same height whether empty or full. */}
         <div className="eq-hub-wide eq-hub-tiles">
-          <CountTile icon={Bell} label="Announcements" n={notices.length}
+          {/* "why is the announcements on the presidency home 0?"
+              Because it counts announcement POSTS live on the members' feed,
+              not the announcements read out at the Sunday meeting — and the
+              only feed notice had a date that has passed. Both numbers are
+              worth knowing and they are rarely the same, so the tile now says
+              which one it is. The meeting's announcements are counted on the
+              secretary card below, where they're edited. */}
+          <CountTile icon={Bell} label="Feed Notices" n={notices.length}
             onGo={() => onGo?.("feed", { postId: notices[0]?.id })} />
           <CountTile icon={CalendarDays} label="Activities" n={activities.length}
             flag={activities.filter((e) => !e.post_id).length}
@@ -255,7 +282,8 @@ export default function HomeHub({ onGo }) {
             empty="Nothing on the calendar yet."
             items={upcoming.slice(0, UPCOMING_SHOWN).map((e) => ({
               id: e.id,
-              when: e.event_date,
+              // The date it NEXT happens, not the one it started on.
+              when: e.when,
               title: e.title,
               meta: [e.event_time, e.location, e.assigned_to].filter(Boolean).join(" · "),
               onClick: () => onGo?.("plan", { eventId: e.id }),
@@ -480,6 +508,11 @@ function CountTile({ icon: Icon, label, n, flag, onGo }) {
     <button
       onClick={onGo}
       disabled={empty}
+      // The count, readable on its own. Reading it out of the tile's text
+      // meant parsing "Activities33 not posted", where the number and the
+      // not-posted flag run together.
+      data-count-tile={label}
+      data-count={n}
       style={{
         ...card, padding: "12px 12px 13px", textAlign: "left",
         cursor: empty ? "default" : "pointer", opacity: empty ? 0.65 : 1,

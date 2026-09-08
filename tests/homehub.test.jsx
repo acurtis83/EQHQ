@@ -13,9 +13,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
  */
 
 let TEACHING = [];
+let EVENTS = [];
+let EVENT_DATES = [];
+let POSTS = [];
 
 function query(name) {
-  const rows = name === "teaching_assignments" ? TEACHING : [];
+  const rows = name === "teaching_assignments" ? TEACHING
+    : name === "events" ? EVENTS
+    : name === "event_dates" ? EVENT_DATES
+    : name === "posts" ? POSTS
+    : [];
   const chain = () => new Proxy(Promise.resolve({ data: rows, error: null }), {
     get(t, k) {
       if (k === "then" || k === "catch" || k === "finally") return t[k].bind(t);
@@ -50,6 +57,24 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(NOW);
   TEACHING = [];
+  EVENT_DATES = [];
+  POSTS = [];
+  EVENTS = [
+    // Runs every Thursday since August. Its stored event_date is the FIRST
+    // one it ever had, which is the whole problem: the screen filtered on
+    // that column and the series disappeared the moment August passed.
+    { id: "bball", kind: "activity", title: "Basketball",
+      event_date: "2026-08-20", repeat_rule: "weekly" },
+    { id: "bbq", kind: "activity", title: "2026 Fall EQ BBQ", event_date: "2026-09-23" },
+    { id: "padel", kind: "activity", title: "Conquer Padel Night", event_date: "2026-11-06" },
+    // Genuinely over, and should stay out.
+    { id: "old", kind: "activity", title: "August Social", event_date: "2026-08-01" },
+    // Sits between today and basketball's next Thursday. Sorting on the
+    // STORED date puts basketball (August) first; sorting on when each thing
+    // next happens puts this first. Without a row like this the two orders
+    // are identical and the sort is untested.
+    { id: "tnight", kind: "temple", title: "Ward Temple Night", event_date: "2026-09-09" },
+  ];
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); });
 
@@ -96,5 +121,68 @@ describe("the lesson card on Home", () => {
     TEACHING = [];
     const dom = await mount();
     expect(dom.container.textContent).toContain("No Teacher Assigned");
+  });
+});
+
+/**
+ * "Activities is off too i think it should show 3"
+ *
+ * Basketball, the BBQ and padel night. The count said 2 because the events
+ * query filtered on event_date >= today, and a repeating event keeps the date
+ * of its first occurrence for ever.
+ */
+describe("the counts on Home", () => {
+  const count = (dom, label) =>
+    dom.container.querySelector(`[data-count-tile="${label}"]`)?.dataset.count;
+
+  it("counts a repeating activity that's still running", async () => {
+    const dom = await mount();
+    expect(count(dom, "Activities"), "basketball fell out of the count").toBe("3");
+  });
+
+  it("and lists it under Upcoming Events, at its next date", async () => {
+    const dom = await mount();
+    const text = dom.container.textContent;
+    expect(text, "the weekly activity is missing from Upcoming").toContain("Basketball");
+    // Next Thursday, not the August one it started on.
+    expect(text).not.toContain("Aug 20");
+  });
+
+  it("soonest first, by when it next happens", async () => {
+    const dom = await mount();
+    const text = dom.container.textContent;
+    // Basketball's stored date (20 Aug) is the oldest of the lot, but it
+    // doesn't happen again until Thursday the 10th — after the temple night
+    // on the 9th. By stored date it would come first; by when it next
+    // happens it comes second.
+    expect(text.indexOf("Ward Temple Night")).toBeLessThan(text.indexOf("Basketball"));
+    expect(text.indexOf("Basketball")).toBeLessThan(text.indexOf("2026 Fall EQ BBQ"));
+  });
+
+  it("but leaves out one that's genuinely over", async () => {
+    const dom = await mount();
+    expect(dom.container.textContent).not.toContain("August Social");
+  });
+
+  it("drops a series once its explicit dates are used up", async () => {
+    // The stored date is deliberately in the FUTURE while every real date is
+    // past. That's what makes this test able to fail: with a past stored date
+    // the row drops out anyway and the rule under test never runs.
+    EVENTS = [{ id: "clean", kind: "assignment", title: "Temple Cleaning", event_date: "2026-12-01" }];
+    EVENT_DATES = [
+      { id: "d1", event_id: "clean", event_date: "2026-08-01" },
+      { id: "d2", event_id: "clean", event_date: "2026-08-15" },
+    ];
+    const dom = await mount();
+    // Falling back to the row's own date here would resurrect it.
+    expect(dom.container.textContent).not.toContain("Temple Cleaning");
+  });
+
+  it("and the feed-notice tile says what it counts", async () => {
+    // It counts announcement POSTS on the members' feed, not the
+    // announcements read out at the meeting — which is why it read 0 while
+    // the Sunday agenda had two.
+    const dom = await mount();
+    expect(dom.container.textContent).toContain("Feed Notices");
   });
 });

@@ -80,3 +80,51 @@ export function upcomingForSunday({ events, eventDates, sundayIso, limit = 6, fr
     .sort((a, b) => a.when.localeCompare(b.when))
     .slice(0, limit);
 }
+
+/**
+ * Everything still open, from today: what the presidency has on.
+ *
+ * "Activities is off too i think it should show 3"
+ *
+ * Presidency Home asked the database for events with
+ * `event_date is null or event_date >= today`, and that quietly loses a whole
+ * class of them. A repeating event's stored event_date is the FIRST date it
+ * ever had — basketball every Thursday since August keeps the August date
+ * forever — so a series that is very much still running drops out the moment
+ * its first occurrence passes. Same for an event whose real dates live in
+ * event_dates: the row's own date is the first of them.
+ *
+ * So the filtering has to happen here, where the repeat rule and the explicit
+ * dates can both be consulted, rather than in a query that can only see one
+ * column.
+ *
+ * An undated event counts as open: it's still being planned, which is exactly
+ * the state the presidency needs to see.
+ *
+ * Each result carries `when` — the next date it actually happens, or null if
+ * it hasn't got one yet — so callers can sort and display without redoing any
+ * of this.
+ */
+export function openEvents({ events, eventDates, todayIso }) {
+  const today = String(todayIso || "").slice(0, 10);
+  const all = eventDates || [];
+
+  return (events || [])
+    .filter((e) => !e.done)
+    .map((e) => {
+      const own = all
+        .filter((d) => d.event_id === e.id && !d.done && d.event_date >= today)
+        .sort((a, b) => a.event_date.localeCompare(b.event_date));
+      if (own.length) return { ...e, when: own[0].event_date, remaining: own.length };
+
+      // Has explicit dates and has used them all: the series is finished.
+      // Falling back to the row's own date would resurrect it months later.
+      if (all.some((d) => d.event_id === e.id)) return null;
+
+      if (!e.event_date) return { ...e, when: null };
+      return { ...e, when: nextOccurrence(e, today) };
+    })
+    .filter(Boolean)
+    // Undated ones survive; dated ones only if they still have a date to come.
+    .filter((e) => e.when || !e.event_date);
+}
