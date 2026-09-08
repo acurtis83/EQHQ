@@ -2,7 +2,7 @@ import { render, act, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   sundayAnnouncements, saysTheSameAs, missingFromAgenda, nearDuplicates,
-  restatingEvents, announcementWarnings, MAX_SHOWN,
+  restatingEvents, announcementWarnings, notYetCarried, MAX_SHOWN,
 } from "../src/lib/domain/announcements";
 import { buildEmailText, buildEmailHtml } from "../src/lib/domain/weeklyEmail";
 import { signUpHref, actionFor, ACTION } from "../src/lib/domain/upcomingAction";
@@ -276,6 +276,48 @@ describe("what Karl gets warned about", () => {
     // Handled where it's loaded, but stated here so the intent survives: an
     // announcement about last week isn't missing from the agenda, it's over.
     expect(missingFromAgenda([], agenda)).toHaveLength(0);
+  });
+});
+
+/* --------------------------- bringing them forward ------------------------ */
+
+describe("what's still owed from last Sunday", () => {
+  const LAST = [
+    { id: "a", text: "Stake Blood Drive on Friday, September 11, 1:00 to 7:00PM at the Stake Center" },
+    { id: "b", text: "9/11 National Day of Service - Saturday 9/12 - 9am to Noon" },
+    { id: "c", text: "Church cleaning Saturday 9/12 at 7am, last names S-Z" },
+  ];
+
+  it("offers the ones this week hasn't got", () => {
+    const here = [{ text: "9/11 National Day of Service - Saturday 9/12 - 9am to Noon" }];
+    expect(notYetCarried(LAST, here, "2026-09-13").map((r) => r.id)).toEqual(["a", "c"]);
+  });
+
+  it("matches on wording, not on id", () => {
+    // A carried row is a new row with its own id, and people retype an
+    // announcement as often as they carry it. Comparing ids would offer to
+    // add things that are plainly already on the agenda.
+    const here = [{ id: "zzz", text: "Blood drive Friday September 11 at the stake center, 1 to 7pm" }];
+    expect(notYetCarried(LAST, here, "2026-09-13").map((r) => r.id)).not.toContain("a");
+  });
+
+  it("leaves out anything already over by that Sunday", () => {
+    const dated = [{ id: "d", text: "Church cleaning Saturday", expires_on: "2026-09-12" }];
+    expect(notYetCarried(dated, [], "2026-09-13")).toHaveLength(0);
+    expect(notYetCarried(dated, [], "2026-09-12")).toHaveLength(1);
+  });
+
+  it("and anything pinned to its own week", () => {
+    const pinned = [{ id: "e", text: "Fast offerings are collected today", carry_over: false }];
+    expect(notYetCarried(pinned, [], "2026-09-13")).toHaveLength(0);
+  });
+
+  it("says nothing when the week is already up to date", () => {
+    expect(notYetCarried(LAST, LAST, "2026-09-13")).toHaveLength(0);
+  });
+
+  it("and ignores the blank rows the agenda leaves behind", () => {
+    expect(notYetCarried([{ id: "f", text: "   " }], [], "2026-09-13")).toHaveLength(0);
   });
 });
 

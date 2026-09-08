@@ -113,6 +113,58 @@ describe("what the banner calls the day", () => {
   });
 });
 
+describe("who taught it and who gave the talk", () => {
+  it("says which name is which", async () => {
+    // They used to be "Cameron Butler · Edward B. Rowe" — two names either
+    // side of a dot with nothing saying that one is a member of the quorum
+    // standing at the front and the other is a conference speaker who will
+    // never be in the room.
+    LESSON = {
+      date: "2026-09-06", teacher_name: "Cameron Butler",
+      talk_title: "Choose Jesus Christ as Your Guide", speaker: "Edward B. Rowe",
+    };
+    const dom = await mount();
+    const text = dom.container.textContent;
+    expect(text).toContain("Talk by");
+    expect(text).toContain("Taught by");
+    expect(text, "the names are still run together").not.toContain(
+      "Cameron Butler · Edward B. Rowe"
+    );
+  });
+
+  it("keeps each name with its own label", async () => {
+    LESSON = {
+      date: "2026-09-06", teacher_name: "Cameron Butler",
+      talk_title: "Choose Jesus Christ as Your Guide", speaker: "Edward B. Rowe",
+    };
+    const dom = await mount();
+    const talk = dom.container.querySelector('[data-credit="Talk by"]');
+    const taught = dom.container.querySelector('[data-credit="Taught by"]');
+    expect(talk.textContent).toContain("Edward B. Rowe");
+    expect(talk.textContent, "the teacher was labelled as the speaker")
+      .not.toContain("Cameron Butler");
+    expect(taught.textContent).toContain("Cameron Butler");
+    expect(taught.textContent).not.toContain("Edward B. Rowe");
+  });
+
+  it("names only the teacher when the lesson is a topic", async () => {
+    // No talk, so no speaker — and no empty "Talk by" line either.
+    LESSON = { date: "2026-09-06", teacher_name: "Cameron Butler", topic: "Ministering" };
+    const dom = await mount();
+    expect(dom.container.textContent).toContain("Taught by");
+    expect(dom.container.textContent).not.toContain("Talk by");
+    expect(dom.container.querySelector('[data-credit="Taught by"]').textContent)
+      .toContain("Cameron Butler");
+  });
+
+  it("and says nothing about people when nobody is set", async () => {
+    LESSON = { date: "2026-09-06", talk_title: "Come Home" };
+    const dom = await mount();
+    expect(dom.container.textContent).not.toContain("Taught by");
+    expect(dom.container.textContent).not.toContain("Talk by");
+  });
+});
+
 describe("the two actions look like buttons", () => {
   const LESSON_WITH_TALK = {
     date: "2026-09-06", teacher_name: "Karl Ricks", talk_title: "Come Home",

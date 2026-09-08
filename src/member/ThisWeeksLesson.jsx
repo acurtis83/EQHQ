@@ -101,7 +101,8 @@ export default function ThisWeeksLesson() {
     .toUpperCase();
 
   let title;
-  let sub;
+  let sub;          // a single plain line, when there are no people to name
+  let credits = []; // ...or the two names, each said to be what it is
   if (reason) {
     const fifth = reason === NO_LESSON.FIFTH_SUNDAY;
     title = fifth ? "5th Sunday" : reason;
@@ -116,7 +117,20 @@ export default function ThisWeeksLesson() {
     // being dropped, so a week set up with a teacher and a subject showed the
     // bare word "Lesson" — less than the email said about the same week.
     title = row.talk_title || row.topic || "Lesson";
-    sub = [row.teacher_name, row.speaker].filter(Boolean).join(" · ");
+
+    // Two names sat side by side separated by a dot — "Cameron Butler ·
+    // Edward B. Rowe" — and nothing said which was which. They're not the
+    // same kind of thing at all: one is a member of the quorum who'll be at
+    // the front on Sunday, the other is whoever gave the conference talk and
+    // is never in the room. Labelled, and the speaker first because he
+    // belongs to the title directly above him.
+    if (row.speaker && row.talk_title) {
+      credits.push({ label: "Talk by", name: row.speaker });
+    }
+    if (row.teacher_name) {
+      credits.push({ label: "Taught by", name: row.teacher_name });
+    }
+    if (!credits.length) sub = "";
   } else {
     title = "Lesson Coming";
     sub = "Not posted yet — check back before Sunday.";
@@ -173,6 +187,25 @@ export default function ThisWeeksLesson() {
       {sub && (
         <div style={{ fontSize: 14.5, color: ON_INK_SOFT, marginTop: 5, lineHeight: 1.5 }}>
           {sub}
+        </div>
+      )}
+
+      {/* One line each, label first in the fainter colour so the eye runs
+          down the names. Stacked rather than side by side: on a phone the two
+          would wrap anyway, and wrapping mid-pair is what made them read as
+          one run of text in the first place. */}
+      {credits.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {credits.map((c) => (
+            <div
+              key={c.label}
+              data-credit={c.label}
+              style={{ fontSize: 14.5, lineHeight: 1.45, color: ON_INK }}
+            >
+              <span style={{ color: ON_INK_SOFT }}>{c.label} </span>
+              {c.name}
+            </div>
+          ))}
         </div>
       )}
 

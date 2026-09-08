@@ -258,3 +258,36 @@ export function announcementWarnings({ agendaItems = [], feedPosts = [], events 
 
   return out;
 }
+
+/* --------------------------- bringing them forward ------------------------ */
+
+/**
+ * Last Sunday's announcements that aren't on this Sunday's agenda yet.
+ *
+ * The automatic carry runs once per agenda and can miss: an agenda opened
+ * before the previous week's announcements were written up marks itself
+ * carried and never looks again. That's how notices about the 11th and the
+ * 12th stayed on the 6th's agenda while the 13th's sat empty.
+ *
+ * So this is the manual way back — offered rather than applied, because by
+ * the time anybody presses it the week has moved on and some of those notices
+ * really are finished.
+ *
+ * Matching is by wording, not by id. A carried row is a new row with its own
+ * id, and the same announcement is often retyped rather than carried, so
+ * comparing ids would offer to add things that are plainly already there.
+ * saysTheSameAs is the same comparison the secretary's duplicate warning
+ * uses, which is what stops the two disagreeing about whether a pair matches.
+ */
+export function notYetCarried(previous = [], current = [], toDate = "") {
+  const here = (current || []).map((r) => String(r?.text || "")).filter(Boolean);
+  return (previous || []).filter((row) => {
+    const text = String(row?.text || "").trim();
+    if (!text) return false;
+    // Pinned to its own week by whoever wrote it.
+    if (row.carry_over === false) return false;
+    // Already over by the Sunday it would appear on.
+    if (toDate && row.expires_on && String(row.expires_on) < String(toDate)) return false;
+    return !here.some((t) => saysTheSameAs(t, text));
+  });
+}

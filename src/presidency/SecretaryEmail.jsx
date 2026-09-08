@@ -3,6 +3,7 @@ import { Mail, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Chip, Select } from "../components/ui";
 import EmailSheet from "../components/EmailSheet";
+import BringForward from "../components/BringForward";
 import { toIso, fmtDate, noLessonReason } from "../lib/domain/dates";
 import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
 import { upcomingForSunday } from "../lib/domain/upcoming";
@@ -211,6 +212,14 @@ export default function SecretaryEmail({ compact, onGo }) {
           ))
         )}
       </div>
+
+      <BringForward
+        agendaId={agenda?.id}
+        forDate={date}
+        current={announcements}
+        onAdded={load}
+        setErr={setErr}
+      />
 
       {adding ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>

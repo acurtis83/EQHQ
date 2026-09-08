@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 import Sheet from "../components/Sheet";
 import EmailSheet from "../components/EmailSheet";
+import BringForward from "../components/BringForward";
 import SecretaryEmail from "./SecretaryEmail";
 import { upcomingForSunday } from "../lib/domain/upcoming";
 import { conductingFor, monthLabel, monthKey, scheduleFromRows } from "../lib/domain/conducting";
@@ -176,12 +177,26 @@ export default function SundayAgenda({ onGo }) {
       setAgenda((a) => (a ? { ...a, carried_over: true } : a));
     };
 
-    if (!prev.data) { await markDone(); return null; }
+    // Nothing to carry FROM yet, so nothing has been decided — leave the flag
+    // alone and look again next time.
+    //
+    // This is the bug Drew hit. The flag meant "this agenda has been opened
+    // once", not "the carry has happened", and the two come apart whenever an
+    // agenda is opened before last Sunday's announcements are typed up —
+    // which is normal, because the presidency looks ahead at the week and the
+    // secretary writes the notices up afterwards. The 13th was opened, found
+    // the 6th empty, marked itself done, and could never carry anything
+    // again. Announcements about the 11th and the 12th sat on the 6th's
+    // agenda and never reached the week they were about.
+    //
+    // Re-checking costs two small reads on each open, and it stops as soon as
+    // there is something to carry.
+    if (!prev.data) return null;
 
     const old = await supabase.from("agenda_items").select("*")
       .eq("agenda_id", prev.data.id).eq("section", SECTION).order("sort_order");
     const candidates = old.data || [];
-    if (!candidates.length) { await markDone(); return null; }
+    if (!candidates.length) return null;
 
     // Which presidency items are still open. Anything a carried announcement
     // points at that isn't in here was finished or deleted.
@@ -448,6 +463,14 @@ export default function SundayAgenda({ onGo }) {
                   </div>
                 </div>
               )}
+
+              <BringForward
+                agendaId={agenda?.id}
+                forDate={date}
+                current={announcements}
+                onAdded={loadDay}
+                setErr={setErr}
+              />
 
               {!announcements.length ? (
                 <Empty2>Nothing yet. Pull from a presidency meeting, or add one.</Empty2>

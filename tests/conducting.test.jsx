@@ -262,6 +262,31 @@ describe("the Sunday agenda reading the schedule", () => {
     expect(marked, "it marked a past agenda as carried").toHaveLength(0);
   });
 
+  /**
+   * "the announcements from sunday 9/6 did not carry over"
+   *
+   * `carried_over` meant "this agenda has been opened once", not "the carry
+   * has happened", and the two come apart in the ordinary case: the
+   * presidency looks ahead at next Sunday before the secretary has written up
+   * last Sunday's notices. The agenda found nothing, marked itself done, and
+   * could never carry again — so announcements about the 11th and 12th stayed
+   * on the 6th's agenda and never reached the week they were about.
+   */
+  it("doesn't call the carry done when there was nothing to carry yet", async () => {
+    SCHEDULE = [];
+    AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", carried_over: false };
+    // No previous agenda at all: the mock's maybeSingle returns AGENDA for the
+    // lookup, but agenda_items comes back empty, which is the case that
+    // matters — last Sunday exists and has no announcements on it yet.
+    await mountAgenda();
+
+    const marked = WRITES.filter(
+      (w) => w.table === "agendas" && w.op === "update" && w.arg?.carried_over === true
+    );
+    expect(marked, "it gave up on carrying before there was anything to carry")
+      .toHaveLength(0);
+  });
+
   it("fills Conducting from the month, and says where it came from", async () => {
     SCHEDULE = [{ month: "2026-09", name: "Cameron Pearson" }];
     AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", conducting: null };
