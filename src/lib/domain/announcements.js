@@ -291,3 +291,42 @@ export function notYetCarried(previous = [], current = [], toDate = "") {
     return !here.some((t) => saysTheSameAs(t, text));
   });
 }
+
+/* -------------------------------- reordering ------------------------------ */
+
+/**
+ * Move one announcement up or down, returning the rows in their new order.
+ *
+ * Pure, and returns the whole list rather than a pair of rows to swap. The
+ * caller writes every sort_order back, which is what makes this safe on data
+ * that arrived crooked: agendas carry rows whose sort_order collided or left
+ * gaps (a carried batch starts at the count of what was already there, and a
+ * deleted row leaves a hole), and a swap-two-values approach silently does
+ * nothing when both rows claim the same number.
+ *
+ * Out-of-range moves return the list unchanged rather than wrapping. Wrapping
+ * from the top to the bottom is never what somebody tapping "up" wanted.
+ */
+export function moveAnnouncement(rows = [], id, delta) {
+  const list = [...(rows || [])];
+  const from = list.findIndex((r) => r?.id === id);
+  if (from < 0) return list;
+  const to = from + Number(delta || 0);
+  if (to < 0 || to >= list.length) return list;
+  const [row] = list.splice(from, 1);
+  list.splice(to, 0, row);
+  return list;
+}
+
+/**
+ * The writes needed to store an order: one {id, sort_order} per row that moved.
+ *
+ * Only the rows whose position actually changed, so reordering a list of
+ * fifteen after one tap is two updates rather than fifteen.
+ */
+export function orderWrites(rows = []) {
+  return (rows || [])
+    .map((r, i) => ({ id: r?.id, sort_order: i, changed: r?.sort_order !== i }))
+    .filter((r) => r.id && r.changed)
+    .map(({ id, sort_order }) => ({ id, sort_order }));
+}

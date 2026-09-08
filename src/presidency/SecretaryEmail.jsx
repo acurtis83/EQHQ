@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Mail, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Mail, Plus, Trash2, AlertTriangle, ChevronUp, ChevronDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Chip, Select } from "../components/ui";
 import EmailSheet from "../components/EmailSheet";
 import BringForward from "../components/BringForward";
+import { moveAndSave } from "../lib/announcementActions";
 import { toIso, fmtDate, noLessonReason } from "../lib/domain/dates";
 import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
 import { upcomingForSunday } from "../lib/domain/upcoming";
@@ -159,6 +160,22 @@ export default function SecretaryEmail({ compact, onGo }) {
     load();
   };
 
+  // Typed straight through to the row. The list is short and the field is
+  // small, so there's no save button — the same way the Sunday agenda has
+  // always worked, and having one screen ask you to save while the other
+  // doesn't is its own kind of confusing.
+  const patchItem = async (id, fields) => {
+    setItems((all) => all.map((i) => (i.id === id ? { ...i, ...fields } : i)));
+    const { error } = await supabase.from("agenda_items").update(fields).eq("id", id);
+    if (error) setErr(error.message);
+  };
+
+  const move = async (id, delta) => {
+    const problem = await moveAndSave(announcements, id, delta);
+    if (problem) setErr(problem);
+    else load();
+  };
+
   if (loading) {
     return <div style={{ color: T.sub, fontSize: 15, padding: 18, textAlign: "center" }}>Loading…</div>;
   }
@@ -193,18 +210,39 @@ export default function SecretaryEmail({ compact, onGo }) {
             Nothing to announce yet.
           </div>
         ) : (
-          announcements.map((a) => (
+          announcements.map((a, i) => (
             <div
               key={a.id}
+              data-announcement={a.id}
               style={{
                 display: "flex", alignItems: "flex-start", gap: 8,
                 background: T.inset, border: `1px solid ${T.lineSoft}`,
                 borderRadius: 10, padding: "8px 10px",
               }}
             >
-              <span style={{ fontSize: 14.5, color: T.ink, flex: 1, minWidth: 0, lineHeight: 1.45 }}>
-                {a.text}
-              </span>
+              {/* Editable here, not just on the Sunday agenda. This card is
+                  the one place the announcements are managed now, and having
+                  to open another screen to fix a typo is what sent people
+                  looking for another way to do it. */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Input value={a.text} onChange={(v) => patchItem(a.id, { text: v })} />
+              </div>
+
+              {/* The order they're read out in on Sunday, and the order they
+                  appear in the email and on the feed. Arrows rather than
+                  drag: this is a phone, the list is short, and a drag handle
+                  next to an editable field fights with selecting text. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: "0 0 auto" }}>
+                <Btn size="sm" kind="plain" aria-label="Move up"
+                  disabled={i === 0} onClick={() => move(a.id, -1)}>
+                  <ChevronUp size={13} />
+                </Btn>
+                <Btn size="sm" kind="plain" aria-label="Move down"
+                  disabled={i === announcements.length - 1} onClick={() => move(a.id, 1)}>
+                  <ChevronDown size={13} />
+                </Btn>
+              </div>
+
               <Btn size="sm" kind="plain" aria-label="Remove" onClick={() => remove(a.id)}>
                 <Trash2 size={13} />
               </Btn>

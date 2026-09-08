@@ -16,13 +16,15 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 let SCHEDULE = [];
 let PRESIDENCY = [];
 let AGENDA = null;
+let ITEMS = [];
 let WRITES = [];
 
 function table(name) {
   const rows =
     name === "conducting_schedule" ? SCHEDULE :
     name === "presidency_members" ? PRESIDENCY :
-    name === "members" ? [{ id: "m1", name: "Ryan Talbot", active: true }] : [];
+    name === "members" ? [{ id: "m1", name: "Ryan Talbot", active: true }] :
+    name === "agenda_items" ? ITEMS : [];
 
   const capture = (op) => (arg) => {
     WRITES.push({ table: name, op, arg });
@@ -104,6 +106,7 @@ beforeEach(() => {
   SCHEDULE = [];
   PRESIDENCY = PRES.map((p) => ({ ...p }));
   AGENDA = null;
+  ITEMS = [];
   WRITES = [];
 });
 afterEach(() => { vi.useRealTimers(); cleanup(); });
@@ -285,6 +288,85 @@ describe("the Sunday agenda reading the schedule", () => {
     );
     expect(marked, "it gave up on carrying before there was anything to carry")
       .toHaveLength(0);
+  });
+
+  /**
+   * "theres too many spots for the weekly Email to be generated....its a
+   *  little confusing to know which one to use or if the announcements are
+   *  synced between them all"
+   *
+   * There were three, two of them on this one screen: the toolbar button, and
+   * an embedded copy of the Secretary card that kept its OWN selected Sunday
+   * — so on the agenda for the 20th it could be sitting on the 13th, with two
+   * "Weekly Email" buttons inches apart building different weeks.
+   */
+  it("has no way to generate the weekly email any more", async () => {
+    SCHEDULE = [];
+    AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", carried_over: true };
+    const dom = await mountAgenda();
+
+    const buttons = [...dom.container.querySelectorAll("button")]
+      .map((b) => b.textContent.trim());
+    expect(buttons.filter((t) => /^Weekly Email$/i.test(t)),
+      "the agenda is still offering to build the email").toHaveLength(0);
+
+    // ...and says where it went, since this is where it'll be looked for.
+    expect(dom.container.textContent).toContain("Weekly email is on Home");
+  });
+
+  it("and doesn't embed a second secretary card with its own date", async () => {
+    SCHEDULE = [];
+    AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", carried_over: true };
+    const dom = await mountAgenda();
+    // The embedded card announced itself with this heading.
+    expect(dom.container.textContent).not.toContain("Secretary");
+
+    // Two Sunday pickers on one screen is the actual hazard — that's what let
+    // the two email buttons sit on different weeks. Counted by which selects
+    // list Sundays, because the agenda also has selects for conducting and
+    // the two prayers.
+    const sundayPickers = [...dom.container.querySelectorAll("select")]
+      .filter((s) => [...s.options].some((o) => /^Sun, /.test(o.textContent)));
+    expect(sundayPickers).toHaveLength(1);
+  });
+
+  it("can shuffle the announcements, and writes the new order", async () => {
+    SCHEDULE = [];
+    AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", carried_over: true };
+    ITEMS = [
+      { id: "i1", section: "announcements", text: "First one", sort_order: 0 },
+      { id: "i2", section: "announcements", text: "Second one", sort_order: 1 },
+    ];
+    const dom = await mountAgenda();
+    WRITES = [];
+
+    const down = dom.container.querySelector('[data-announcement="i1"] [aria-label="Move down"]');
+    expect(down, "no reorder control on the announcement").toBeTruthy();
+    await act(async () => {
+      fireEvent.click(down);
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    const orders = WRITES.filter(
+      (w) => w.table === "agenda_items" && w.op === "update" && "sort_order" in (w.arg || {})
+    );
+    // Both rows renumbered explicitly rather than two values swapped: agendas
+    // collect colliding sort_orders, and a swap silently does nothing there.
+    expect(orders.map((w) => w.arg.sort_order)).toEqual([0, 1]);
+  });
+
+  it("and the ends don't offer a move that goes nowhere", async () => {
+    SCHEDULE = [];
+    AGENDA = { id: "a1", kind: "sunday", meeting_date: "2026-09-06", carried_over: true };
+    ITEMS = [
+      { id: "i1", section: "announcements", text: "First one", sort_order: 0 },
+      { id: "i2", section: "announcements", text: "Second one", sort_order: 1 },
+    ];
+    const dom = await mountAgenda();
+    expect(dom.container.querySelector('[data-announcement="i1"] [aria-label="Move up"]').disabled)
+      .toBe(true);
+    expect(dom.container.querySelector('[data-announcement="i2"] [aria-label="Move down"]').disabled)
+      .toBe(true);
   });
 
   it("fills Conducting from the month, and says where it came from", async () => {

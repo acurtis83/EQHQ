@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   sundayAnnouncements, saysTheSameAs, missingFromAgenda, nearDuplicates,
   restatingEvents, announcementWarnings, notYetCarried, MAX_SHOWN,
+  moveAnnouncement, orderWrites,
 } from "../src/lib/domain/announcements";
 import { buildEmailText, buildEmailHtml } from "../src/lib/domain/weeklyEmail";
 import { signUpHref, actionFor, ACTION } from "../src/lib/domain/upcomingAction";
@@ -140,6 +141,18 @@ describe("the announcements hub", () => {
     const text = dom.container.textContent;
     expect(text.indexOf("First")).toBeLessThan(text.indexOf("Second"));
     expect(text.indexOf("Second")).toBeLessThan(text.indexOf("Third"));
+  });
+
+  it("gives members nothing to edit", async () => {
+    // "which would need to be on the presidency side not the feed/member
+    //  side." Editing and reordering went onto the presidency screens; this
+    //  is the counterweight, because the obvious way to share that work would
+    //  have been to reuse the row component on both sides.
+    const dom = await openHub();
+    expect(dom.container.querySelectorAll("input")).toHaveLength(0);
+    expect(dom.container.querySelectorAll("textarea")).toHaveLength(0);
+    expect(dom.container.querySelectorAll("button")).toHaveLength(0);
+    expect(dom.container.textContent).not.toMatch(/Move up|Move down/);
   });
 
   it("drops the blank rows the agenda leaves behind", async () => {
@@ -318,6 +331,54 @@ describe("what's still owed from last Sunday", () => {
 
   it("and ignores the blank rows the agenda leaves behind", () => {
     expect(notYetCarried([{ id: "f", text: "   " }], [], "2026-09-13")).toHaveLength(0);
+  });
+});
+
+/* -------------------------------- reordering ------------------------------ */
+
+describe("shuffling the announcements", () => {
+  const ROWS = [
+    { id: "a", sort_order: 0 }, { id: "b", sort_order: 1 }, { id: "c", sort_order: 2 },
+  ];
+
+  it("moves one down", () => {
+    expect(moveAnnouncement(ROWS, "a", 1).map((r) => r.id)).toEqual(["b", "a", "c"]);
+  });
+
+  it("and up", () => {
+    expect(moveAnnouncement(ROWS, "c", -1).map((r) => r.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("won't wrap off either end", () => {
+    // Tapping "up" on the top item wanting it to appear at the bottom is not
+    // a thing anybody has ever wanted.
+    expect(moveAnnouncement(ROWS, "a", -1).map((r) => r.id)).toEqual(["a", "b", "c"]);
+    expect(moveAnnouncement(ROWS, "c", 1).map((r) => r.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("leaves the list alone when the row isn't in it", () => {
+    expect(moveAnnouncement(ROWS, "nope", 1).map((r) => r.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("writes only the rows that actually moved", () => {
+    // Reordering fifteen after one tap should be two updates, not fifteen.
+    expect(orderWrites(moveAnnouncement(ROWS, "a", 1)))
+      .toEqual([{ id: "b", sort_order: 0 }, { id: "a", sort_order: 1 }]);
+  });
+
+  it("and renumbers a list whose sort_orders arrived crooked", () => {
+    // This is the case a swap-two-values reorder gets wrong and silently does
+    // nothing for. Agendas collect collisions: a carried batch starts
+    // numbering at the count of what was already there, and deleting a row
+    // leaves a hole.
+    const messy = [
+      { id: "x", sort_order: 0 }, { id: "y", sort_order: 0 }, { id: "z", sort_order: 7 },
+    ];
+    const moved = moveAnnouncement(messy, "y", -1);
+    expect(moved.map((r) => r.id)).toEqual(["y", "x", "z"]);
+    const writes = orderWrites(moved);
+    expect(writes.map((w) => w.sort_order)).toEqual([1, 2]);
+    expect(writes.map((w) => w.id)).toEqual(["x", "z"]);
   });
 });
 

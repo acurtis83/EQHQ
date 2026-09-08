@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus, Trash2, Printer, Mail, Copy, ArrowDownToLine, ExternalLink,
-  Check, RefreshCw,
+  Check, RefreshCw, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 import Sheet from "../components/Sheet";
-import EmailSheet from "../components/EmailSheet";
 import BringForward from "../components/BringForward";
-import SecretaryEmail from "./SecretaryEmail";
 import { upcomingForSunday } from "../lib/domain/upcoming";
 import { conductingFor, monthLabel, monthKey, scheduleFromRows } from "../lib/domain/conducting";
 import PersonPick from "../components/PersonPick";
@@ -18,8 +16,11 @@ import {
   fmtDate, fmtShort, toIso, noLessonReason, NO_LESSON, DOW, MON, isoParts,
 } from "../lib/domain/dates";
 import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
-import { buildEmailText, buildEmailHtml, textToHtml, emailSubject } from "../lib/domain/weeklyEmail";
+// The email builders used to be imported here. They aren't any more: this
+// screen no longer generates the email, and leaving the imports would suggest
+// it still might.
 import { carryable, carriedRow } from "../lib/domain/carryOver";
+import { moveAndSave } from "../lib/announcementActions";
 import UpcomingList from "../components/UpcomingList";
 import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 
@@ -27,6 +28,10 @@ import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 // arbitrary window — a date cut-off hides items with nothing to explain why.
 const UPCOMING_SHOWN = 6;
 const SECTION = "announcements";
+
+// Where the weekly email went. One string so the button and the plain-text
+// fallback can't come to say different things.
+const EMAIL_MOVED = "Weekly email is on Home";
 
 // Reason text the email can use as-is.
 const readableReason = (r) =>
@@ -53,7 +58,6 @@ export default function SundayAgenda({ onGo }) {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [pullOpen, setPullOpen] = useState(false);
-  const [emailOpen, setEmailOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
 
   // Which Sundays actually have a quorum meeting. Conference and stake
@@ -239,6 +243,12 @@ export default function SundayAgenda({ onGo }) {
     if (error) setErr(error.message);
   };
 
+  const moveAnnouncementRow = async (id, delta) => {
+    const problem = await moveAndSave(announcements, id, delta);
+    if (problem) setErr(problem);
+    else loadDay();
+  };
+
   const addAnnouncement = async (text) => {
     const t = (text || "").trim();
     if (!t) return;
@@ -318,12 +328,35 @@ export default function SundayAgenda({ onGo }) {
           </Lbl>
         </div>
 
+        {/* No Weekly Email button here any more.
+            "theres too many spots for the weekly Email to be generated....its
+             a little confusing to know which one to use or if the
+             announcements are synced between them all"
+
+            There were three, two of them on this screen. They all read the
+            same announcement rows, so nothing was ever out of sync — but
+            there was no way to know that by looking, and one of them could be
+            on a different Sunday. One button, on Presidency Home. */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <Btn kind="primary" onClick={() => setEmailOpen(true)}>
-            <Mail size={15} />Weekly Email
-          </Btn>
           <Btn kind="plain" onClick={printAgenda}><Printer size={14} />PDF</Btn>
           <Btn kind="plain" onClick={copyPlain}><Copy size={14} />Copy</Btn>
+          {/* Said plainly rather than left for somebody to hunt for: this is
+              where the button used to be, so this is where it'll be looked for
+              first. It's a button when there's somewhere to navigate to and
+              plain text otherwise — a button that goes nowhere is worse than
+              a sentence. */}
+          {onGo ? (
+            <Btn kind="plain" onClick={() => onGo("home")}>
+              <Mail size={14} />{EMAIL_MOVED}
+            </Btn>
+          ) : (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontSize: 13.5, color: T.faint,
+            }}>
+              <Mail size={14} />{EMAIL_MOVED}
+            </span>
+          )}
         </div>
 
         {!agenda ? (
@@ -476,13 +509,26 @@ export default function SundayAgenda({ onGo }) {
                 <Empty2>Nothing yet. Pull from a presidency meeting, or add one.</Empty2>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                  {announcements.map((a) => (
+                  {announcements.map((a, i) => (
                     <div key={a.id} data-announcement={a.id}
                       style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                         <span style={{ color: T.faint, fontSize: 15, lineHeight: 1.5 }}>•</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Input value={a.text} onChange={(v) => patchItem(a.id, { text: v })} />
+                        </div>
+                        {/* The order they're read out in, which is also the
+                            order they reach the email and the feed. */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: "0 0 auto" }}>
+                          <Btn size="sm" kind="plain" aria-label="Move up"
+                            disabled={i === 0} onClick={() => moveAnnouncementRow(a.id, -1)}>
+                            <ChevronUp size={13} />
+                          </Btn>
+                          <Btn size="sm" kind="plain" aria-label="Move down"
+                            disabled={i === announcements.length - 1}
+                            onClick={() => moveAnnouncementRow(a.id, 1)}>
+                            <ChevronDown size={13} />
+                          </Btn>
                         </div>
                         <Btn size="sm" kind="plain" onClick={() => removeItem(a.id)}><Trash2 size={13} /></Btn>
                       </div>
@@ -504,10 +550,18 @@ export default function SundayAgenda({ onGo }) {
               )}
             </Section>
 
-            {/* ---------- what's coming ---------- */}
-            {/* The same secretary card as the Presidency Home. Either place works;
-                they write the same rows. */}
-            <div style={{ marginBottom: 12 }}><SecretaryEmail compact /></div>
+            {/* The secretary card used to be embedded here, and it was worse
+                than a duplicate. It keeps its OWN selected Sunday, so on this
+                screen showing the 20th it could be sitting on the 13th — two
+                "Weekly Email" buttons a few inches apart, quietly building
+                different weeks. The old comment here said "either place
+                works; they write the same rows", which was true of the rows
+                and false of the week.
+
+                The email is generated from the Secretary card on Presidency
+                Home now, and only there. The announcements are the same rows
+                either way, so editing them here still changes what goes out.
+                See the note by the toolbar above. */}
 
             <Section title="Upcoming Events" count={events.length}
               onGo={onGo ? () => onGo("plan") : null} goLabel="Plan">
@@ -554,21 +608,6 @@ export default function SundayAgenda({ onGo }) {
         />
       )}
 
-      {emailOpen && agenda && (
-        <EmailSheet
-          agenda={agenda}
-          sundayIso={date}
-          lesson={lesson}
-          noLessonReason={reason}
-          // The whole row, so a link or attachment on an announcement
-          // reaches the email rather than being dropped on the way.
-          announcements={announcements}
-          events={events}
-          senderName={presidency?.name || ""}
-          onSave={(body) => patchAgenda({ email_body: body })}
-          onClose={() => setEmailOpen(false)}
-        />
-      )}
     </div>
   );
 }
