@@ -165,7 +165,7 @@ export default function HomeHub({ onGo }) {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <GraduationCap size={15} style={{ color: T.primary, flex: "0 0 auto" }} />
-            <span style={{
+            <span data-lesson-banner style={{
               fontSize: 12, fontWeight: 800, letterSpacing: "0.1em",
               textTransform: "uppercase", color: T.primary,
             }}>

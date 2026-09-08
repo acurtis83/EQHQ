@@ -5,8 +5,9 @@ import { T, card, Btn, Input, Chip, Select } from "../components/ui";
 import EmailSheet from "../components/EmailSheet";
 import BringForward from "../components/BringForward";
 import { moveAndSave } from "../lib/announcementActions";
-import { toIso, fmtDate, noLessonReason } from "../lib/domain/dates";
-import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
+import { toIso, fmtDate, fmtShort, noLessonReason } from "../lib/domain/dates";
+import { sundayOptions } from "../lib/domain/sundayPicker";
+import { defaultMeeting, planFor } from "../lib/domain/emailPlan";
 import { upcomingForSunday, emailWindowStart } from "../lib/domain/upcoming";
 import { announcementWarnings } from "../lib/domain/announcements";
 import { useAuth } from "../lib/useAuth";
@@ -54,13 +55,23 @@ export default function SecretaryEmail({ compact, onGo }) {
     // Recent Sundays as well as coming ones, so an announcement can be fixed
     // after the fact — the feed shows the last meeting's announcements to the
     // whole quorum, and that page was previously unreachable.
-    const sched = sundayOptions(today, stake, { ahead: 8 });
+    // Enough past Sundays to reach back over a missed week, and only a couple
+    // ahead — this screen is about the meeting that has happened, not the ones
+    // being planned.
+    const sched = sundayOptions(today, stake, { ahead: 2 });
     setSundays(sched);
-    setDate((d) => d || defaultSunday(sched, today));
+    // `date` is the MEETING now, not the lesson. See domain/emailPlan.js: the
+    // email repeats what was announced at the last meeting and announces the
+    // lesson at the next one, and using one date for both is what made "the
+    // 9/6 announcements" come out labelled 9/13.
+    setDate((d) => d || defaultMeeting(sched, today));
     setLoading(false);
   }, []);
 
   useEffect(() => { loadShell(); }, [loadShell]);
+
+  // The three dates this email involves, worked out in one place.
+  const plan = useMemo(() => planFor(date, sundays), [date, sundays]);
 
   const load = useCallback(async () => {
     if (!date) return;
@@ -79,7 +90,12 @@ export default function SecretaryEmail({ compact, onGo }) {
       found.data
         ? supabase.from("agenda_items").select("*").eq("agenda_id", found.data.id).order("sort_order")
         : Promise.resolve({ data: [] }),
-      supabase.from("teaching_assignments").select("*").eq("date", date).maybeSingle(),
+      // The lesson being ANNOUNCED, which is the Sunday after this meeting —
+      // not this meeting's own lesson, which everybody has already sat
+      // through by the time the email goes out.
+      plan.lesson
+        ? supabase.from("teaching_assignments").select("*").eq("date", plan.lesson).maybeSingle()
+        : Promise.resolve({ data: null }),
       // No kind filter — see the note in SundayAgenda: a hardcoded list here
       // silently dropped custom categories from the weekly email.
       supabase.from("events").select("*").order("event_date"),
@@ -98,16 +114,16 @@ export default function SecretaryEmail({ compact, onGo }) {
       (p) => !p.event_date || String(p.event_date) >= String(date)
     ));
     setLesson(tl.data || null);
+    // Everything between the meeting and the Sunday being announced. Starting
+    // at the meeting rather than at today means an email written on Tuesday
+    // still carries Monday's activity — it was announced on Sunday and the
+    // email is that meeting's write-up.
     setEvents(upcomingForSunday({
       events: ev.data || [], eventDates: ed.data || [],
-      sundayIso: date, limit: UPCOMING_SHOWN,
-      // From today when the Sunday is still ahead, so the things happening
-      // between writing the email and that Sunday are in it. The blood drive
-      // on the Friday was being dropped for being "past" the Sunday it was
-      // announcing itself to.
-      fromIso: emailWindowStart(toIso(new Date()), date),
+      sundayIso: plan.lesson || date, limit: UPCOMING_SHOWN,
+      fromIso: emailWindowStart(date, plan.lesson || date),
     }));
-  }, [date]);
+  }, [date, plan.lesson]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -131,10 +147,14 @@ export default function SecretaryEmail({ compact, onGo }) {
     }),
     [announcements, feedNotices, events]
   );
-  const chosen = sundays.find((s) => s.date === date);
+  // About the LESSON Sunday, not the meeting. This says "no lesson, it's
+  // general conference" in the email, and the lesson it's describing is the
+  // one being announced — checking the meeting's own date would report on a
+  // Sunday that has already been and gone.
+  const chosen = sundays.find((s) => s.date === plan.lesson);
   const reason = chosen && !chosen.teaches
     ? readableReason(chosen.reason)
-    : readableReason(date ? noLessonReason(date, new Set()) : "");
+    : readableReason(plan.lesson ? noLessonReason(plan.lesson, new Set()) : "");
 
   // Adding the first announcement is what creates the agenda, so a week nobody
   // has planned doesn't get an empty row just for being looked at.
@@ -199,15 +219,55 @@ export default function SecretaryEmail({ compact, onGo }) {
     <div style={{ ...card }}>
       {header}
 
-      <Select value={date} onChange={setDate}>
+      {/* The MEETING whose announcements go out, not the lesson. Labelled as
+          such: the same dropdown used to be the lesson Sunday, and the two
+          are a week apart, so an unlabelled date here is the single most
+          confusable thing on the screen. */}
+      <Select value={date} onChange={setDate} aria-label="Meeting to report on">
         {sundays.map((s) => (
           <option key={s.date} value={s.date}>
-            {fmtDate(s.date)}
-            {s.past ? " — past" : ""}
-            {s.teaches ? "" : " — no quorum lesson"}
+            Meeting of {fmtDate(s.date)}
+            {s.past ? "" : " — not held yet"}
           </option>
         ))}
       </Select>
+
+      {/* "is there a better way to keep that organized or for us to know the
+           process flow....especially for Karl whos the secretary and sends out
+           the email every monday"
+
+          Three dates, said plainly, in the order Karl thinks about them. This
+          is the whole answer to that question: nothing here is new behaviour,
+          it's the behaviour finally being visible. */}
+      <div data-email-plan style={{
+        marginTop: 9, padding: "9px 11px", borderRadius: 10,
+        background: T.inset, border: `1px solid ${T.lineSoft}`,
+        fontSize: 13, color: T.sub, lineHeight: 1.6,
+      }}>
+        <div style={{ fontWeight: 700, color: T.ink, marginBottom: 3 }}>
+          What goes in this email
+        </div>
+        <div>
+          <strong>Announcements</strong> — what was announced at the meeting
+          on {fmtDate(date)}, below.
+        </div>
+        <div>
+          <strong>Lesson</strong> —{" "}
+          {plan.lesson
+            ? `the one coming up on ${fmtDate(plan.lesson)}.`
+            : "no quorum lesson scheduled after this meeting."}
+        </div>
+        <div>
+          <strong>Coming up</strong> — anything happening between those two
+          Sundays.
+        </div>
+        {plan.week && (
+          <div style={{ marginTop: 4, color: T.faint }}>
+            Goes out {fmtDate(plan.week)}, and the subject says
+            {" "}&ldquo;Week of {fmtShort(plan.week)}&rdquo;.
+          </div>
+        )}
+      </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 11 }}>
         {!announcements.length ? (
@@ -341,7 +401,11 @@ export default function SecretaryEmail({ compact, onGo }) {
           // A week with no agenda row yet still has a lesson and events to
           // write about, so the email doesn't wait on the meeting being planned.
           agenda={agenda || {}}
-          sundayIso={date}
+          // The lesson's Sunday for the body, the Monday for the subject.
+          // These were one value, which is how an email sent on the 7th came
+          // to call itself the week of the 13th.
+          sundayIso={plan.lesson || date}
+          weekIso={plan.week}
           lesson={lesson}
           noLessonReason={reason}
           // The whole row, so a link or attachment on an announcement

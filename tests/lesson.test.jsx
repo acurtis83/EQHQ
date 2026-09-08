@@ -316,8 +316,14 @@ describe("the presidency home card heads the same Sunday", () => {
   });
 
   it("drops LESSON on a Sunday the bishopric directs", async () => {
+    // Scoped to the banner. This used to search the whole page, which meant
+    // any unrelated copy on Home containing the word "Lesson" — the
+    // secretary card now explains that the email carries one — failed a test
+    // about a heading.
     const dom = await mountHub(BEFORE_FIFTH);
-    expect(dom.container.textContent).not.toContain("Lesson");
+    const banner = dom.container.querySelector("[data-lesson-banner]");
+    expect(banner, "the lesson banner isn't on the hub at all").toBeTruthy();
+    expect(banner.textContent).not.toContain("Lesson");
   });
 
   it("uses the same words as the member feed for the same week", async () => {

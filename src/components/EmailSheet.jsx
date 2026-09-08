@@ -31,7 +31,8 @@ function Lbl({ label, children }) {
  * the main thing.
  */
 export default function EmailSheet({
-  agenda, sundayIso, lesson, noLessonReason, announcements, events, senderName, onSave, onClose,
+  agenda, sundayIso, weekIso, lesson, noLessonReason, announcements, events,
+  senderName, onSave, onClose,
 }) {
   // Where the app is served from, so a form_id can become a link someone can
   // tap. Read here rather than baked into the builder, which stays pure.
@@ -49,7 +50,8 @@ export default function EmailSheet({
   // get back to the freshly built version after the lesson or events change.
   const [text, setText] = useState(agenda.email_body || generate);
   const [copied, setCopied] = useState("");
-  const subject = emailSubject({ sundayIso });
+  // The Monday it goes out, not the Sunday of the lesson inside it.
+  const subject = emailSubject({ weekIso, sundayIso });
 
   const edited = !!agenda.email_body && agenda.email_body !== generate();
 

@@ -33,8 +33,20 @@ export const APP_LINE =
 export const GROUPME_NAME = "EQ GroupMe";
 export const GROUPME_LINE = `Join the day-to-day quorum chat on our ${GROUPME_NAME}`;
 
-export function emailSubject({ sundayIso }) {
-  return `Elders Quorum ${dash} Week of ${fmtShort(sundayIso)}`;
+/**
+ * "Elders Quorum — Week of Sep 7".
+ *
+ * `weekIso` is the Monday the email goes out on, not the Sunday of the lesson
+ * inside it. It used to be the Sunday, which meant an email arriving on the
+ * 7th announced itself as the week of the 13th — a week that hadn't started,
+ * about announcements made the day before. The lesson is still named by its
+ * own date in the body.
+ *
+ * Falls back to sundayIso so a caller that hasn't been updated still produces
+ * a subject rather than "Week of ".
+ */
+export function emailSubject({ weekIso, sundayIso }) {
+  return `Elders Quorum ${dash} Week of ${fmtShort(weekIso || sundayIso)}`;
 }
 
 /**
