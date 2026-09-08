@@ -20,8 +20,43 @@ import { nextOccurrence } from "./repeat.js";
  * Pulled out of the Sunday agenda so the secretary's email builder derives the
  * same list rather than growing a second, subtly different copy.
  */
-export function upcomingForSunday({ events, eventDates, sundayIso, limit = 6 }) {
-  const cutoff = sundayIso;
+/**
+ * Where the weekly email's list should start.
+ *
+ * "The weekly email 'coming up' should include the Service activities also. I
+ *  dont see the Blood Drive or its link on the email."
+ *
+ * The blood drive wasn't dropped for being a Service event — nothing here
+ * looks at the category. It was dropped for being on the Friday. The email is
+ * written on Monday for the Sunday coming, so counting "ahead" from that
+ * Sunday throws away everything happening in between: precisely the week's
+ * most urgent items, and the only ones the email can still do anything about.
+ *
+ * So the email starts from whichever comes first, today or the Sunday:
+ *   - writing Monday the 7th for Sunday the 13th → from the 7th, so Friday's
+ *     blood drive and Saturday's day of service are in it
+ *   - looking back at a Sunday that has passed → from that Sunday, so the
+ *     list reads as it did when it went out rather than being rewritten by
+ *     today's date
+ *
+ * The Sunday agenda deliberately does NOT use this. That list is read aloud on
+ * the day, where Friday's blood drive is over and announcing it would be
+ * worse than silence.
+ */
+export function emailWindowStart(todayIso, sundayIso) {
+  const today = String(todayIso || "").slice(0, 10);
+  const sunday = String(sundayIso || "").slice(0, 10);
+  if (!today) return sunday;
+  if (!sunday) return today;
+  return today < sunday ? today : sunday;
+}
+
+/**
+ * @param {string} [fromIso]  start the window here instead of at the Sunday.
+ *   Only the email passes this; see emailWindowStart above.
+ */
+export function upcomingForSunday({ events, eventDates, sundayIso, limit = 6, fromIso }) {
+  const cutoff = String(fromIso || sundayIso || "").slice(0, 10);
   const all = eventDates || [];
 
   return (events || [])

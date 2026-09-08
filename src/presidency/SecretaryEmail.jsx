@@ -7,7 +7,7 @@ import BringForward from "../components/BringForward";
 import { moveAndSave } from "../lib/announcementActions";
 import { toIso, fmtDate, noLessonReason } from "../lib/domain/dates";
 import { sundayOptions, defaultSunday } from "../lib/domain/sundayPicker";
-import { upcomingForSunday } from "../lib/domain/upcoming";
+import { upcomingForSunday, emailWindowStart } from "../lib/domain/upcoming";
 import { announcementWarnings } from "../lib/domain/announcements";
 import { useAuth } from "../lib/useAuth";
 
@@ -101,6 +101,11 @@ export default function SecretaryEmail({ compact, onGo }) {
     setEvents(upcomingForSunday({
       events: ev.data || [], eventDates: ed.data || [],
       sundayIso: date, limit: UPCOMING_SHOWN,
+      // From today when the Sunday is still ahead, so the things happening
+      // between writing the email and that Sunday are in it. The blood drive
+      // on the Friday was being dropped for being "past" the Sunday it was
+      // announcing itself to.
+      fromIso: emailWindowStart(toIso(new Date()), date),
     }));
   }, [date]);
 

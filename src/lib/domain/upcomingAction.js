@@ -45,6 +45,14 @@ export function signUpHref(post) {
   const url = String(post?.link_url || "").trim();
   if (!url) return "";
   if (/[?&]f=/.test(url)) return url;
+
+  // The planner's own flag, straight off the event row. This matters because
+  // the weekly email builds from `events`, and that table has link_url but no
+  // link_label — the label only comes into existence when the event is
+  // published to a post. Reading the label alone meant the feed showed a Sign
+  // Up button while the email called the same link "Details".
+  if (post?.link_is_signup) return url;
+
   return SIGNUP_WORDS.test(String(post?.link_label || "")) ? url : "";
 }
 

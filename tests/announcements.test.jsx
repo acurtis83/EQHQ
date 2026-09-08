@@ -8,6 +8,7 @@ import {
 import { buildEmailText, buildEmailHtml } from "../src/lib/domain/weeklyEmail";
 import { signUpHref, actionFor, ACTION } from "../src/lib/domain/upcomingAction";
 import { publishedLink } from "../src/lib/domain/planning";
+import { upcomingForSunday, emailWindowStart } from "../src/lib/domain/upcoming";
 
 /**
  * Announcements, in the three places they show up.
@@ -439,6 +440,74 @@ describe("the weekly email leads with the lesson", () => {
     const t = buildEmailText({ ...base, siteUrl: "" });
     expect(t).not.toContain("Elders Quorum App");
     expect(t).toContain("ANNOUNCEMENTS");
+  });
+});
+
+/* ----------------------- what the email counts as coming up --------------- */
+
+describe("the email's Coming Up window", () => {
+  const EVENTS = [
+    { id: "blood", title: "Stake Blood Drive", kind: "service", event_date: "2026-09-11",
+      event_time: "1PM", location: "Stake Center",
+      link_url: "https://redcrossblood.org/drive/8th", link_is_signup: true },
+    { id: "serve", title: "9/11 Day of Service", kind: "service", event_date: "2026-09-12" },
+    { id: "bball", title: "Basketball", kind: "activity", event_date: "2026-09-17" },
+  ];
+  const forSunday = (fromIso) => upcomingForSunday({
+    events: EVENTS, eventDates: [], sundayIso: "2026-09-13", limit: 6, fromIso,
+  }).map((e) => e.title);
+
+  it("includes what happens between writing it and that Sunday", () => {
+    // "I dont see the Blood Drive or its link on the email." It was on the
+    // Friday, and the window started at the Sunday — so the week's most
+    // urgent items, the only ones the email could still do anything about,
+    // were the exact ones being dropped.
+    expect(forSunday(emailWindowStart("2026-09-07", "2026-09-13")))
+      .toEqual(["Stake Blood Drive", "9/11 Day of Service", "Basketball"]);
+  });
+
+  it("and nothing was ever filtered by category", () => {
+    // Worth stating: two Service events, and the fix has nothing to do with
+    // their kind. Anyone reading "Service events are missing" would reasonably
+    // go looking for a category filter, and there isn't one.
+    const titles = forSunday(emailWindowStart("2026-09-07", "2026-09-13"));
+    expect(titles).toContain("Stake Blood Drive");
+    expect(titles).toContain("Basketball");
+  });
+
+  it("but the Sunday agenda still starts at its own Sunday", () => {
+    // Read aloud on the day, where Friday's blood drive is over. Announcing
+    // it there would be worse than saying nothing.
+    expect(forSunday(undefined)).toEqual(["Basketball"]);
+  });
+
+  it("and a past Sunday reads as it did at the time", () => {
+    // Looking back at the 6th from the 20th shows the 6th's week, not a list
+    // rewritten by today's date.
+    expect(emailWindowStart("2026-09-20", "2026-09-06")).toBe("2026-09-06");
+  });
+
+  it("picks whichever comes first, today or the Sunday", () => {
+    expect(emailWindowStart("2026-09-07", "2026-09-13")).toBe("2026-09-07");
+    expect(emailWindowStart("2026-09-13", "2026-09-13")).toBe("2026-09-13");
+    expect(emailWindowStart("", "2026-09-13")).toBe("2026-09-13");
+    expect(emailWindowStart("2026-09-07", "")).toBe("2026-09-07");
+  });
+
+  it("and the blood drive carries its sign-up link", () => {
+    const list = upcomingForSunday({
+      events: EVENTS, eventDates: [], sundayIso: "2026-09-13", limit: 6,
+      fromIso: emailWindowStart("2026-09-07", "2026-09-13"),
+    });
+    const txt = buildEmailText({
+      sundayIso: "2026-09-13", lesson: null, announcements: [], events: list,
+      siteUrl: "https://eqhq.netlify.app",
+    });
+    // Not "Details for". The events table has link_url but no link_label, so
+    // reading the label alone left the email calling it a details link while
+    // the feed showed a Sign Up button for the same event.
+    expect(txt).toMatch(/Sign up for the Stake Blood Drive here: https:\/\/redcrossblood\.org/);
+    expect(txt).not.toMatch(/Details for the Stake Blood Drive/);
   });
 });
 
