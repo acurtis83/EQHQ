@@ -435,27 +435,60 @@ describe("what the label is on its own", () => {
   });
 });
 
-describe("the banner and the email agree", () => {
-  it("ask the same question about whether there's a talk", async () => {
-    const { hasTalk } = await import("../src/lib/domain/lesson");
-    const { buildEmailText } = await import("../src/lib/domain/weeklyEmail");
+describe("the email doesn't tell anybody to read the talk", () => {
+  /**
+   * "on the email template. remove 'Please read the talk before Sunday.'"
+   *
+   * This used to be conditional on hasTalk(), and the test here checked that
+   * the email and the banner agreed about when to say it. The sentence is
+   * gone, so what's worth holding onto is that it stays gone in every shape
+   * of lesson — including the ones that used to trigger it.
+   */
+  const CASES = [
+    { teacher_name: "Karl Ricks", topic: "Ministering" },
+    { teacher_name: "Karl Ricks", talk_title: "2nd Hour Changes" },
+    { teacher_name: "Karl Ricks", talk_title: "Come Home", speaker: "Clark G. Gilbert" },
+    { teacher_name: "Karl Ricks", talk_link: "https://example.org/talk" },
+    { teacher_name: "Karl Ricks" },
+  ];
 
-    const cases = [
-      { teacher_name: "Karl Ricks", topic: "Ministering" },
-      { teacher_name: "Karl Ricks", talk_title: "2nd Hour Changes" },
-      { teacher_name: "Karl Ricks", talk_title: "Come Home", speaker: "Clark G. Gilbert" },
-      { teacher_name: "Karl Ricks", talk_link: "https://example.org/talk" },
-      { teacher_name: "Karl Ricks" },
-    ];
-    for (const lesson of cases) {
+  it("in the plain text", async () => {
+    const { buildEmailText } = await import("../src/lib/domain/weeklyEmail");
+    for (const lesson of CASES) {
       const txt = buildEmailText({
         sundayIso: "2026-09-06", lesson, announcements: [], events: [],
         senderName: "Karl", siteUrl: "https://eqhq.netlify.app",
       });
-      expect(
-        txt.includes("Please read the talk before Sunday."),
-        `email disagrees with hasTalk for ${JSON.stringify(lesson)}`
-      ).toBe(hasTalk(lesson));
+      expect(txt, `still asking, for ${JSON.stringify(lesson)}`)
+        .not.toMatch(/read the talk before Sunday/i);
     }
+  });
+
+  it("or the HTML", async () => {
+    const { buildEmailHtml } = await import("../src/lib/domain/weeklyEmail");
+    for (const lesson of CASES) {
+      const html = buildEmailHtml({
+        sundayIso: "2026-09-06", lesson, announcements: [], events: [],
+        senderName: "Karl", siteUrl: "https://eqhq.netlify.app",
+      });
+      expect(html, `still asking, for ${JSON.stringify(lesson)}`)
+        .not.toMatch(/read the talk before Sunday/i);
+    }
+  });
+
+  it("but the link to the talk itself stays", async () => {
+    // The line was removed, not the talk. "Read the talk" is the link, and
+    // it's the most useful thing in the email.
+    const { buildEmailText, buildEmailHtml } = await import("../src/lib/domain/weeklyEmail");
+    const lesson = {
+      teacher_name: "Karl Ricks", talk_title: "Come Home",
+      talk_link: "https://example.org/talk",
+    };
+    const args = {
+      sundayIso: "2026-09-06", lesson, announcements: [], events: [],
+      senderName: "Karl", siteUrl: "https://eqhq.netlify.app",
+    };
+    expect(buildEmailText(args)).toContain("Read the talk: https://example.org/talk");
+    expect(buildEmailHtml(args)).toContain("https://example.org/talk");
   });
 });

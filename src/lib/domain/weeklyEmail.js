@@ -7,7 +7,9 @@
 // Explicit .js so this module can be imported by plain Node as well as Vite —
 // the email is pure text assembly and worth testing on its own.
 import { fmtDate, fmtShort } from "./dates.js";
-import { hasTalk } from "./lesson.js";
+// hasTalk() was imported here for the "please read the talk" line. That line
+// is gone; the feed's lesson card still uses it to decide whether to show the
+// Read the talk button, so the function stays where it is.
 import { signUpHref } from "./upcomingAction.js";
 
 const dash = "—";
@@ -181,17 +183,9 @@ export function buildEmailText({
     // already showing it as "Read the talk" while the plain one showed the
     // address — so a hand-edited email came out different from a sent one.
     if (lesson.talk_link) out.push(`Read the talk: ${lesson.talk_link}`);
-    // Only when there's a talk to read. Most weeks have one, but a lesson from
-    // the manual or a testimony meeting doesn't, and "please read the talk"
-    // with no talk named is an instruction nobody can follow.
-    //
-    // The teacher, the lesson and the link are one block — no breaks between
-    // them. The ask is a different kind of line, so it gets one blank line
-    // above it, and the heading below it gets a wider margin than that.
-    if (hasTalk(lesson)) {
-      out.push("");
-      out.push("Please read the talk before Sunday.");
-    }
+    // "Please read the talk before Sunday." used to follow. Removed at Drew's
+    // request. The link is right there and says "Read the talk" — the sentence
+    // was telling the quorum to do the thing the line above already offers.
   } else {
     out.push("Lesson details to follow.");
   }
@@ -302,11 +296,10 @@ export function buildEmailHtml({
     if (lesson.talk_link) {
       rows.push(`<a href="${escHtml(lesson.talk_link)}" style="color:#0063d6">Read the talk</a>`);
     }
-    const asked = hasTalk(lesson);
-    parts.push(`<p style="${P}${asked ? ";margin-bottom:0" : ""}">${rows.join("<br>")}</p>`);
-    if (asked) {
-      parts.push(`<p style="${P};margin-top:10px">Please read the talk before Sunday.</p>`);
-    }
+    // The block keeps its normal bottom margin now that nothing follows it —
+    // the margin was being zeroed only to tuck the "please read the talk"
+    // line up underneath.
+    parts.push(`<p style="${P}">${rows.join("<br>")}</p>`);
   } else {
     parts.push(`<p style="${P}">Lesson details to follow.</p>`);
   }
@@ -376,8 +369,8 @@ export function textToHtml(text) {
 
   // Consecutive lines are one paragraph with breaks in it; a blank line starts
   // a new one. That's how people write plain text, and it's what keeps the
-  // teacher, the lesson and "please read the talk" together as one block
-  // instead of four paragraphs with a gap between each.
+  // teacher, the lesson and the talk link together as one block instead of
+  // three paragraphs with a gap between each.
   const flushPara = () => {
     if (!para.length) return;
     out.push(`<p style="${P}">${para.map((l) => linkify(escHtml(l))).join("<br>")}</p>`);
