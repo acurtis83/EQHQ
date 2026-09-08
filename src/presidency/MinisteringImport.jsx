@@ -6,6 +6,7 @@ import { pdfToLines } from "../lib/pdfLines";
 import { readMinisteringPdf, districtGroups } from "../lib/domain/ministeringPdf";
 import { matchCompanions } from "../lib/domain/ministeringImport";
 import { applyImport, clearCompanionships } from "../lib/ministeringApply";
+import ImportAftermath from "./ImportAftermath";
 
 /**
  * Import ministering assignments from the LCR report.
@@ -27,6 +28,7 @@ export default function MinisteringImport({ members, onClose, onDone }) {
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [read, setRead] = useState(null);
+  const [after, setAfter] = useState(null);
 
   const pick = async (file) => {
     if (!file) return;
@@ -56,6 +58,14 @@ export default function MinisteringImport({ members, onClose, onDone }) {
     const out = await applyImport({ districts: read.districts, members });
     setBusy("");
     if (out.error) { setErr(out.error); return; }
+
+    // Anything the import couldn't decide on its own gets asked about before
+    // the sheet closes — families that fell off the report, and ones that may
+    // just have been relabelled. Nothing to ask means nothing to show.
+    if (out.dropped?.length || out.renames?.length) {
+      setAfter({ dropped: out.dropped || [], renames: out.renames || [], done: out.done });
+      return;
+    }
     onDone?.(out.done);
   };
 
@@ -69,6 +79,17 @@ export default function MinisteringImport({ members, onClose, onDone }) {
       (g) => matchCompanions(g.companions, members)
         .filter((c) => !c.member).map((c) => c.name))))],
   } : null;
+
+  if (after) {
+    return (
+      <ImportAftermath
+        dropped={after.dropped}
+        renames={after.renames}
+        onClose={() => onDone?.(after.done)}
+        onDone={() => onDone?.(after.done)}
+      />
+    );
+  }
 
   return (
     <Sheet title="Import From LCR" onClose={onClose}>

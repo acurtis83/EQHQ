@@ -322,3 +322,71 @@ export function districtGroups(district) {
 
   return { groups, duplicates: [...new Set(duplicates)] };
 }
+
+/* ----------------------------- renames and leavers ------------------------ */
+
+/** The surname a household is filed under. */
+export function surnameOf(name) {
+  const s = String(name || "").trim();
+  if (!s) return "";
+  return (s.includes(",") ? s.split(",")[0] : s.split(/\s+/)[0])
+    .toLowerCase().trim();
+}
+
+/** The given names in a household label — "Michael", "Madeline". */
+export function givenNamesOf(name) {
+  const s = String(name || "");
+  const rest = s.includes(",") ? s.split(",").slice(1).join(",") : "";
+  return rest
+    .split("&")
+    .map((part) => part.trim().split(/\s+/)[0] || "")
+    .map((w) => w.toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Could these two labels be the same family, renamed?
+ *
+ * LCR relabels a household when its make-up changes — a marriage turns
+ * "Brown, Liana" into "Brown, Liana & David", a death turns a couple back into
+ * one name. The exact-name match that keeps re-imports stable can't see
+ * through that, so the family arrives as a new row and the old one is left
+ * behind holding all the history.
+ *
+ * The test is deliberately strict, because the cost is asymmetric: a missed
+ * rename leaves a duplicate somebody notices and fixes, while a wrong merge
+ * quietly pours one family's ministering history into another's and nobody
+ * ever finds out. So: same surname, AND at least one given name in common.
+ *
+ * "Brown, Liana" and "Brown, Todd" share a surname and no given name — five
+ * different Brown households in this ward, so surname alone would merge them
+ * all.
+ */
+export function looksRenamed(before, after) {
+  const a = surnameOf(before);
+  const b = surnameOf(after);
+  if (!a || a !== b) return false;
+  const ga = givenNamesOf(before);
+  const gb = givenNamesOf(after);
+  if (!ga.length || !gb.length) return false;
+  return ga.some((n) => gb.includes(n));
+}
+
+/**
+ * Pair up households that fell off the list with ones that just appeared.
+ *
+ * Offered, never applied. Each pairing is a question for the presidency —
+ * "is this the same family?" — and one that only they can answer.
+ *
+ * A household that could match two newcomers is left out entirely rather than
+ * paired with whichever came first: an ambiguous guess presented as a
+ * suggestion is worse than no suggestion, because it invites a yes.
+ */
+export function likelyRenames(dropped = [], added = []) {
+  const out = [];
+  for (const before of dropped) {
+    const hits = (added || []).filter((after) => looksRenamed(before.name, after.name));
+    if (hits.length === 1) out.push({ before, after: hits[0] });
+  }
+  return out;
+}

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { matchCompanions } from "./domain/ministeringImport";
+import { likelyRenames } from "./domain/ministeringPdf";
 
 /**
  * Write an approved ministering import.
@@ -35,6 +36,9 @@ export async function applyImport({ districts, members }) {
   // Every household the import mentions, so anything left over can be
   // unassigned at the end.
   const claimed = new Set();
+  let dropped = [];
+  // ...and the ones it created, for the rename check below.
+  const appeared = [];
 
   for (const district of districts) {
     let row = byName.get(district.name.trim().toLowerCase());
@@ -92,8 +96,12 @@ export async function applyImport({ districts, members }) {
             name: house.name,
             address: house.address || null,
             phone: house.phone || null,
-          });
+          }).select().maybeSingle();
           if (ins.error) return { error: ins.error.message };
+          // Kept so a family that only LOOKS new — relabelled by LCR after a
+          // marriage, say — can be offered as a possible rename of one that
+          // dropped off in the same import.
+          appeared.push({ id: ins.data?.id, name: house.name });
         }
         done.households += 1;
       }
@@ -113,9 +121,18 @@ export async function applyImport({ districts, members }) {
       if (off.error) return { error: off.error.message };
       done.unassigned = orphans.length;
     }
+    dropped = orphans;
   }
 
-  return { done };
+  // The report only lists households that HAVE a companionship, so a family
+  // missing from it might have moved away or might simply be waiting for an
+  // assignment. Nothing here can tell those apart, so both are handed back
+  // for the presidency to sort out rather than guessed at.
+  return {
+    done,
+    dropped,
+    renames: likelyRenames(dropped, appeared),
+  };
 }
 
 /**

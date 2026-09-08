@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import {
   columnStarts, readMinisteringPdf, householdName, districtGroups,
-  toColumns, findSexColumn,
+  toColumns, findSexColumn, looksRenamed, likelyRenames,
 } from "../src/lib/domain/ministeringPdf";
 
 /**
@@ -235,5 +235,65 @@ describe("reading what pdf.js produces", () => {
     // exactly like a heading.
     expect(readMinisteringPdf(PDFJS).districts.map((d) => d.name))
       .not.toContain("Ministering Assignments");
+  });
+});
+
+/* --------------------------- renames and leavers -------------------------- */
+
+/**
+ * "if ministering changes or people move out can i just import a new PDF to
+ *  update?"
+ *
+ * Mostly yes. The awkward case is LCR relabelling a household when its
+ * make-up changes: matching on the exact name is what keeps re-imports
+ * stable, and it can't see through a rename, so the family arrives as a new
+ * row while the old one is left holding all the history.
+ */
+describe("spotting a household that was renamed", () => {
+  it("sees a marriage added to the label", () => {
+    expect(looksRenamed("Brown, Liana", "Brown, Liana & David")).toBe(true);
+  });
+
+  it("and a spouse dropping off it", () => {
+    expect(looksRenamed("Lee, Michael & Madeline", "Lee, Michael")).toBe(true);
+  });
+
+  it("but never two different families with the same surname", () => {
+    // Five Brown households in this ward. Surname alone would merge the lot,
+    // and a wrong merge pours one family's ministering history into another's
+    // where nobody would ever find it.
+    expect(looksRenamed("Brown, Liana", "Brown, Todd")).toBe(false);
+    expect(looksRenamed("Hill, Matt & Carolyn", "Hill, Andrew & Emilee")).toBe(false);
+  });
+
+  it("or the same given name under a different surname", () => {
+    expect(looksRenamed("Smith, John", "Jones, John")).toBe(false);
+  });
+
+  it("and says nothing about a household with no given name at all", () => {
+    expect(looksRenamed("Smith", "Smith, John")).toBe(false);
+  });
+
+  it("pairs a leaver with the newcomer it matches", () => {
+    const out = likelyRenames(
+      [{ id: "old", name: "Brown, Liana" }, { id: "keep", name: "Miller, Patricia" }],
+      [{ id: "new", name: "Brown, Liana & David" }]
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].before.id).toBe("old");
+    expect(out[0].after.id).toBe("new");
+  });
+
+  it("but offers nothing when two newcomers both match", () => {
+    // An ambiguous guess dressed up as a suggestion is worse than no
+    // suggestion, because it invites a yes.
+    expect(likelyRenames(
+      [{ id: "old", name: "Brown, Liana" }],
+      [{ id: "a", name: "Brown, Liana & David" }, { id: "b", name: "Brown, Liana & Sam" }]
+    )).toEqual([]);
+  });
+
+  it("and nothing at all when nobody left", () => {
+    expect(likelyRenames([], [{ id: "new", name: "Brown, Liana" }])).toEqual([]);
   });
 });
