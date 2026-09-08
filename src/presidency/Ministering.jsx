@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import {
   Map as MapIcon, Users, Home, Plus, Check, X, ChevronRight, ChevronDown,
-  AlertTriangle, MapPin,
+  AlertTriangle, MapPin, Upload,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Select, Chip, Empty, SectionTitle } from "../components/ui";
+import MinisteringImport from "./MinisteringImport";
 import { useMinistering } from "../lib/useMinistering";
 import { conductingNames } from "../lib/domain/conducting";
 import {
@@ -224,6 +225,7 @@ function CompanionshipCard({
 /* --------------------------------- the screen ----------------------------- */
 
 export default function Ministering() {
+  const [importing, setImporting] = useState(false);
   const m = useMinistering();
   const [view, setView] = useState("list");
   const [presidency, setPresidency] = useState([]);
@@ -314,7 +316,29 @@ export default function Ministering() {
         <Btn size="sm" kind={view === "map" ? "primary" : "ghost"} onClick={() => setView("map")}>
           <MapIcon size={14} /> Map
         </Btn>
+        {/* The annual reorganisation arrives as a PDF out of LCR. Typing 95
+            companionships in by hand is the reason this screen would
+            otherwise sit empty. */}
+        <Btn size="sm" kind="ghost" onClick={() => setImporting(true)}>
+          <Upload size={14} /> Import
+        </Btn>
       </div>
+
+      {importing && (
+        <MinisteringImport
+          members={m.members || []}
+          onClose={() => setImporting(false)}
+          onDone={(done) => {
+            setImporting(false);
+            m.reload();
+            m.setErr(
+              `Imported ${done.companionships} companionships and `
+              + `${done.households} households.`
+              + (done.unassigned ? ` ${done.unassigned} household(s) no longer assigned.` : "")
+            );
+          }}
+        />
+      )}
 
       {m.err && (
         <div style={{ ...card, padding: 11, marginBottom: 12, fontSize: 13.5, color: "var(--red, #c0392b)" }}>
