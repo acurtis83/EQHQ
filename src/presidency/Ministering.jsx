@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import {
   Map as MapIcon, Users, Home, Plus, Check, X, ChevronRight, ChevronDown,
-  AlertTriangle, MapPin, Upload,
+  AlertTriangle, MapPin, Upload, ClipboardCheck,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { useAuth } from "../lib/useAuth";
 import { T, card, Btn, Input, Select, Chip, Empty, SectionTitle } from "../components/ui";
 import MinisteringImport from "./MinisteringImport";
+import Interviews from "./Interviews";
 import { useMinistering } from "../lib/useMinistering";
 import { conductingNames } from "../lib/domain/conducting";
 import {
@@ -225,6 +227,7 @@ function CompanionshipCard({
 /* --------------------------------- the screen ----------------------------- */
 
 export default function Ministering() {
+  const { presidency: me } = useAuth();
   const [importing, setImporting] = useState(false);
   const m = useMinistering();
   const [view, setView] = useState("list");
@@ -316,6 +319,10 @@ export default function Ministering() {
         <Btn size="sm" kind={view === "map" ? "primary" : "ghost"} onClick={() => setView("map")}>
           <MapIcon size={14} /> Map
         </Btn>
+        <Btn size="sm" kind={view === "interviews" ? "primary" : "ghost"}
+          onClick={() => setView("interviews")}>
+          <ClipboardCheck size={14} /> Interviews
+        </Btn>
         {/* The annual reorganisation arrives as a PDF out of LCR. Typing 95
             companionships in by hand is the reason this screen would
             otherwise sit empty. */}
@@ -348,6 +355,18 @@ export default function Ministering() {
 
       {m.loading ? (
         <div style={{ fontSize: 14, color: T.faint }}>Loading…</div>
+      ) : view === "interviews" ? (
+        <Interviews
+          comps={m.comps}
+          households={m.households}
+          interviews={m.interviews}
+          members={m.members}
+          membersById={m.membersById}
+          districts={m.districts}
+          me={me?.name || ""}
+          onChanged={m.reload}
+          setErr={m.setErr}
+        />
       ) : view === "map" ? (
         <MinisteringMap
           points={m.points}

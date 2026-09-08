@@ -30,6 +30,13 @@ const LEVEL_COLOR = {
   concern: "#c0392b",
 };
 
+// Interview coverage, for colorBy="coverage".
+const COVERAGE_COLOR = {
+  covered: "#2f9e5e",
+  "no-report": "#d99a2b",
+  unassigned: "#8a8f98",
+};
+
 // Distinct enough to tell apart on a phone in sunlight, and deliberately not
 // the health colours — a district being blue must never read as "fine".
 const DISTRICT_COLORS = ["#2f6fd0", "#7a3fbf", "#0f8f8f", "#c2571c", "#5a6b7a"];
@@ -64,7 +71,14 @@ export function drawLayers(L, layer, {
   }
 
   for (const p of placed) {
-    const colour = colorBy === "district"
+    // "which parts of the neighborhood" — the same pins, coloured by whether
+    // this quarter's interview has happened rather than by the household's
+    // own health. Green covered, amber assigned but nobody has reported, grey
+    // nobody assigned at all: three states, because the middle one needs a
+    // different conversation from either neighbour.
+    const colour = colorBy === "coverage"
+      ? (COVERAGE_COLOR[p.status] || COVERAGE_COLOR.unassigned)
+      : colorBy === "district"
       ? (colorForDistrict[p.district_id] || "#8a8f98")
       : LEVEL_COLOR[p.level] || LEVEL_COLOR.ok;
     L.circleMarker([Number(p.lat), Number(p.lng)], {

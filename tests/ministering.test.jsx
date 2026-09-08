@@ -31,6 +31,15 @@ function query(table) {
   return chain(rows);
 }
 
+// Signed in as the president. The screen records who held an interview, so it
+// asks who's signed in — without this the provider throws and every test here
+// fails on a screen that renders perfectly well in the app.
+vi.mock("../src/lib/useAuth", () => ({
+  useAuth: () => ({
+    presidency: { name: "Drew Curtis" }, isPresidency: true, ready: true, signOut() {},
+  }),
+}));
+
 vi.mock("../src/lib/supabase", () => ({
   supabase: {
     from: (t) => query(t),

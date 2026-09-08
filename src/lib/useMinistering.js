@@ -81,7 +81,7 @@ export function useMinistering() {
       supabase.from("ministering_households").select("*").order("name"),
       supabase.from("ministering_contacts").select("*"),
       supabase.from("ministering_interviews").select("*"),
-      supabase.from("members").select("id,name,active"),
+      supabase.from("members").select("id,name,active,age"),
     ]);
 
     // A missing table reads as "relation does not exist". Anything else is a
