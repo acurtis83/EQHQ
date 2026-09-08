@@ -14,12 +14,14 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 let POSTS = [];
 let RSVPS = [];
 let NOTICES = [];
+let LINKS = [];
 let WRITES = [];
 
 function query(table) {
   const rows = table === "posts" ? POSTS
     : table === "public_rsvps" ? RSVPS
     : table === "sunday_announcements_public" ? NOTICES
+    : table === "post_links" ? LINKS
     : [];
   const capture = (op) => (arg) => {
     WRITES.push({ table, op, arg });
@@ -96,6 +98,7 @@ beforeEach(() => {
   POSTS = DEFAULTS.map((p) => ({ ...p }));
   RSVPS = [];
   NOTICES = [];
+  LINKS = [];
   WRITES = [];
   localStorage.clear();
 });
@@ -161,6 +164,48 @@ describe("the three sections, in order", () => {
   it("and takes its space back when nothing was announced", async () => {
     const dom = await mount();   // NOTICES is empty
     expect(dom.container.textContent).not.toContain("From Sun");
+  });
+});
+
+describe("one link per destination, on the post itself", () => {
+  /**
+   * "why is there 2 links? we only need one"
+   *
+   * Mounted through the Feed. The rule is checked directly in
+   * postlinks.test.jsx, but that passed with the component ignoring it
+   * entirely — proving a function works is not proving anything calls it.
+   */
+  const BLOOD = {
+    id: "blood", category: "service", title: "Stake Blood Drive",
+    event_date: "2026-09-11", link_url: "https://redcrossblood.org/drive/8th",
+    link_label: "Sign Up", created_at: "2026-09-05T00:00:00Z",
+  };
+
+  it("collapses a hand-added copy of the post's own link", async () => {
+    POSTS = [BLOOD];
+    LINKS = [{
+      id: "l1", post_id: "blood", label: "Sign Up Here",
+      url: "https://redcrossblood.org/drive/8th", sort_order: 0,
+    }];
+    const dom = await mount();
+
+    const card = document.getElementById("post-blood");
+    const toDrive = [...card.querySelectorAll("a")]
+      .filter((a) => a.getAttribute("href") === "https://redcrossblood.org/drive/8th");
+    expect(toDrive, "the same page is linked twice on one post").toHaveLength(1);
+    expect(card.textContent).not.toContain("Sign Up Here");
+  });
+
+  it("but keeps two links that go to different places", async () => {
+    POSTS = [BLOOD];
+    LINKS = [{
+      id: "l1", post_id: "blood", label: "Flyer",
+      url: "https://example.org/flyer.pdf", sort_order: 0,
+    }];
+    const dom = await mount();
+    const card = document.getElementById("post-blood");
+    expect(card.textContent).toContain("Flyer");
+    expect(dom.container.textContent).toContain("Sign Up");
   });
 });
 

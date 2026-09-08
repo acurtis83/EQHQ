@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link2, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, Btn, Input } from "../components/ui";
+import { visibleLinks, duplicateLinks } from "../lib/domain/postLinks";
 
 /**
  * The links on a post.
@@ -17,17 +18,19 @@ export default function PostLinks({ post, links, isPresidency, onReload }) {
     .filter((l) => l.post_id === post.id)
     .sort((a, b) => a.sort_order - b.sort_order);
 
-  const hasOwn = !!post.link_url;
-  if (!mine.length && !hasOwn && !isPresidency) return null;
+  // One row per destination. A post can name the same page twice — its own
+  // link_url plus a hand-added copy — and two identical buttons on one post
+  // reads as a mistake by whoever wrote it. See domain/postLinks.js.
+  const shown = visibleLinks(post, links);
+  if (!shown.length && !isPresidency) return null;
 
   return (
     <>
-      {(mine.length > 0 || hasOwn) && (
+      {shown.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 9 }}>
-          {hasOwn && (
-            <LinkRow href={post.link_url} label={post.link_label || "Details"} primary />
-          )}
-          {mine.map((l) => <LinkRow key={l.id} href={l.url} label={l.label} />)}
+          {shown.map((l) => (
+            <LinkRow key={l.id} href={l.href} label={l.label} primary={l.primary} />
+          ))}
         </div>
       )}
 
@@ -39,7 +42,8 @@ export default function PostLinks({ post, links, isPresidency, onReload }) {
       )}
 
       {editing && (
-        <LinkEditor post={post} links={mine} onClose={() => setEditing(false)} onReload={onReload} />
+        <LinkEditor post={post} links={mine} hidden={duplicateLinks(post, links)}
+          onClose={() => setEditing(false)} onReload={onReload} />
       )}
     </>
   );
@@ -67,7 +71,7 @@ function LinkRow({ href, label, primary }) {
   );
 }
 
-function LinkEditor({ post, links, onClose, onReload }) {
+function LinkEditor({ post, links, hidden = [], onClose, onReload }) {
   const [label, setLabel] = useState("");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -133,6 +137,33 @@ function LinkEditor({ post, links, onClose, onReload }) {
                 <Btn size="sm" kind="plain" onClick={() => remove(l.id)}><Trash2 size={13} /></Btn>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Said out loud rather than quietly dropped. Somebody added this row
+            on purpose, and a link that vanishes from the feed with no
+            explanation just gets added again next week. */}
+        {hidden.length > 0 && (
+          <div data-duplicate-links={hidden.length} style={{
+            padding: "9px 10px", borderRadius: 10,
+            background: T.inset, border: `1px solid ${T.gold}`,
+            fontSize: 13.5, color: T.sub, lineHeight: 1.5,
+          }}>
+            {hidden.length === 1 ? "This link isn't" : "These links aren't"} shown on the
+            feed — {hidden.length === 1 ? "it goes" : "they go"} to the same place as{" "}
+            {hidden[0].duplicateOf}.
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 5 }}>
+              {hidden.map((l) => (
+                <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flex: 1, minWidth: 0, color: T.ink, fontWeight: 600 }}>
+                    {l.label}
+                  </span>
+                  <Btn size="sm" kind="plain" onClick={() => remove(l.id)}>
+                    <Trash2 size={13} />
+                  </Btn>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

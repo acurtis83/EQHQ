@@ -192,9 +192,23 @@ export default function HomeHub({ onGo }) {
                     <div style={{ fontSize: 17.5, fontWeight: 700, color: T.ink, lineHeight: 1.35 }}>
                       {nextSunday.row.talk_title || nextSunday.row.topic || "Lesson"}
                     </div>
-                    <div style={{ fontSize: 14.5, color: T.sub, marginTop: 3 }}>
-                      {nextSunday.row.teacher_name}
-                      {nextSunday.row.speaker ? ` · ${nextSunday.row.speaker}` : ""}
+                    {/* Labelled, matching the feed's lesson card. The two
+                        names either side of a dot were the same confusion
+                        here: one is the brother teaching on Sunday, the other
+                        gave the conference talk and is never in the room. */}
+                    <div style={{ marginTop: 3 }}>
+                      {nextSunday.row.speaker && nextSunday.row.talk_title && (
+                        <div data-credit="Talk by"
+                          style={{ fontSize: 14.5, color: T.ink, lineHeight: 1.45 }}>
+                          <span style={{ color: T.sub }}>Talk by </span>
+                          {nextSunday.row.speaker}
+                        </div>
+                      )}
+                      <div data-credit="Taught by"
+                        style={{ fontSize: 14.5, color: T.ink, lineHeight: 1.45 }}>
+                        <span style={{ color: T.sub }}>Taught by </span>
+                        {nextSunday.row.teacher_name}
+                      </div>
                     </div>
                   </div>
                 ) : (
