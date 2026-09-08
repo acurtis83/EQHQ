@@ -178,3 +178,110 @@ describe("recognising the same household twice", () => {
     expect(householdKey("Brown, Liana")).not.toBe(householdKey("Brown, Todd"));
   });
 });
+
+/* --------------------------- what an import changes ----------------------- */
+
+import { planImport, companionshipKey } from "../src/lib/domain/ministeringImport";
+
+const MEMBERS = [
+  { id: "seth", name: "Seth Adamson" },
+  { id: "spencer", name: "Spencer Gifford" },
+  { id: "ben", name: "Ben Aston" },
+  { id: "grant", name: "Grant Weekley" },
+];
+
+// Ben and Grant, exactly as they'd come back from the database.
+const PAIR = {
+  id: "c1",
+  matchKey: companionshipKey(["ben", "grant"], MEMBERS),
+};
+
+describe("planning the import", () => {
+  const { groups } = parseAssignments(
+    ["Aston, Ben", "Weekley, Grant\t", "",
+     "Lee, Michael & Madeline", "Mall, Prem & Nicole Michelle"].join("\n")
+  );
+
+  it("recognises a companionship that hasn't changed", () => {
+    const plan = planImport(groups, {
+      companionships: [PAIR],
+      households: [
+        { id: "h1", name: "Lee, Michael & Madeline", companionship_id: "c1" },
+        { id: "h2", name: "Mall, Prem & Nicole Michelle", companionship_id: "c1" },
+      ],
+    }, MEMBERS);
+
+    expect(plan.counts.newCompanionships).toBe(0);
+    expect(plan.counts.newHouseholds).toBe(0);
+    expect(plan.counts.moved).toBe(0);
+    expect(plan.companionships[0].households.every((h) => h.status === "same")).toBe(true);
+  });
+
+  it("spots a family that has moved to a different companionship", () => {
+    const plan = planImport(groups, {
+      companionships: [PAIR],
+      households: [
+        { id: "h1", name: "Lee, Michael & Madeline", companionship_id: "somebody-else" },
+        { id: "h2", name: "Mall, Prem & Nicole Michelle", companionship_id: "c1" },
+      ],
+    }, MEMBERS);
+
+    expect(plan.counts.moved).toBe(1);
+    expect(plan.companionships[0].households.find((h) => h.name.startsWith("Lee")).status)
+      .toBe("moved");
+  });
+
+  it("and one that's new to the ward", () => {
+    const plan = planImport(groups, {
+      companionships: [PAIR],
+      households: [{ id: "h2", name: "Mall, Prem & Nicole Michelle", companionship_id: "c1" }],
+    }, MEMBERS);
+    expect(plan.counts.newHouseholds).toBe(1);
+  });
+
+  it("reports a family the district no longer ministers to, without deleting it", () => {
+    const plan = planImport(groups, {
+      companionships: [PAIR],
+      households: [
+        { id: "h1", name: "Lee, Michael & Madeline", companionship_id: "c1" },
+        { id: "h2", name: "Mall, Prem & Nicole Michelle", companionship_id: "c1" },
+        { id: "h9", name: "Gone, Family", companionship_id: "c1" },
+      ],
+    }, MEMBERS);
+
+    // Unassigned, not removed: a family that stops being ministered to is
+    // still a family, and the contact log against them is worth keeping.
+    expect(plan.dropped.map((h) => h.id)).toEqual(["h9"]);
+    expect(plan.counts.dropped).toBe(1);
+  });
+
+  it("treats a pair with one brother swapped as a new companionship", () => {
+    // Not the same partnership, and saying it is would carry one man's
+    // history onto another's.
+    const swapped = parseAssignments(
+      ["Aston, Ben", "Adamson, Seth\t", "", "Lee, Michael & Madeline"].join("\n")
+    ).groups;
+    const plan = planImport(swapped, { companionships: [PAIR], households: [] }, MEMBERS);
+    expect(plan.companionships[0].status).toBe("new");
+    expect(plan.counts.retired).toBe(1);
+  });
+
+  it("doesn't care what order the two names were pasted in", () => {
+    const flipped = parseAssignments(
+      ["Weekley, Grant", "Aston, Ben\t", "", "Lee, Michael & Madeline"].join("\n")
+    ).groups;
+    const plan = planImport(flipped, { companionships: [PAIR], households: [] }, MEMBERS);
+    expect(plan.companionships[0].status, "the same pair read as a new one").toBe("same");
+  });
+
+  it("lists companions it couldn't find on the roster", () => {
+    const plan = planImport(groups, { companionships: [], households: [] },
+      [{ id: "ben", name: "Ben Aston" }]);
+    expect(plan.unmatched).toEqual(["Grant Weekley"]);
+  });
+
+  it("and says nothing at all about an empty paste", () => {
+    const plan = planImport([], { companionships: [], households: [] }, MEMBERS);
+    expect(plan.counts).toMatchObject({ companionships: 0, dropped: 0, retired: 0 });
+  });
+});

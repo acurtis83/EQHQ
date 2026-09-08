@@ -162,3 +162,110 @@ export function matchCompanions(names = [], members = []) {
     member: byKey.get(normalizeNameKey(name)) || null,
   }));
 }
+
+/* -------------------------------- the diff -------------------------------- */
+
+/**
+ * What a pasted district would change.
+ *
+ * Scoped to ONE district, because that's how the paste arrives: LCR shows a
+ * district at a time and Drew pastes one at a time. That scoping is what makes
+ * "no longer assigned" safe to report — across the whole ward it would be a
+ * guess, but within a district it's simply the households that district had
+ * and this paste doesn't.
+ *
+ * Nothing is written from here. It returns a description that the review
+ * screen renders and the apply step walks, so the presidency sees every
+ * pairing before it lands.
+ *
+ * @param groups        from parseAssignments()
+ * @param existing      { companionships, households } already in this district
+ * @param members       the roster, for matching companions to people
+ */
+export function planImport(groups = [], existing = {}, members = []) {
+  const oldComps = existing.companionships || [];
+  const oldHouses = existing.households || [];
+
+  // Where each household sits today, by name.
+  const homeOf = new Map();
+  for (const h of oldHouses) homeOf.set(householdKey(h.name), h);
+
+  const seen = new Set();
+  const companionships = [];
+  let newHouseholds = 0;
+  let moved = 0;
+
+  for (const g of groups) {
+    const matched = matchCompanions(g.companions, members);
+    // A companionship is the same companionship if it's the same people. Two
+    // brothers reassigned as a pair keep their history; a pair with one
+    // brother swapped is a new companionship, which is the truthful reading —
+    // it isn't the same partnership any more.
+    const key = matched
+      .map((c) => normalizeNameKey(c.name)).filter(Boolean).sort().join(" + ");
+    const before = oldComps.find((c) => c.matchKey === key) || null;
+
+    const households = g.households.map((name) => {
+      const k = householdKey(name);
+      seen.add(k);
+      const current = homeOf.get(k) || null;
+      if (!current) { newHouseholds += 1; return { name, existing: null, status: "new" }; }
+      const stays = before && current.companionship_id === before.id;
+      if (!stays) moved += 1;
+      return { name, existing: current, status: stays ? "same" : "moved" };
+    });
+
+    companionships.push({
+      key,
+      companions: matched,
+      households,
+      existing: before,
+      status: before ? "same" : "new",
+    });
+  }
+
+  // Households this district had that the paste doesn't mention. Unassigned
+  // rather than deleted: a family that stops being ministered to is still a
+  // family, and the contact history against them is worth keeping.
+  const dropped = oldHouses.filter((h) => !seen.has(householdKey(h.name)));
+
+  // Companionships with nobody left to visit, for the same reason.
+  const retired = oldComps.filter(
+    (c) => !companionships.some((n) => n.existing && n.existing.id === c.id)
+  );
+
+  const unmatched = companionships
+    .flatMap((c) => c.companions.filter((p) => !p.member).map((p) => p.name));
+
+  return {
+    companionships,
+    dropped,
+    retired,
+    unmatched: [...new Set(unmatched)],
+    counts: {
+      companionships: companionships.length,
+      newCompanionships: companionships.filter((c) => c.status === "new").length,
+      households: companionships.reduce((n, c) => n + c.households.length, 0),
+      newHouseholds,
+      moved,
+      dropped: dropped.length,
+      retired: retired.length,
+      unmatched: new Set(unmatched).size,
+    },
+  };
+}
+
+/**
+ * The key that identifies a stored companionship by its people.
+ *
+ * Exported because the caller has to stamp it onto the rows it loads before
+ * handing them to planImport — the database stores two member ids, not a key.
+ */
+export function companionshipKey(memberIds = [], members = []) {
+  const byId = new Map((members || []).map((m) => [m.id, m]));
+  return (memberIds || [])
+    .map((id) => normalizeNameKey(byId.get(id)?.name))
+    .filter(Boolean)
+    .sort()
+    .join(" + ");
+}
