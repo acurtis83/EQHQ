@@ -285,3 +285,23 @@ describe("planning the import", () => {
     expect(plan.counts).toMatchObject({ companionships: 0, dropped: 0, retired: 0 });
   });
 });
+
+describe("matching companions however the name arrived", () => {
+  const ROSTER = [{ id: "m1", name: "David Ballif" }];
+
+  it("matches a name written the PDF's way round", () => {
+    // The PDF hands over "Ballif, David"; the paste hands over "David
+    // Ballif". The lookup key is order-sensitive, so without normalising
+    // first every companion read from the PDF came back unmatched — 189 of
+    // them, reported on screen as "aren't on the roster".
+    expect(matchCompanions(["Ballif, David"], ROSTER)[0].member?.id).toBe("m1");
+  });
+
+  it("and the paste's way round", () => {
+    expect(matchCompanions(["David Ballif"], ROSTER)[0].member?.id).toBe("m1");
+  });
+
+  it("but still doesn't invent a match for somebody absent", () => {
+    expect(matchCompanions(["Weekley, Grant"], ROSTER)[0].member).toBeNull();
+  });
+});

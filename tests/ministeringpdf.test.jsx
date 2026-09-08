@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import {
   columnStarts, readMinisteringPdf, householdName, districtGroups,
+  toColumns, findSexColumn,
 } from "../src/lib/domain/ministeringPdf";
 
 /**
@@ -175,5 +176,64 @@ describe("families listed twice", () => {
       ],
     };
     expect(districtGroups(district).duplicates).toEqual(["Hill, Andrew & Emilee"]);
+  });
+});
+
+/* ------------------- the same report, as pdf.js reports it ---------------- */
+
+/**
+ * Two extractors, one parser.
+ *
+ * This fixture is the shape pdf.js actually produces from the real report,
+ * and it differs from the text dump above in the way that broke the import:
+ * SIX columns rather than five, because pdf.js splits "Presidency Member:"
+ * from "Unassigned" into separate cells. Every column index shifts by one.
+ *
+ * It also carries the two things that turned 4 districts into 25 — a
+ * companion's email and the last line of his address, each left alone in the
+ * first column by a page break, directly above the next "Presidency Member:".
+ */
+const PDFJS = JSON.parse(readFileSync(
+  `${process.cwd()}/tests/fixtures/lcr-pdfjs.json`, "utf8"
+));
+
+describe("reading what pdf.js produces", () => {
+  it("finds the columns by content, not by counting from the left", () => {
+    // Six columns here, five in the text dump. Indices hardcoded against
+    // either one empty the household column entirely against the other —
+    // silently, with the districts and companionships still looking right.
+    const rows = toColumns(PDFJS, columnStarts(PDFJS));
+    expect(findSexColumn(rows)).toBe(4);
+  });
+
+  it("still pairs each companionship with its own families", () => {
+    const seen = readMinisteringPdf(PDFJS).districts.flatMap((d) =>
+      districtGroups(d).groups.map((g) => ({
+        who: g.companions.join(" + "),
+        homes: g.households.map((h) => h.name),
+      })));
+    expect(seen).toEqual([
+      { who: "Ballif, David", homes: ["Arnold, Alexander Curtis & Kaitlyn Caresse"] },
+      { who: "Brinley, Logan", homes: ["Brown, Liana"] },
+      { who: "Aston, Ben + Weekley, Grant", homes: ["Lee, Michael & Madeline"] },
+      // Straight after a page break, with the report title reprinted above it
+      // and no district heading of its own — it stays in District 1.
+      { who: "Savio, Ben", homes: ["Curtis, Andrew & Camarie"] },
+    ]);
+  });
+
+  it("finds four districts' worth of headings, and only headings", () => {
+    // An email and an address line, each alone in the first column above a
+    // "Presidency Member:", are not districts. Reading them as such is what
+    // produced twenty-five of them from a report that has four.
+    expect(readMinisteringPdf(PDFJS).districts.map((d) => d.name))
+      .toEqual(["Bishopric/EQ Presidency", "District 1"]);
+  });
+
+  it("and doesn't take the report's own title for a district", () => {
+    // Printed at the top of all twenty-nine pages, alone in the first column,
+    // exactly like a heading.
+    expect(readMinisteringPdf(PDFJS).districts.map((d) => d.name))
+      .not.toContain("Ministering Assignments");
   });
 });

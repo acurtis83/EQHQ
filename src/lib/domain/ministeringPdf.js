@@ -96,6 +96,9 @@ export function toColumns(lines, starts) {
 const DOTTED = /^[.\s]{20,}$/;
 const PRESIDENCY = /^Presidency Member:/i;
 const SEX = /^(Male|Female|M|F)$/i;
+// The report's own title, printed at the top of all 29 pages. It sits
+// alone in the first column exactly like a district heading does.
+const REPORT_TITLE = /^Ministering Assignments$/i;
 const PERSON = /^[^,]+,\s*\S/;
 
 /** A name, rather than a phone number, an address or an email. */
@@ -104,6 +107,25 @@ function isName(s) {
   if (!t || t.includes("@")) return false;
   if (/\d/.test(t)) return false;
   return PERSON.test(t);
+}
+
+/**
+ * The column holding Male/Female.
+ *
+ * The only column in the report with a closed set of values, which makes it
+ * the one thing that can be identified without counting. Chosen by whichever
+ * column has the most of them, so a stray "Male" in someone's notes can't win.
+ */
+export function findSexColumn(rows) {
+  const hits = [];
+  for (const row of rows || []) {
+    row.forEach((cell, i) => {
+      if (SEX.test(String(cell || "").trim())) hits[i] = (hits[i] || 0) + 1;
+    });
+  }
+  let best = -1;
+  hits.forEach((n, i) => { if (n > (hits[best] || 0)) best = i; });
+  return best;
 }
 
 /**
@@ -127,7 +149,30 @@ export function readMinisteringPdf(lines) {
   }
 
   const rows = toColumns(lines, starts);
-  const sexCol = starts.length >= 4 ? 3 : starts.length - 1;
+
+  // Which column is which, found by CONTENT rather than by counting from the
+  // left. Two extractors of the same page don't agree on how many columns
+  // there are — pdf.js reports six (it splits "Presidency Member:" from
+  // "Unassigned"), a fixed-width text dump reports five — and hardcoded
+  // indices shift by one between them, which empties the household column
+  // completely while districts and companionships still look right.
+  //
+  // The sex column is the anchor because it's the only one with a closed set
+  // of values. Everything else is positioned relative to it: the people are
+  // immediately to its left, the household surname to their left again.
+  const sexCol = findSexColumn(rows);
+  if (sexCol < 2) {
+    return {
+      districts: [],
+      problems: [{
+        kind: "unreadable",
+        text: "Couldn't find the Male/Female column in that PDF. It should be "
+          + "the Ministering Assignments report from LCR.",
+      }],
+    };
+  }
+  const personCol = sexCol - 1;
+  const houseCol = sexCol - 2;
 
   const districts = [];
   const problems = [];
@@ -158,12 +203,26 @@ export function readMinisteringPdf(lines) {
       // A district heading is the line just above the first "Presidency
       // Member:" under it — the only other thing that sits alone in the left
       // column with nothing beside it.
-      const above = (rows[i - 1] || []).join(" ").trim();
-      const twoUp = (rows[i - 2] || []).join(" ").trim();
-      const heading = [above, twoUp].find(
-        (t) => t && !DOTTED.test(t) && !PRESIDENCY.test(t) && !isName(t)
-          && !/\d{3}/.test(t) && !t.includes("@") && t.length < 40
-      );
+      // A heading sits alone in the first column. Judging it on the joined
+      // text instead let a person's row through — "Woffinden, Kinxton Kourt
+      // Male 25 Sep" isn't a name by the strict test and has no long number
+      // in it, so it read as a district. That's how one report produced
+      // twenty-five of them.
+      const alone = (r) => !!r && !!String(r[0] || "").trim()
+        && r.slice(1).every((c) => !String(c || "").trim());
+      const text = (r) => String((r || [])[0] || "").trim();
+      const heading = [rows[i - 1], rows[i - 2]]
+        .filter(alone)
+        .map(text)
+        .find((t) => t && !DOTTED.test(t) && !PRESIDENCY.test(t)
+          && !REPORT_TITLE.test(t) && t.length < 40
+          // Not an email, not an address, not a person. A companion's email
+          // or the last line of his address ends up alone in the first column
+          // at a page break, directly above the next "Presidency Member:" —
+          // which is how "lizeshlo@gmail.com" and "Lehi UT 84043" became
+          // districts. Three digits rather than any digit, because
+          // "District 1" is a perfectly good name.
+          && !t.includes("@") && !t.includes(",") && !/\d{3}/.test(t));
       if (heading && (!district || district.name !== heading)) openDistrict(heading);
       if (!district) openDistrict("Ministering");
       closeCompanionship();
@@ -176,8 +235,8 @@ export function readMinisteringPdf(lines) {
     // Left column: the brothers assigned.
     if (isName(first)) comp.companions.push(first);
 
-    // Middle column: a bare surname opens a household.
-    const surname = row[1] || "";
+    // A bare surname in the household column opens a household.
+    const surname = row[houseCol] || "";
     if (surname && !/\d/.test(surname) && !surname.includes("@") && !surname.includes(",")) {
       comp.households.push({ name: surname, people: [], address: "", phone: "", email: "" });
     }
@@ -190,7 +249,7 @@ export function readMinisteringPdf(lines) {
       }
 
       // Right columns: one person, and whether they're a man or a woman.
-      const person = row[2] || "";
+      const person = row[personCol] || "";
       const sex = (row[sexCol] || "").trim();
       if (isName(person) && SEX.test(sex)) {
         house.people.push({ name: person, male: /^m/i.test(sex) });

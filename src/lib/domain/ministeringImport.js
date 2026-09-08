@@ -157,9 +157,14 @@ export function matchCompanions(names = [], members = []) {
     const k = normalizeNameKey(m?.name);
     if (k && !byKey.has(k)) byKey.set(k, m);
   }
+  // normalizeName first, because the two ways in disagree about order: the
+  // paste hands over "Seth Adamson", the PDF hands over "Adamson, Seth". The
+  // key is order-sensitive, so without this every companion read from the PDF
+  // came back unmatched — 189 of them, which is what "aren't on the roster"
+  // was really reporting.
   return (names || []).map((name) => ({
     name,
-    member: byKey.get(normalizeNameKey(name)) || null,
+    member: byKey.get(normalizeNameKey(normalizeName(name))) || null,
   }));
 }
 
