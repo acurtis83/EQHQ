@@ -932,8 +932,13 @@ function PrintDoc({ date, blocks = [] }) {
           the lesson before the announcements weeks after the screen had
           stopped. */}
       {blocks.map((b) => (
-        b.kind === "person" ? (
-          <PrintRow key={b.key} label={b.label} value={b.value} />
+        // People print as their own labelled rows rather than under the hub's
+        // heading. "Presiding" is a card on a screen; on paper it would be a
+        // heading over two lines, which costs more than it explains.
+        b.kind === "people" ? (
+          <div key={b.key}>
+            {b.rows.map((r) => <PrintRow key={r.key} label={r.label} value={r.value} />)}
+          </div>
         ) : (
           <div key={b.key}>
             <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>{b.label}</h2>

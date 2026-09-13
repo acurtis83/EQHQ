@@ -76,28 +76,20 @@ export default function AgendaPresent({ date, blocks = [], onClose }) {
 
       <div style={{
         flex: 1, minHeight: 0, overflowY: "auto",
-        padding: "20px 18px 28px",
-        display: "flex", flexDirection: "column", gap: 24,
+        padding: "16px 14px 24px",
+        display: "flex", flexDirection: "column", gap: 12,
         // Room to read on a wide screen without the lines running the full
         // width of a laptop, which is its own way of losing your place.
         width: "100%", maxWidth: 720, margin: "0 auto", boxSizing: "border-box",
       }}>
         {blocks.map((b) => (
-          <section key={b.key} data-block={b.key}>
-            {b.kind === "person" ? (
-              <Person block={b} />
-            ) : (
-              <>
-                <Eyebrow>{b.label}</Eyebrow>
-                <div style={{ marginTop: 8 }}>
-                  {b.kind === "lesson" && <Lesson block={b} />}
-                  {b.kind === "business" && <Business block={b} />}
-                  {b.kind === "notices" && <Notices items={b.items} />}
-                  {b.kind === "events" && <Events items={b.items} />}
-                </div>
-              </>
-            )}
-          </section>
+          <Hub key={b.key} block={b}>
+            {b.kind === "people" && <People rows={b.rows} />}
+            {b.kind === "lesson" && <Lesson block={b} />}
+            {b.kind === "business" && <Business block={b} />}
+            {b.kind === "notices" && <Notices items={b.items} />}
+            {b.kind === "events" && <Events items={b.items} />}
+          </Hub>
         ))}
       </div>
 
@@ -146,28 +138,81 @@ function Eyebrow({ children }) {
 }
 
 /**
- * A label on the left and a name on the right, as the printed agenda sets
- * them. The names line up in a column, so finding "who's praying" is a glance
- * down one edge rather than a read.
+ * One part of the meeting, outlined.
  *
- * Not greyed out of existence when nobody is down for it: an unassigned prayer
- * is a gap worth spotting at 8:55, so it stays and says so.
+ * "lets give the Sunday Quorum Meeting Agenda presentation a little more
+ *  segmentation. similar to the hubs on the Agenda...categories can have a
+ *  hub outline"
+ *
+ * A run of headings down a scrolling page gives you nothing to aim at: the
+ * eye has to read to work out where one part stops. A border does that
+ * without being read, which is the whole job while you're looking up at the
+ * room between items — and it makes the sheet match the agenda screen the
+ * presidency already knows, hub for hub.
+ *
+ * The count comes off the block's own items rather than being passed in, so a
+ * heading can't say two while three are printed underneath it.
  */
-function Person({ block }) {
+function Hub({ block, children }) {
+  const count = block.items?.length || 0;
   return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
-      <span style={{
-        flex: "0 0 40%", fontSize: 16, color: T.sub, minWidth: 0,
-      }}>
-        {block.label}
-      </span>
-      <span style={{
-        flex: 1, minWidth: 0, fontSize: 21, fontWeight: 700, lineHeight: 1.3,
-        color: block.assigned ? T.ink : T.faint,
-        fontStyle: block.assigned ? "normal" : "italic",
-      }}>
-        {block.value}
-      </span>
+    <section
+      data-block={block.key}
+      style={{
+        border: `1px solid ${T.lineSoft}`, borderRadius: 14,
+        background: T.panel, padding: "13px 14px 15px",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9 }}>
+        <Eyebrow>{block.label}</Eyebrow>
+        {count > 1 && (
+          // Only when there's more than one. "Lesson 1" and "Closing Prayer 1"
+          // are noise; "Announcements 4" is how many are left to read.
+          <span data-count style={{
+            fontSize: 12, fontWeight: 800, color: T.sub, background: T.inset,
+            borderRadius: 20, padding: "1px 8px", lineHeight: 1.6,
+          }}>
+            {count}
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Label on the left, name on the right, as the printed agenda sets them. The
+ * names line up in a column, so finding who's praying is a glance down one
+ * edge rather than a read.
+ *
+ * A single row drops its label — the hub above it already says "Closing
+ * Prayer", and printing that twice reads as a mistake.
+ *
+ * Nobody assigned is not the same as nothing to show: an unassigned prayer is
+ * a gap worth spotting at 8:55, so the row stays and says so.
+ */
+function People({ rows = [] }) {
+  const solo = rows.length === 1;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      {rows.map((r) => (
+        <div key={r.key} data-person={r.key}
+          style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+          {!solo && (
+            <span style={{ flex: "0 0 42%", fontSize: 16, color: T.sub, minWidth: 0 }}>
+              {r.label}
+            </span>
+          )}
+          <span style={{
+            flex: 1, minWidth: 0, fontSize: 21, fontWeight: 700, lineHeight: 1.3,
+            color: r.assigned ? T.ink : T.faint,
+            fontStyle: r.assigned ? "normal" : "italic",
+          }}>
+            {r.value}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -196,18 +241,14 @@ function Named({ children, ...rest }) {
 }
 
 /**
- * A piece of business, in a card: the sentence, the names, the vote.
+ * A piece of business: the sentence, the names, the vote.
  *
- * Boxed because it is the part of the meeting where something has to happen —
- * a hand goes up — and it should be obvious at a glance where that part starts
- * and stops.
+ * No border of its own any more — the hub around it is the border. Nesting a
+ * card inside a card made the business look like a sub-part of itself.
  */
 function Business({ block }) {
   return (
-    <div style={{
-      border: `1px solid ${T.lineSoft}`, borderRadius: 12,
-      padding: "13px 14px", display: "flex", flexDirection: "column", gap: 11,
-    }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
       <Say>{block.intro}</Say>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {block.items.map((it) => (

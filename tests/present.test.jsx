@@ -156,7 +156,7 @@ describe("the order the meeting runs in", () => {
   it("does the business first and the lesson last", () => {
     const keys = full().map((b) => b.key);
     expect(keys).toEqual([
-      "conducting", "opening", "announcements", "upcoming", "sustainings", "lesson", "closing",
+      "presiding", "announcements", "upcoming", "sustainings", "lesson", "closing",
     ]);
   });
 
@@ -175,14 +175,15 @@ describe("the order the meeting runs in", () => {
     // this order, and two of them were already stale.
     expect(SECTIONS).toEqual(["announcements", "upcoming", "sustainings", "lesson"]);
     const keys = full().map((b) => b.key);
-    expect(keys.slice(2, -1)).toEqual(SECTIONS);
+    expect(keys.slice(1, -1)).toEqual(SECTIONS);
   });
 
   it("keeps a prayer nobody is down for, and says so", () => {
     // A gap you can still fix at 8:55. A block that vanished when empty would
     // take the reminder with it.
-    const blocks = runningOrder({ agenda: { opening_prayer: "" } });
-    const opening = blocks.find((b) => b.key === "opening");
+    const presiding = runningOrder({ agenda: { opening_prayer: "" } })
+      .find((b) => b.key === "presiding");
+    const opening = presiding.rows.find((r) => r.key === "opening");
     expect(opening).toBeTruthy();
     expect(opening.value).toBe(NOBODY);
     expect(opening.assigned).toBe(false);
@@ -196,7 +197,7 @@ describe("the order the meeting runs in", () => {
     expect(keys).not.toContain("announcements");
     expect(keys).not.toContain("upcoming");
     // The prayers and the lesson still stand.
-    expect(keys).toEqual(["conducting", "opening", "lesson", "closing"]);
+    expect(keys).toEqual(["presiding", "lesson", "closing"]);
   });
 
   it("and the lesson still sits after where the business would have been", () => {
@@ -405,7 +406,7 @@ describe("presentation mode", () => {
     await open();
     const keys = [...document.querySelectorAll("[data-present] [data-block]")]
       .map((el) => el.dataset.block);
-    expect(keys[0]).toBe("conducting");
+    expect(keys[0]).toBe("presiding");
     expect(keys[keys.length - 1]).toBe("closing");
     expect(keys.indexOf("announcements")).toBeLessThan(keys.indexOf("lesson"));
   });
@@ -464,6 +465,51 @@ describe("presentation mode", () => {
     expect(sheet.textContent).toContain("Ben Savio — Quorum Instructor");
   });
 
+  /**
+   * "lets give the Sunday Quorum Meeting Agenda presentation a little more
+   *  segmentation. similar to the hubs on the Agenda...categories can have a
+   *  hub outline"
+   */
+  it("puts every part of the meeting in its own outlined hub", async () => {
+    await open();
+    const hubs = [...document.querySelectorAll("[data-present] [data-block]")];
+    expect(hubs.length).toBeGreaterThan(3);
+    for (const h of hubs) {
+      expect(h.style.border, `${h.dataset.block} has no outline`).toMatch(/1px solid/);
+      expect(h.style.borderRadius).toBeTruthy();
+    }
+  });
+
+  it("groups conducting and the opening prayer onto one", async () => {
+    // Two cards holding one line each at the top of the sheet is chrome, not
+    // segmentation.
+    await open();
+    const presiding = document.querySelector('[data-present] [data-block="presiding"]');
+    expect(presiding).toBeTruthy();
+    expect([...presiding.querySelectorAll("[data-person]")].map((el) => el.dataset.person))
+      .toEqual(["conducting", "opening"]);
+    expect(presiding.textContent).toContain("Cameron Pearson");
+    expect(presiding.textContent).toContain("Karl Moore");
+  });
+
+  it("and drops the row label when the hub already says it", async () => {
+    // "Closing Prayer" over a row labelled "Closing Prayer" reads as a fault.
+    await open();
+    const closing = document.querySelector('[data-present] [data-block="closing"]');
+    expect(closing.textContent.match(/Closing Prayer/g)).toHaveLength(1);
+  });
+
+  it("counts the ones that are lists", async () => {
+    await open();
+    const count = (key) =>
+      document.querySelector(`[data-present] [data-block="${key}"] [data-count]`);
+    expect(count("announcements")?.textContent, "no count on the announcements").toBe("2");
+    // ...and not on the ones where it would only ever say one.
+    expect(count("lesson"), "a count on the lesson").toBeNull();
+    expect(count("closing")).toBeNull();
+    expect(count("sustainings"), "a count of 1 on a single sustaining").toBeNull();
+  });
+
   it("closes on Done", async () => {
     await open();
     await act(async () => {
@@ -512,7 +558,7 @@ describe("every surface agrees on the order", () => {
     const keys = [...document.querySelectorAll("[data-present] [data-block]")]
       .map((el) => el.dataset.block);
     expect(keys).toEqual([
-      "conducting", "opening", "announcements", "upcoming", "sustainings", "lesson", "closing",
+      "presiding", "announcements", "upcoming", "sustainings", "lesson", "closing",
     ]);
   });
 

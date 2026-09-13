@@ -104,14 +104,25 @@ export function runningOrder({
   };
 
   return [
-    person("conducting", "Conducting", conducting),
-    person("opening", "Opening Prayer", agenda?.opening_prayer),
+    // Conducting and the opening prayer travel together: they're the two
+    // things said before anything else happens, and reading them off one card
+    // beats two cards holding one line each.
+    {
+      key: "presiding", kind: "people", label: "Presiding",
+      rows: [
+        person("conducting", "Conducting", conducting),
+        person("opening", "Opening Prayer", agenda?.opening_prayer),
+      ],
+    },
     // flatMap, because the business slot yields two blocks when there are both
     // releases and callings to put.
     ...SECTIONS.flatMap((k) => middle[k] || []),
     // Last, which is the whole point. On the editing screen it sits directly
     // under the opening prayer because they're the same kind of field.
-    person("closing", "Closing Prayer", agenda?.closing_prayer),
+    {
+      key: "closing", kind: "people", label: "Closing Prayer",
+      rows: [person("closing", "Closing Prayer", agenda?.closing_prayer)],
+    },
   ].filter(Boolean);
 }
 
@@ -133,7 +144,13 @@ export function runningOrder({
 export function agendaText(blocks = [], heading = "", fmt = (d) => d) {
   const out = heading ? [heading, ""] : [];
   for (const b of blocks) {
-    if (b.kind === "person") { out.push(`${b.label}: ${b.value}`); continue; }
+    // Flattened to "Conducting: name" lines rather than printed under a
+    // "Presiding" heading. The grouping is a card on a screen; in pasted text
+    // it would be a heading over two lines, which is worse than the two lines.
+    if (b.kind === "people") {
+      for (const r of b.rows) out.push(`${r.label}: ${r.value}`);
+      continue;
+    }
 
     out.push("", `${b.label}:`);
     if (b.kind === "lesson") {
