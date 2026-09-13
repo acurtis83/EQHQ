@@ -948,19 +948,26 @@ function PrintDoc({ date, blocks = [] }) {
                 </div>
               )
             ) : (
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
-                {b.items.map((it) => (
-                  <li key={it.id}>
-                    {b.kind === "notices" && it.text}
-                    {b.kind === "list" && `${it.lead} — ${it.text}`}
-                    {b.kind === "events" && [
-                      it.title,
-                      [it.when ? fmtShort(it.when) : "TBC", it.where].filter(Boolean).join(" · "),
-                    ].join(" — ")}
-                    {b.kind === "events" && it.signUp ? " (sign-up)" : ""}
-                  </li>
-                ))}
-              </ul>
+              <>
+                {/* The words that go around a piece of business travel with
+                    it onto paper too — this sheet gets handed to whoever is
+                    conducting, and the names alone don't tell them what to
+                    put to the quorum. */}
+                {b.intro && <Script>{b.intro}</Script>}
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
+                  {b.items.map((it) => (
+                    <li key={it.id}>
+                      {(b.kind === "notices" || b.kind === "business") && it.text}
+                      {b.kind === "events" && [
+                        it.title,
+                        [it.when ? fmtShort(it.when) : "TBC", it.where].filter(Boolean).join(" · "),
+                      ].join(" — ")}
+                      {b.kind === "events" && it.signUp ? " (sign-up)" : ""}
+                    </li>
+                  ))}
+                </ul>
+                {b.vote && <Script>{b.vote}</Script>}
+              </>
             )}
           </div>
         )
@@ -971,6 +978,15 @@ function PrintDoc({ date, blocks = [] }) {
   // Onto <body>, so nothing in the app's layout constrains the page width.
   // In a server render there's no document; the tree is returned as-is.
   return typeof document === "undefined" ? sheet : createPortal(sheet, document.body);
+}
+
+/** A line to read out, set apart on paper from the names it wraps. */
+function Script({ children }) {
+  return (
+    <div style={{ fontSize: 12.5, fontStyle: "italic", color: "#444", lineHeight: 1.5, margin: "0 0 3px" }}>
+      {children}
+    </div>
+  );
 }
 
 function Lbl({ label, children }) {

@@ -91,16 +91,12 @@ export function runningOrder({
         signUp: has.has(e.id),
       })),
     },
-    sustainings: sustainings.length && {
-      key: "sustainings", kind: "list", label: "Callings & Sustainings",
-      items: sustainings.map((c) => ({
-        id: c.id,
-        // The word the conductor says. "Need to Release" is tracker language
-        // and reads as a to-do; at the podium it's "Release".
-        lead: c.stage === "Need to Release" ? "Release" : "Sustain",
-        text: [c.candidate_name || "—", c.position].filter(Boolean).join(", "),
-      })),
-    },
+    // Two blocks, not one list with a "Release"/"Sustain" word in front of
+    // each name. They are different pieces of business: a release asks for a
+    // vote of thanks, a calling asks to be sustained, and they're put to the
+    // quorum separately with different words. Mixing them means reading the
+    // list twice and picking out the right ones each time.
+    sustainings: business(sustainings),
     // Not conditional: a Sunday with no lesson still has a reason worth
     // saying, and a blank where the lesson goes reads as a forgotten
     // assignment rather than stake conference.
@@ -110,7 +106,9 @@ export function runningOrder({
   return [
     person("conducting", "Conducting", conducting),
     person("opening", "Opening Prayer", agenda?.opening_prayer),
-    ...SECTIONS.map((k) => middle[k]),
+    // flatMap, because the business slot yields two blocks when there are both
+    // releases and callings to put.
+    ...SECTIONS.flatMap((k) => middle[k] || []),
     // Last, which is the whole point. On the editing screen it sits directly
     // under the opening prayer because they're the same kind of field.
     person("closing", "Closing Prayer", agenda?.closing_prayer),
@@ -145,16 +143,68 @@ export function agendaText(blocks = [], heading = "", fmt = (d) => d) {
       if (b.link) out.push(`  ${b.link}`);
       continue;
     }
+    // The wording goes with it. Somebody pasting this into a message to a
+    // counselor who's conducting for them wants the sentences, not a list of
+    // names they then have to work out what to do with.
+    if (b.intro) out.push(`  ${b.intro}`);
+
     for (const it of b.items) {
-      if (b.kind === "notices") out.push(`  - ${it.text}`);
-      if (b.kind === "list") out.push(`  - ${it.lead}: ${it.text}`);
+      if (b.kind === "notices" || b.kind === "business") out.push(`  - ${it.text}`);
       if (b.kind === "events") {
         const when = [it.when ? fmt(it.when) : "", it.where].filter(Boolean).join(" · ");
         out.push(`  - ${[it.title, when].filter(Boolean).join(" — ")}${it.signUp ? " (sign-up)" : ""}`);
       }
     }
+    if (b.vote) out.push(`  ${b.vote}`);
   }
   return out;
+}
+
+/**
+ * Releases and callings, each with the words that go around them.
+ *
+ * The lead-in and the vote are part of the item, not decoration. Standing up
+ * to put business to the quorum, what you need is the sentence — the names are
+ * the easy part, and composing "and we propose that they be given a vote of
+ * thanks" from memory while everyone waits is where it goes wrong.
+ *
+ * Singular and plural are handled because this is read aloud. "The following
+ * individuals have been released" over one name is the kind of thing everyone
+ * in the room notices.
+ */
+function business(rows = []) {
+  const of = (stage) => rows.filter((c) => c.stage === stage);
+  const named = (list) => list.map((c) => ({
+    id: c.id,
+    text: [c.candidate_name || "—", c.position].filter(Boolean).join(" — "),
+  }));
+
+  const blocks = [];
+  const releases = of("Need to Release");
+  const callings = rows.filter((c) => c.stage !== "Need to Release");
+
+  if (releases.length) {
+    blocks.push({
+      key: "releases", kind: "business", label: "Releases",
+      intro: releases.length === 1
+        ? "The following individual has been released from their calling, and we propose that they be given a vote of thanks."
+        : "The following individuals have been released from their callings, and we propose that they be given a vote of thanks.",
+      items: named(releases),
+      vote: "Those who would like to express thanks for their service may show it by the uplifted hand.",
+    });
+  }
+
+  if (callings.length) {
+    blocks.push({
+      key: "sustainings", kind: "business", label: "Sustainings",
+      intro: callings.length === 1
+        ? "The following individual has been called, and we propose that they be sustained."
+        : "The following individuals have been called, and we propose that they be sustained.",
+      items: named(callings),
+      vote: "All in favor, please show by the uplifted hand. Any opposed, by the same sign.",
+    });
+  }
+  return blocks;
 }
 
 function person(key, label, value) {

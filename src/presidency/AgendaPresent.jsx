@@ -23,13 +23,17 @@ import { fmtDate, fmtShort } from "../lib/domain/dates";
  *     scrolling does.
  *   - One column, scrolled, in the order the meeting runs — not paged. You
  *     can see what's next, which is what stops the pauses.
- *   - Exactly one control: a large Done. A button you might hit by accident
- *     while holding a phone is a button that shouldn't be here.
+ *   - One control, at the bottom. See BOTTOM BAR below.
+ *
+ * The layout follows the printed sacrament meeting agenda: a gold rule of
+ * small caps to open each part, people as label-and-name rows so the eye can
+ * run down the right-hand side for the name, and business set in a bordered
+ * card with the words to say above and below the names. It reads as a script
+ * because that is what it is being used as.
  *
  * The order itself is not decided in this file. The blocks arrive already
  * built by lib/domain/runningOrder.js — the same ones the agenda screen lays
- * itself out from, and the same ones the PDF and Copy render — so the sheet
- * can't quietly disagree with anything else built from the same meeting.
+ * itself out from, and the same ones the PDF and Copy render.
  */
 export default function AgendaPresent({ date, blocks = [], onClose }) {
   // Escape leaves. Somebody who opened this by accident shouldn't have to hunt
@@ -48,56 +52,80 @@ export default function AgendaPresent({ date, blocks = [], onClose }) {
         display: "flex", flexDirection: "column",
       }}
     >
-      <div style={{
-        flex: "0 0 auto", display: "flex", alignItems: "center", gap: 12,
-        padding: "14px 16px", borderBottom: `1px solid ${T.lineSoft}`,
-        background: T.panel,
+      {/* The safe areas live in a stylesheet rather than inline, because
+          env() inside calc() is not something React's style object survives
+          intact everywhere it gets parsed — and getting this wrong is
+          invisible until it's a dead tap on somebody's phone. */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .eq-present-top { padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 12px; }
+        .eq-present-bar { padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)); }
+      ` }} />
+
+      {/* The top is the notch, the status bar and Safari's own chrome, so
+          nothing that has to be touched goes up here — only the heading, and
+          it is padded clear of all of it. */}
+      <div className="eq-present-top" style={{
+        flex: "0 0 auto",
+        borderBottom: `1px solid ${T.lineSoft}`, background: T.panel,
       }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{
-            fontSize: 11.5, fontWeight: 800, letterSpacing: "0.12em",
-            textTransform: "uppercase", color: T.faint,
-          }}>
-            Sunday Quorum Meeting
-          </div>
-          <div style={{ fontSize: 17, fontWeight: 800, color: T.ink }}>{fmtDate(date)}</div>
+        <Eyebrow>Sunday Quorum Meeting</Eyebrow>
+        <div style={{ fontSize: 19, fontWeight: 800, color: T.ink, marginTop: 2 }}>
+          {fmtDate(date)}
         </div>
-        {/* Deliberately oversized. Missing Done and hitting something else
-            while standing up in front of everybody is the one interaction
-            that has to be impossible to get wrong. */}
-        <button
-          onClick={onClose}
-          aria-label="Done"
-          style={{
-            flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 7,
-            minHeight: 46, padding: "0 18px", borderRadius: 12,
-            border: `1px solid ${T.line}`, background: T.inset,
-            fontSize: 16, fontWeight: 700, color: T.ink, cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          <X size={17} />Done
-        </button>
       </div>
 
       <div style={{
         flex: 1, minHeight: 0, overflowY: "auto",
-        padding: "18px 18px 64px",
-        display: "flex", flexDirection: "column", gap: 26,
+        padding: "20px 18px 28px",
+        display: "flex", flexDirection: "column", gap: 24,
         // Room to read on a wide screen without the lines running the full
         // width of a laptop, which is its own way of losing your place.
         width: "100%", maxWidth: 720, margin: "0 auto", boxSizing: "border-box",
       }}>
         {blocks.map((b) => (
           <section key={b.key} data-block={b.key}>
-            <Label>{b.label}</Label>
-            {b.kind === "person" && <Person block={b} />}
-            {b.kind === "lesson" && <Lesson block={b} />}
-            {b.kind === "list" && <Sustainings items={b.items} />}
-            {b.kind === "notices" && <Notices items={b.items} />}
-            {b.kind === "events" && <Events items={b.items} />}
+            {b.kind === "person" ? (
+              <Person block={b} />
+            ) : (
+              <>
+                <Eyebrow>{b.label}</Eyebrow>
+                <div style={{ marginTop: 8 }}>
+                  {b.kind === "lesson" && <Lesson block={b} />}
+                  {b.kind === "business" && <Business block={b} />}
+                  {b.kind === "notices" && <Notices items={b.items} />}
+                  {b.kind === "events" && <Events items={b.items} />}
+                </div>
+              </>
+            )}
           </section>
         ))}
+      </div>
+
+      {/* BOTTOM BAR.
+          "the close button at the top is hard to use on my iphone"
+
+          It was a button in the top-right corner, which on a phone held in one
+          hand while you're standing up in front of people is the furthest
+          point from your thumb — and on an iPhone it sits under the notch and
+          Safari's toolbar besides. Full width along the bottom instead, inside
+          the home indicator's safe area, where the thumb already is. */}
+      <div className="eq-present-bar" style={{
+        flex: "0 0 auto", background: T.panel,
+        borderTop: `1px solid ${T.lineSoft}`,
+      }}>
+        <button
+          onClick={onClose}
+          aria-label="Done"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            width: "100%", minHeight: 52, borderRadius: 14,
+            border: `1px solid ${T.line}`, background: T.inset,
+            fontSize: 17, fontWeight: 700, color: T.ink, cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          <X size={18} />Done
+        </button>
       </div>
     </div>
   );
@@ -105,11 +133,12 @@ export default function AgendaPresent({ date, blocks = [], onClose }) {
   return typeof document === "undefined" ? view : createPortal(view, document.body);
 }
 
-function Label({ children }) {
+/** The small gold capitals that open each part of the meeting. */
+function Eyebrow({ children }) {
   return (
     <div style={{
       fontSize: 12, fontWeight: 800, letterSpacing: "0.14em",
-      textTransform: "uppercase", color: T.faint, marginBottom: 7,
+      textTransform: "uppercase", color: T.gold,
     }}>
       {children}
     </div>
@@ -117,39 +146,92 @@ function Label({ children }) {
 }
 
 /**
- * A name, or the fact that there isn't one.
+ * A label on the left and a name on the right, as the printed agenda sets
+ * them. The names line up in a column, so finding "who's praying" is a glance
+ * down one edge rather than a read.
  *
- * Greyed and italic rather than absent. An unassigned prayer is a thing to
- * notice with five minutes to fix it, and a block that vanished when empty
- * would take the reminder with it.
+ * Not greyed out of existence when nobody is down for it: an unassigned prayer
+ * is a gap worth spotting at 8:55, so it stays and says so.
  */
 function Person({ block }) {
   return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+      <span style={{
+        flex: "0 0 40%", fontSize: 16, color: T.sub, minWidth: 0,
+      }}>
+        {block.label}
+      </span>
+      <span style={{
+        flex: 1, minWidth: 0, fontSize: 21, fontWeight: 700, lineHeight: 1.3,
+        color: block.assigned ? T.ink : T.faint,
+        fontStyle: block.assigned ? "normal" : "italic",
+      }}>
+        {block.value}
+      </span>
+    </div>
+  );
+}
+
+/** What to say, set apart from what to read out. */
+function Say({ children }) {
+  return (
     <div style={{
-      fontSize: 25, fontWeight: 700, lineHeight: 1.3,
-      color: block.assigned ? T.ink : T.faint,
-      fontStyle: block.assigned ? "normal" : "italic",
+      fontSize: 16.5, lineHeight: 1.5, color: T.sub, fontStyle: "italic",
     }}>
-      {block.value}
+      {children}
+    </div>
+  );
+}
+
+/** A name behind a rule, the way the printed agenda indents them. */
+function Named({ children, ...rest }) {
+  return (
+    <div {...rest} style={{
+      borderLeft: `2px solid ${T.line}`, paddingLeft: 12,
+      fontSize: 19, lineHeight: 1.45, color: T.ink,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A piece of business, in a card: the sentence, the names, the vote.
+ *
+ * Boxed because it is the part of the meeting where something has to happen —
+ * a hand goes up — and it should be obvious at a glance where that part starts
+ * and stops.
+ */
+function Business({ block }) {
+  return (
+    <div style={{
+      border: `1px solid ${T.lineSoft}`, borderRadius: 12,
+      padding: "13px 14px", display: "flex", flexDirection: "column", gap: 11,
+    }}>
+      <Say>{block.intro}</Say>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {block.items.map((it) => (
+          <Named key={it.id} data-business={it.id}>{it.text}</Named>
+        ))}
+      </div>
+      <Say>{block.vote}</Say>
     </div>
   );
 }
 
 function Lesson({ block }) {
-  if (block.reason) {
-    return <div style={{ fontSize: 21, lineHeight: 1.4, color: T.sub }}>{block.reason}</div>;
-  }
+  if (block.reason) return <Say>{block.reason}</Say>;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{
-        fontSize: 25, fontWeight: 700, lineHeight: 1.3,
+        fontSize: 23, fontWeight: 700, lineHeight: 1.3,
         color: block.assigned ? T.ink : T.faint,
         fontStyle: block.assigned ? "normal" : "italic",
       }}>
         {block.teacher}
       </div>
       {block.talk && (
-        <div style={{ fontSize: 20, lineHeight: 1.4, color: T.sub }}>
+        <div style={{ fontSize: 19, lineHeight: 1.4, color: T.sub }}>
           {`“${block.talk}”`}
           {/* The talk's author, not the teacher. Two different people, and
               running the names together is what made this confusing on the
@@ -170,19 +252,6 @@ function Lesson({ block }) {
   );
 }
 
-function Sustainings({ items }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {items.map((c) => (
-        <div key={c.id} style={{ fontSize: 21, lineHeight: 1.4, color: T.ink }}>
-          <span style={{ fontWeight: 800 }}>{c.lead}</span>
-          <span style={{ color: T.sub }}> — {c.text}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /**
  * The announcements, whole.
  *
@@ -193,18 +262,18 @@ function Sustainings({ items }) {
 function Notices({ items }) {
   return (
     <ol style={{ margin: 0, padding: 0, listStyle: "none",
-      display: "flex", flexDirection: "column", gap: 18 }}>
+      display: "flex", flexDirection: "column", gap: 14 }}>
       {items.map((a, i) => (
         <li key={a.id} data-notice={a.id}
-          style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+          style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
           <span style={{
-            flex: "0 0 auto", minWidth: 26, fontSize: 17, fontWeight: 800,
-            color: T.faint, lineHeight: 1.6, fontVariantNumeric: "tabular-nums",
+            flex: "0 0 auto", minWidth: 24, fontSize: 16, fontWeight: 800,
+            color: T.gold, lineHeight: 1.65, fontVariantNumeric: "tabular-nums",
           }}>
             {i + 1}.
           </span>
           <span style={{
-            fontSize: 22, lineHeight: 1.55, color: T.ink,
+            fontSize: 21, lineHeight: 1.55, color: T.ink,
             // Newlines the presidency typed are newlines here too, and a long
             // URL breaks rather than pushing the column sideways.
             whiteSpace: "pre-wrap", overflowWrap: "anywhere", minWidth: 0,
@@ -219,24 +288,22 @@ function Notices({ items }) {
 
 function Events({ items }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {items.map((e) => (
-        <div key={e.id} data-event={e.id}>
-          <div style={{ fontSize: 21, fontWeight: 700, color: T.ink, lineHeight: 1.35 }}>
-            {e.title}
-          </div>
-          <div style={{ fontSize: 17, color: T.sub, lineHeight: 1.45, marginTop: 2 }}>
+        <Named key={e.id} data-event={e.id}>
+          <div style={{ fontWeight: 700, lineHeight: 1.35 }}>{e.title}</div>
+          <div style={{ fontSize: 16.5, color: T.sub, lineHeight: 1.45, marginTop: 1 }}>
             {[e.when ? fmtShort(e.when) : null, e.where].filter(Boolean).join(" · ")}
           </div>
           {/* That there is one, not where it points. A URL read out loud is
               noise; by the time anybody wants it, it's on the feed and in
               Monday's email. */}
           {e.signUp && (
-            <div style={{ fontSize: 16, fontWeight: 700, color: T.primaryDeep, marginTop: 3 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: T.primaryDeep, marginTop: 2 }}>
               Sign-up on the app
             </div>
           )}
-        </div>
+        </Named>
       ))}
     </div>
   );

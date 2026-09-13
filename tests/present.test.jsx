@@ -220,11 +220,65 @@ describe("the order the meeting runs in", () => {
     expect(b.speaker).toBe("Elder Renlund");
   });
 
-  it("says 'Release' rather than the tracker's 'Need to Release'", () => {
-    const b = runningOrder({
+  /**
+   * Releases and callings are two pieces of business, not one list with a
+   * word in front of each name. They're put to the quorum separately and the
+   * words differ — thanks for one, a sustaining vote for the other.
+   */
+  it("splits releases from callings", () => {
+    const keys = runningOrder({
+      sustainings: [
+        { id: "c1", stage: "Need to Release", candidate_name: "Matt Hill", position: "Instructor" },
+        { id: "c2", stage: "Called", candidate_name: "Ben Savio", position: "Instructor" },
+      ],
+    }).map((b) => b.key);
+    expect(keys).toContain("releases");
+    expect(keys).toContain("sustainings");
+    // Released first, the way the meeting runs it.
+    expect(keys.indexOf("releases")).toBeLessThan(keys.indexOf("sustainings"));
+  });
+
+  it("and shows only the one that has anybody in it", () => {
+    const keys = runningOrder({
+      sustainings: [{ id: "c2", stage: "Called", candidate_name: "Ben Savio", position: "Instructor" }],
+    }).map((b) => b.key);
+    expect(keys).toContain("sustainings");
+    expect(keys, "an empty Releases heading with nothing under it").not.toContain("releases");
+  });
+
+  it("carries the words to say, not just the names", () => {
+    const [rel, sus] = runningOrder({
+      sustainings: [
+        { id: "c1", stage: "Need to Release", candidate_name: "Matt Hill", position: "Instructor" },
+        { id: "c2", stage: "Called", candidate_name: "Ben Savio", position: "Instructor" },
+      ],
+    }).filter((b) => b.kind === "business");
+
+    expect(rel.intro).toMatch(/released from their calling/i);
+    expect(rel.vote).toMatch(/express thanks/i);
+    // A release asks for thanks; it does not ask for a sustaining vote.
+    expect(rel.vote).not.toMatch(/all in favor/i);
+
+    expect(sus.intro).toMatch(/be sustained/i);
+    expect(sus.vote).toMatch(/all in favor/i);
+    expect(sus.vote).toMatch(/opposed/i);
+  });
+
+  it("and gets the grammar right for one person", () => {
+    // "The following individuals have been released" over a single name is
+    // the kind of thing every person in the room notices.
+    const one = runningOrder({
       sustainings: [{ id: "c1", stage: "Need to Release", candidate_name: "Matt Hill", position: "Instructor" }],
-    }).find((x) => x.key === "sustainings");
-    expect(b.items[0].lead).toBe("Release");
+    }).find((b) => b.key === "releases");
+    expect(one.intro).toMatch(/individual has been released from their calling,/);
+
+    const two = runningOrder({
+      sustainings: [
+        { id: "c1", stage: "Need to Release", candidate_name: "Matt Hill", position: "Instructor" },
+        { id: "c3", stage: "Need to Release", candidate_name: "Joe Hirt", position: "Instructor" },
+      ],
+    }).find((b) => b.key === "releases");
+    expect(two.intro).toMatch(/individuals have been released from their callings,/);
   });
 
   it("carries the whole announcement, not a summary of it", () => {
@@ -363,6 +417,53 @@ describe("presentation mode", () => {
     expect(ids).toEqual(["n1", "n2"]);
   });
 
+  /**
+   * "the close button at the top is hard to use on my iphone"
+   *
+   * It was in the top-right corner — the furthest point from the thumb of a
+   * hand holding a phone up in front of people, and on an iPhone it sits
+   * under the notch and Safari's toolbar besides.
+   */
+  it("puts Done along the bottom, not in a top corner", async () => {
+    await open();
+    const done = document.querySelector('[data-present] [aria-label="Done"]');
+    const bar = done.parentElement;
+    const sheet = document.querySelector("[data-present]");
+
+    // Last thing in the overlay, not the first.
+    expect(bar).toBe(sheet.lastElementChild);
+    expect(done.style.width, "still a corner-sized target").toBe("100%");
+    expect(parseInt(done.style.minHeight, 10)).toBeGreaterThanOrEqual(44);
+  });
+
+  it("and keeps it clear of the home indicator", async () => {
+    // Without the safe-area inset the bottom of the button sits under the
+    // iPhone's home bar, which swallows the tap.
+    await open();
+    const bar = document.querySelector('[data-present] [aria-label="Done"]').parentElement;
+    expect(bar.className).toBe("eq-present-bar");
+
+    const css = [...document.querySelectorAll("[data-present] style")]
+      .map((s) => s.textContent).join("");
+    expect(css).toMatch(/\.eq-present-bar\s*\{[^}]*env\(safe-area-inset-bottom/);
+    // The notch at the other end, for the same reason.
+    expect(css).toMatch(/\.eq-present-top\s*\{[^}]*env\(safe-area-inset-top/);
+  });
+
+  it("with nothing to press at the top", async () => {
+    await open();
+    const header = document.querySelector("[data-present]").firstElementChild;
+    expect(header.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("reads the business out with the words that go around it", async () => {
+    await open();
+    const sheet = document.querySelector("[data-present]");
+    expect(sheet.textContent).toMatch(/have been called|has been called/i);
+    expect(sheet.textContent).toMatch(/All in favor, please show by the uplifted hand/i);
+    expect(sheet.textContent).toContain("Ben Savio — Quorum Instructor");
+  });
+
   it("closes on Done", async () => {
     await open();
     await act(async () => {
@@ -425,7 +526,7 @@ describe("every surface agrees on the order", () => {
     const sheet = document.querySelector(".eq-print-root");
     expect(sheet, "the print sheet didn't render").toBeTruthy();
     const at = positions(sheet.textContent,
-      ["Announcements", "Coming Up", "Callings & Sustainings", "Lesson", "Closing Prayer"]);
+      ["Announcements", "Coming Up", "Sustainings", "Lesson", "Closing Prayer"]);
     expect(at, `headings came out at ${at}`).toSatisfy(rising);
   });
 
@@ -441,10 +542,13 @@ describe("every surface agrees on the order", () => {
     }), "Sunday Quorum Meeting").join("\n");
 
     const at = positions(text,
-      ["Announcements:", "Coming Up:", "Callings & Sustainings:", "Lesson:", "Closing Prayer:"]);
+      ["Announcements:", "Coming Up:", "Sustainings:", "Lesson:", "Closing Prayer:"]);
     expect(at, `lines came out at ${at}`).toSatisfy(rising);
     // ...and the whole announcement went with it, not a first line.
     expect(text).toContain(LONG);
     expect(text).toContain("Stake Temple Cleaning");
+    // The wording travels too. Somebody pasting this to a counselor who's
+    // conducting for them needs the sentences, not a list of names.
+    expect(text).toMatch(/All in favor/i);
   });
 });
