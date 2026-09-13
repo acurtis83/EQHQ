@@ -12,11 +12,19 @@
  * measures the sheet once it's in the DOM and adjusts from there.
  *
  * The printed agenda is a one-line-per-item summary — name, date, category —
- * and nothing else. Notes, owners, links and attachments stay in the app. That
- * was a deliberate trade: carrying them meant three or four lines an item, and
- * a page that had to shrink to 9pt to hold a normal week. A sheet somebody can
+ * and nothing else. Notes, owners and attachments stay in the app. That was a
+ * deliberate trade: carrying them meant three or four lines an item, and a
+ * page that had to shrink to 9pt to hold a normal week. A sheet somebody can
  * read across a table beats a sheet that repeats what's already on the phone.
+ *
+ * Sign-up links are the one exception, and they earned it. The Upcoming panel
+ * is the part that gets read out, and "there's a sign-up for it" with no way
+ * to say where is worse than not mentioning it — the URL is the whole point of
+ * the announcement. Agenda items still carry no links: those are worked
+ * through with the app open, and the panel is not.
  */
+
+import { eventSignUpHref } from "./upcomingAction.js";
 
 // US Letter at 96dpi, less the print margins. Letter is shorter than A4, so
 // sizing to Letter fits both.
@@ -89,6 +97,47 @@ export const ITEM_RULES = 2;
 
 export const nameW = () => Math.floor(PRINTABLE_W * NAME_FRAC);
 export const noteW = () => PRINTABLE_W - nameW() - COL_GAP;
+
+/* --------------------------- sign-ups, on paper --------------------------- */
+
+/**
+ * The Upcoming panel's column width: the printable page, less the panel's 1px
+ * borders and its 10px side padding, split in two across an 18px gutter.
+ *
+ * Stated here rather than in the component because the estimate needs it to
+ * work out how many lines a URL wraps to, and a URL that wraps to two lines
+ * when the estimate charged one is how a one-page agenda becomes two.
+ */
+export const UPCOMING_COL_W = Math.floor((PRINTABLE_W - 2 - 20 - 18) / 2);
+
+export const SIGNUP_PREFIX = "Sign up: ";
+
+/**
+ * The sign-up line as it prints, or "".
+ *
+ * One function for both the page and the estimate, so they can't disagree
+ * about how long the line is. That mattered enough to be worth the awkward
+ * `origin` argument: the app's own forms are stored as a bare `?f=<id>`, which
+ * is meaningless on paper, so they have to be made absolute — and nothing in a
+ * pure module knows what host it's running on.
+ *
+ * Tidied but never shortened. Dropping the scheme and a leading www. saves
+ * eleven characters and loses nothing anybody has to type; truncating with an
+ * ellipsis would save more and print a URL that doesn't work, which is worse
+ * than printing none. Long ones wrap, and the estimate charges for the wrap.
+ */
+export function signUpLine(event, origin = "") {
+  const href = eventSignUpHref(event);
+  if (!href) return "";
+  const abs = href.startsWith("?")
+    ? (origin ? `${String(origin).replace(/\/$/, "")}/${href}` : "")
+    : href;
+  if (!abs) return "";
+  return SIGNUP_PREFIX + abs
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/$/, "");
+}
 
 /**
  * How tall one writing rule is inside an item row.
@@ -166,7 +215,7 @@ export function hasMeta(it, grouped) {
  * @param {object[]} opts.events    upcoming activities, assignments, temple trips
  * @param {boolean}  opts.grouped   a heading per category, or one flat run
  */
-export function estimateHeight(tier, { sections = [], events = [], grouped = false, categories = [] }) {
+export function estimateHeight(tier, { sections = [], events = [], grouped = false, categories = [], origin = "" }) {
   // Every term below mirrors a real rule in AgendaPrint. An earlier version
   // padded each one "to be safe", and the padding compounded: a page it called
   // 96% full printed at about 74%. The margin for error is one number at the
@@ -204,9 +253,20 @@ export function estimateHeight(tier, { sections = [], events = [], grouped = fal
     // different number of blocks than the page ends up drawing.
     const kinds = groupEvents(withDates, categories).map((g) => g.items);
 
+    // Title, then the date/time/location line, then the sign-up URL if it has
+    // one. The URL is charged by the line it actually wraps to rather than a
+    // flat one line: a stake sign-up URL is routinely longer than half the
+    // page is wide, and an uncounted second line on three events is 40px the
+    // fitter never knew about — which is exactly how a sheet that measured as
+    // fitting comes out of the printer as two.
+    const urlH = (e) => {
+      const text = signUpLine(e, origin);
+      return text ? linesFor(text, tier.note, UPCOMING_COL_W) * tier.note * 1.3 : 0;
+    };
+
     const blocks = kinds.map((list) =>
       line(tier.note - 0.5) + 2 +
-      list.length * (tier.body * 1.25 + tier.note * 1.3 + 3) + 4);
+      list.reduce((h, e) => h + tier.body * 1.25 + tier.note * 1.3 + 3 + urlH(e), 0) + 4);
 
     // A two-column grid is as tall as the taller column of each row, not the
     // sum of every block. Charging the sum was the biggest single over-count.
@@ -287,10 +347,10 @@ export function writeLinesFor(tier, contentHeight) {
  * `fits` is about the content alone. The writing block is sized from whatever
  * is left over, so it can never be the thing that pushes the page over.
  */
-export function choosePrintPlan({ sections = [], events = [], grouped = false, categories = [] } = {}) {
+export function choosePrintPlan({ sections = [], events = [], grouped = false, categories = [], origin = "" } = {}) {
   const heights = TIERS.map((tier) => ({
     tier,
-    height: estimateHeight(tier, { sections, events, grouped, categories }),
+    height: estimateHeight(tier, { sections, events, grouped, categories, origin }),
   }));
 
   // The largest type that holds the content *and* the Follow-Up block.

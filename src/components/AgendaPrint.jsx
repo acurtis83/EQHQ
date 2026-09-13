@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent,
-  COL_GAP, ITEM_RULES, NAME_FRAC, RULE_H, itemRuleH, writeLinesFor,
+  COL_GAP, ITEM_RULES, NAME_FRAC, RULE_H, itemRuleH, writeLinesFor, signUpLine,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
@@ -229,6 +229,11 @@ export default function AgendaPrint({
   // belongs would print plausible-looking nonsense.
   eventKinds = [],
   grouped = false, categoryOrder = [],
+  // Where the app lives, so the sign-up for one of its own forms can print as
+  // something typeable rather than a bare "?f=…". A prop with a default rather
+  // than a reach for window inside the body, so the standalone sample can
+  // render this on a server and still get a sensible sheet.
+  origin = typeof window === "undefined" ? "" : window.location.origin,
 }) {
   const withItems = SECTIONS
     .map((s) => ({ ...s, items: bySection[s.key] || [] }))
@@ -248,7 +253,7 @@ export default function AgendaPrint({
     : [];
   const eventGroups = groupEvents(events, eventKinds);
   const estimate = choosePrintPlan({
-    sections: grouped ? groups : withItems, events, grouped, categories: eventKinds,
+    sections: grouped ? groups : withItems, events, grouped, categories: eventKinds, origin,
   });
   // The estimate opens; the browser's own layout settles the ruled lines.
   const { lines, contentRef, footerRef } = useMeasuredWriteLines(estimate);
@@ -422,6 +427,19 @@ export default function AgendaPrint({
                         {[fmtShort(e.when || e.event_date), e.event_time, e.location]
                           .filter(Boolean).join(" · ")}
                       </div>
+                      {/* The one link on the sheet. This panel is what gets
+                          read out on Sunday, and announcing a sign-up without
+                          saying where is worse than saying nothing. Set in
+                          the darker ink so it reads as something to act on
+                          rather than more detail about the date. */}
+                      {signUpLine(e, origin) && (
+                        <div data-eq-signup style={{
+                          fontFamily: SANS, fontSize: plan.note, color: "#111",
+                          fontWeight: 700, lineHeight: 1.3, overflowWrap: "anywhere",
+                        }}>
+                          {signUpLine(e, origin)}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -57,6 +57,28 @@ export function signUpHref(post) {
 }
 
 /**
+ * The sign-up link for a row out of `events`, or "".
+ *
+ * "need to take a look at the Stake Temple Cleaning Assignment. the SignUP
+ *  link is not showing on the Sunday Meeting Agenda"
+ *
+ * A planner event keeps its sign-up in one of two places and every surface has
+ * to look in both. The app's own form is a `form_id` on the event or on one of
+ * its dates; anything run by the stake — a temple cleaning rota, a blood drive
+ * — is an outside link_url the presidency marked as a sign-up.
+ *
+ * The Sunday agenda checked only the first, so a stake assignment showed a
+ * Sign Up on the feed and in the weekly email and nothing at all on the sheet
+ * being read from on Sunday morning. That is the fourth surface this quarter
+ * to answer "is this a sign-up?" its own way, so the answer lives here now and
+ * they all ask it rather than each keeping a version.
+ */
+export function eventSignUpHref(event) {
+  if (event?.form_id) return `?f=${event.form_id}`;
+  return signUpHref(event);
+}
+
+/**
  * The action for one upcoming item.
  *
  * A form wins over an RSVP when a post somehow has both: the form is the one

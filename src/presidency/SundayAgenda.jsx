@@ -23,6 +23,7 @@ import { carryable, carriedRow } from "../lib/domain/carryOver";
 import { moveAndSave } from "../lib/announcementActions";
 import UpcomingList from "../components/UpcomingList";
 import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
+import { eventSignUpHref } from "../lib/domain/upcomingAction";
 
 // The agenda lists the next few things rather than everything inside an
 // arbitrary window — a date cut-off hides items with nothing to explain why.
@@ -579,7 +580,11 @@ export default function SundayAgenda({ onGo }) {
                     repeats(e) ? describeRepeat(e) : null,
                     e.remaining > 1 ? `${e.remaining} dates` : null,
                   ].filter(Boolean).join(" · "),
-                  signUpHref: e.form_id ? `?f=${e.form_id}` : null,
+                  // Both kinds: the app's own form, and a stake link the
+                  // presidency marked as a sign-up. Checking only form_id
+                  // hid the temple cleaning rota from the one list that
+                  // gets read out on Sunday.
+                  signUpHref: eventSignUpHref(e) || null,
                 }))}
               />
             </Section>
