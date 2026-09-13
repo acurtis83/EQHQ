@@ -1,5 +1,12 @@
 // Shared primitives, styled with the same CSS variables as the legacy app.
 
+import { useEffect, useLayoutEffect, useRef } from "react";
+import { rowsFor, MAX_ROWS } from "../lib/domain/textRows";
+
+// useLayoutEffect warns when React renders on the server, where there is no
+// layout to read anyway. The print sample does exactly that.
+const useIsoLayout = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export const T = {
   ink: "var(--ink)", sub: "var(--sub)", faint: "var(--faint)",
   bg: "var(--bg)", panel: "var(--panel)", inset: "var(--inset)",
@@ -78,6 +85,54 @@ export function Area({ value, onChange, placeholder, rows = 3, style, ...rest })
         background: T.inset, border: `1px solid ${T.line}`, borderRadius: 10,
         padding: "9px 11px", fontSize: 16, color: T.ink, width: "100%",
         minWidth: 0, fontFamily: "inherit", resize: "vertical", ...style,
+      }}
+      {...rest}
+    />
+  );
+}
+
+/**
+ * A text box that grows to fit what's in it.
+ *
+ * "I need to see the full text box so i can read the announcement."
+ *
+ * Estimate first, measure second — the same arrangement the printed agenda
+ * uses. rowsFor() gets the box close before anything is laid out, which is
+ * what makes the height right on the first paint and checkable without a
+ * browser; the effect below then asks the element how tall its content really
+ * is and takes over. Where there's no layout engine — jsdom, server render —
+ * scrollHeight is 0 and the estimate simply stands.
+ *
+ * Still resizable by hand, and still capped: past MAX_ROWS the box scrolls
+ * rather than swallowing the screen.
+ */
+export function AutoArea({ value, onChange, placeholder, style, ...rest }) {
+  const ref = useRef(null);
+
+  useIsoLayout(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Collapse before measuring: scrollHeight can only report content taller
+    // than the box, so without this the box can grow but never shrink back.
+    el.style.height = "auto";
+    const want = el.scrollHeight;
+    if (!want) return;                       // no layout engine — keep the estimate
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 21;
+    el.style.height = `${Math.min(want, MAX_ROWS * line + 20)}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      rows={rowsFor(value)}
+      placeholder={placeholder}
+      onChange={(e) => onChange?.(e.target.value)}
+      style={{
+        background: T.inset, border: `1px solid ${T.line}`, borderRadius: 10,
+        padding: "9px 11px", fontSize: 16, color: T.ink, width: "100%",
+        minWidth: 0, fontFamily: "inherit", lineHeight: 1.45,
+        resize: "vertical", overflowY: "auto", ...style,
       }}
       {...rest}
     />

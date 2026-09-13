@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus, Trash2, Printer, Mail, Copy, ArrowDownToLine, ExternalLink,
-  Check, RefreshCw, ChevronUp, ChevronDown,
+  Check, RefreshCw, ChevronUp, ChevronDown, Presentation,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
@@ -11,7 +11,7 @@ import { upcomingForSunday } from "../lib/domain/upcoming";
 import { conductingFor, monthLabel, monthKey, scheduleFromRows } from "../lib/domain/conducting";
 import PersonPick from "../components/PersonPick";
 import { useAuth } from "../lib/useAuth";
-import { T, card, Btn, Input, Area, Select, Chip, SectionTitle } from "../components/ui";
+import { T, card, Btn, Input, Area, AutoArea, Select, Chip, SectionTitle } from "../components/ui";
 import {
   fmtDate, fmtShort, toIso, noLessonReason, NO_LESSON, DOW, MON, isoParts,
 } from "../lib/domain/dates";
@@ -24,6 +24,7 @@ import { moveAndSave } from "../lib/announcementActions";
 import UpcomingList from "../components/UpcomingList";
 import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 import { eventSignUpHref } from "../lib/domain/upcomingAction";
+import AgendaPresent from "./AgendaPresent";
 
 // The agenda lists the next few things rather than everything inside an
 // arbitrary window — a date cut-off hides items with nothing to explain why.
@@ -60,6 +61,7 @@ export default function SundayAgenda({ onGo }) {
   const [draft, setDraft] = useState("");
   const [pullOpen, setPullOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [presenting, setPresenting] = useState(false);
 
   // Which Sundays actually have a quorum meeting. Conference and stake
   // conference are already excluded by the shared cadence rules, so this list
@@ -339,6 +341,12 @@ export default function SundayAgenda({ onGo }) {
             there was no way to know that by looking, and one of them could be
             on a different Sunday. One button, on Presidency Home. */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          {/* First, and the only primary button on the bar. On Sunday morning
+              this is the one thing anybody opens this screen to do; PDF and
+              Copy are for the rest of the week. */}
+          <Btn kind="primary" onClick={() => setPresenting(true)} disabled={!agenda}>
+            <Presentation size={14} />Present
+          </Btn>
           <Btn kind="plain" onClick={printAgenda}><Printer size={14} />PDF</Btn>
           <Btn kind="plain" onClick={copyPlain}><Copy size={14} />Copy</Btn>
           {/* Said plainly rather than left for somebody to hunt for: this is
@@ -490,7 +498,11 @@ export default function SundayAgenda({ onGo }) {
             >
               {adding && (
                 <div style={{ background: T.inset, borderRadius: 10, padding: 10, marginBottom: 9, display: "flex", flexDirection: "column", gap: 8 }}>
-                  <Input value={draft} onChange={setDraft} placeholder="Ministering interviews this week" />
+                  {/* Grows as you type, so a notice worth two sentences can
+                      be written as two sentences. */}
+                  <AutoArea value={draft} onChange={setDraft}
+                    aria-label="New announcement"
+                    placeholder="Ministering interviews this week" />
                   <div style={{ display: "flex", gap: 8 }}>
                     <Btn kind="primary" size="sm" onClick={() => addAnnouncement(draft)} disabled={!draft.trim()}>Add</Btn>
                     <Btn kind="plain" size="sm" onClick={() => { setAdding(false); setDraft(""); }}>Cancel</Btn>
@@ -515,8 +527,17 @@ export default function SundayAgenda({ onGo }) {
                       style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                         <span style={{ color: T.faint, fontSize: 15, lineHeight: 1.5 }}>•</span>
+                        {/* A box that grows to the text, not a single line.
+                            Announcements run to two or three lines and the
+                            old input clipped them, so the notices going out
+                            to the whole quorum were the one thing on this
+                            screen nobody could read without arrowing along
+                            inside the field. */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <Input value={a.text} onChange={(v) => patchItem(a.id, { text: v })} />
+                          <AnnouncementText
+                            text={a.text}
+                            onSave={(v) => patchItem(a.id, { text: v })}
+                          />
                         </div>
                         {/* The order they're read out in, which is also the
                             order they reach the email and the feed. */}
@@ -591,6 +612,19 @@ export default function SundayAgenda({ onGo }) {
           </div>
         )}
       </div>
+
+      {presenting && agenda && (
+        <AgendaPresent
+          date={date} agenda={agenda} lesson={lesson} reason={reason}
+          conducting={conductingFor(agenda, conducting).name}
+          announcements={announcements} events={events} sustainings={sustainings}
+          // Which events have a sign-up worth mentioning, decided by the same
+          // rule the list above the fold uses. The sheet gets the answer, not
+          // the question.
+          signUps={events.filter((e) => eventSignUpHref(e)).map((e) => e.id)}
+          onClose={() => setPresenting(false)}
+        />
+      )}
 
       {printing && agenda && (
         <PrintDoc
@@ -811,6 +845,42 @@ function ConductingNote({ agenda, schedule }) {
         ? `From the ${month} schedule`
         : "Just this Sunday — clear it to use the schedule"}
     </span>
+  );
+}
+
+/**
+ * One announcement, edited locally and saved when you leave the box.
+ *
+ * The old single-line input wrote to the database on every keystroke and then
+ * reloaded the whole agenda from it. That was survivable for a short line
+ * typed once; it isn't for a box you're meant to sit and read a paragraph in,
+ * where every character costs a round trip and the reload can land mid-word
+ * and move the cursor.
+ *
+ * So the text is local while you're in the box and saved once when you leave
+ * it — and only if it changed, so tabbing through the agenda writes nothing.
+ * The prop wins whenever the box isn't focused, which is what lets Pull,
+ * Bring Forward and the carry-over refresh what's on screen.
+ */
+function AnnouncementText({ text, onSave }) {
+  const [draft, setDraft] = useState(text || "");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { if (!busy) setDraft(text || ""); }, [text, busy]);
+
+  return (
+    <AutoArea
+      value={draft}
+      aria-label="Announcement"
+      onChange={setDraft}
+      onFocus={() => setBusy(true)}
+      onBlur={() => {
+        setBusy(false);
+        const next = draft.trim();
+        if (next && next !== (text || "").trim()) onSave(next);
+        else setDraft(text || "");
+      }}
+    />
   );
 }
 
