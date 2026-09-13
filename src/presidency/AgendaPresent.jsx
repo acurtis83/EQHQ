@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { X, ExternalLink } from "lucide-react";
 import { T } from "../components/ui";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
-import { runningOrder, NOBODY } from "../lib/domain/runningOrder";
 
 /**
  * The agenda as something to read from at the podium.
@@ -27,14 +26,12 @@ import { runningOrder, NOBODY } from "../lib/domain/runningOrder";
  *   - Exactly one control: a large Done. A button you might hit by accident
  *     while holding a phone is a button that shouldn't be here.
  *
- * The order itself is not decided in this file. It comes from
- * lib/domain/runningOrder.js, so the sheet can't quietly disagree with
- * anything else built from the same meeting.
+ * The order itself is not decided in this file. The blocks arrive already
+ * built by lib/domain/runningOrder.js — the same ones the agenda screen lays
+ * itself out from, and the same ones the PDF and Copy render — so the sheet
+ * can't quietly disagree with anything else built from the same meeting.
  */
-export default function AgendaPresent({
-  date, agenda, conducting, lesson, reason,
-  sustainings = [], announcements = [], events = [], signUps = [], onClose,
-}) {
+export default function AgendaPresent({ date, blocks = [], onClose }) {
   // Escape leaves. Somebody who opened this by accident shouldn't have to hunt
   // for a target on a screen deliberately stripped of them.
   useEffect(() => {
@@ -42,10 +39,6 @@ export default function AgendaPresent({
     window.addEventListener("keydown", bail);
     return () => window.removeEventListener("keydown", bail);
   }, [onClose]);
-
-  const blocks = runningOrder({
-    agenda, conducting, lesson, reason, sustainings, announcements, events, signUps,
-  });
 
   const view = (
     <div

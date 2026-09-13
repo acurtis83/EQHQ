@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus, Trash2, Printer, Mail, Copy, ArrowDownToLine, ExternalLink,
   Check, RefreshCw, ChevronUp, ChevronDown, Presentation,
@@ -25,6 +25,7 @@ import UpcomingList from "../components/UpcomingList";
 import { nextOccurrence, repeats, describeRepeat } from "../lib/domain/repeat";
 import { eventSignUpHref } from "../lib/domain/upcomingAction";
 import AgendaPresent from "./AgendaPresent";
+import { runningOrder, agendaText, SECTIONS } from "../lib/domain/runningOrder";
 
 // The agenda lists the next few things rather than everything inside an
 // arbitrary window — a date cut-off hides items with nothing to explain why.
@@ -278,24 +279,24 @@ export default function SundayAgenda({ onGo }) {
     setTimeout(() => { window.print(); setPrinting(false); }, 60);
   };
 
+  /**
+   * The blocks the meeting runs in, shared by everything that presents this
+   * agenda rather than edits it.
+   *
+   * Copy and the printed sheet each used to assemble their own version, and
+   * both still had the lesson before the announcements after the screen had
+   * been reordered. One source, three consumers.
+   */
+  const blocks = useMemo(() => runningOrder({
+    agenda, conducting: conductingFor(agenda || {}, conducting).name,
+    lesson, reason, sustainings, announcements, events,
+    signUps: events.filter((e) => eventSignUpHref(e)).map((e) => e.id),
+  }), [agenda, conducting, lesson, reason, sustainings, announcements, events]);
+
   const copyPlain = async () => {
-    const lines = [
-      `Sunday Quorum Meeting — ${fmtDate(date)}`,
-      conductingFor(agenda, conducting).name
-        ? `Conducting: ${conductingFor(agenda, conducting).name}` : "",
-      agenda?.opening_prayer ? `Opening prayer: ${agenda.opening_prayer}` : "",
-      reason
-        ? `No lesson — ${reason}`
-        : `Lesson: ${lesson?.teacher_name || "unassigned"}${lesson?.talk_title ? ` — "${lesson.talk_title}"` : ""}`,
-      lesson?.talk_link || "",
-      sustainings.length ? "Callings & Sustainings:" : "",
-      ...sustainings.map((c) =>
-        `  - ${c.stage === "Need to Release" ? "Release" : "Sustain"}: ${c.candidate_name || "—"}, ${c.position}`),
-      announcements.length ? "Announcements:" : "",
-      ...announcements.map((a) => `  - ${a.text}`),
-      agenda?.closing_prayer ? `Closing prayer: ${agenda.closing_prayer}` : "",
-    ].filter(Boolean);
-    try { await navigator.clipboard.writeText(lines.join("\n")); } catch { /* clipboard blocked */ }
+    const text = agendaText(blocks, `Sunday Quorum Meeting — ${fmtDate(date)}`, fmtShort)
+      .join("\n");
+    try { await navigator.clipboard.writeText(text); } catch { /* clipboard blocked */ }
   };
 
   if (loading) {
@@ -404,7 +405,16 @@ export default function SundayAgenda({ onGo }) {
               </div>
             </Section>
 
-            {/* ---------- lesson ---------- */}
+            {/* The four sections below are keyed, then laid out in the order
+                SECTIONS gives — business before the lesson. Writing them into
+                a map rather than straight into the tree is what lets the
+                screen, the read-aloud sheet, the PDF and Copy share one
+                statement of the order instead of four copies of it. */}
+            {SECTIONS.map((key) => (
+              <Fragment key={key}>{{
+
+            /* ---------- lesson ---------- */
+            lesson: (
             <Section title="Lesson" onGo={onGo ? () => onGo("plan") : null} goLabel="Teaching">
               {reason ? (
                 <Chip color={T.gold} bg={T.goldSoft}>{reason}</Chip>
@@ -439,11 +449,13 @@ export default function SundayAgenda({ onGo }) {
                 <Empty2>Nothing assigned yet — set it on Plan → Teaching.</Empty2>
               )}
             </Section>
+            ),
 
-            {/* ---------- callings and sustainings ----------
+            /* ---------- callings and sustainings ----------
                 Pulled live from the tracker: anything at "Called" is waiting to
                 be sustained, anything at "Need to Release" is waiting to be
-                released. Nobody has to remember to copy them across. */}
+                released. Nobody has to remember to copy them across. */
+            sustainings: (
             <Section
               title="Callings & Sustainings"
               count={sustainings.length}
@@ -480,8 +492,10 @@ export default function SundayAgenda({ onGo }) {
                 </div>
               )}
             </Section>
+            ),
 
-            {/* ---------- announcements ---------- */}
+            /* ---------- announcements ---------- */
+            announcements: (
             <Section
               title="Announcements"
               count={announcements.length}
@@ -571,8 +585,9 @@ export default function SundayAgenda({ onGo }) {
                 </div>
               )}
             </Section>
+            ),
 
-            {/* The secretary card used to be embedded here, and it was worse
+            /* The secretary card used to be embedded here, and it was worse
                 than a duplicate. It keeps its OWN selected Sunday, so on this
                 screen showing the 20th it could be sitting on the 13th — two
                 "Weekly Email" buttons a few inches apart, quietly building
@@ -583,8 +598,9 @@ export default function SundayAgenda({ onGo }) {
                 The email is generated from the Secretary card on Presidency
                 Home now, and only there. The announcements are the same rows
                 either way, so editing them here still changes what goes out.
-                See the note by the toolbar above. */}
+                See the note by the toolbar above. */
 
+            upcoming: (
             <Section title="Upcoming Events" count={events.length}
               onGo={onGo ? () => onGo("plan") : null} goLabel="Plan">
               {/* Shared with the Presidency Home and the feed, so the same
@@ -609,32 +625,25 @@ export default function SundayAgenda({ onGo }) {
                 }))}
               />
             </Section>
+            ),
+
+              }[key]}</Fragment>
+            ))}
           </div>
         )}
       </div>
 
       {presenting && agenda && (
         <AgendaPresent
-          date={date} agenda={agenda} lesson={lesson} reason={reason}
-          conducting={conductingFor(agenda, conducting).name}
-          announcements={announcements} events={events} sustainings={sustainings}
-          // Which events have a sign-up worth mentioning, decided by the same
-          // rule the list above the fold uses. The sheet gets the answer, not
-          // the question.
-          signUps={events.filter((e) => eventSignUpHref(e)).map((e) => e.id)}
-          onClose={() => setPresenting(false)}
+          date={date} blocks={blocks} onClose={() => setPresenting(false)}
         />
       )}
 
       {printing && agenda && (
-        <PrintDoc
-          date={date} agenda={agenda} lesson={lesson} reason={reason}
-          announcements={announcements} events={events} sustainings={sustainings}
-          // Resolved here rather than in the print component. The sheet stays a
-          // pure function of what it's given, which is what lets it be
-          // rendered on its own to look at.
-          conducting={conductingFor(agenda, conducting).name}
-        />
+        // Assembled here, not in the print component. The sheet stays a pure
+        // function of what it's given, which is what lets it be rendered on
+        // its own to look at.
+        <PrintDoc date={date} blocks={blocks} />
       )}
 
       {pullOpen && agenda && (
@@ -886,7 +895,7 @@ function AnnouncementText({ text, onSave }) {
 
 /* --------------------------------- print --------------------------------- */
 
-function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustainings = [], conducting = "" }) {
+function PrintDoc({ date, blocks = [] }) {
   const sheet = (
     <div className="eq-print-root">
       {/* Same mechanism as the presidency agenda, and for the same reason:
@@ -916,62 +925,46 @@ function PrintDoc({ date, agenda, lesson, reason, announcements, events, sustain
       {/* 24 to match the presidency agenda's printed heading — print sizes are
           chosen for paper and are deliberately not on the screen scale. */}
       <h1 style={{ fontSize: 24, margin: "2px 0" }}>Sunday Quorum Meeting</h1>
-      <div style={{ fontSize: 13, color: "#444", marginBottom: 14 }}>
-        {fmtDate(date)}
-        {conducting ? ` · Conducting: ${conducting}` : ""}
-      </div>
+      <div style={{ fontSize: 13, color: "#444", marginBottom: 14 }}>{fmtDate(date)}</div>
 
-      <PrintRow label="Opening Prayer" value={agenda.opening_prayer || "—"} />
-
-      <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>Lesson</h2>
-      {reason ? (
-        <div style={{ fontSize: 13 }}>{reason}</div>
-      ) : (
-        <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-          <div>Teacher: {lesson?.teacher_name || "—"}</div>
-          {lesson?.talk_title && <div>Talk: “{lesson.talk_title}”{lesson.speaker ? ` — ${lesson.speaker}` : ""}</div>}
-          {lesson?.talk_link && <div style={{ wordBreak: "break-all" }}>{lesson.talk_link}</div>}
-        </div>
-      )}
-
-      {sustainings.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>Callings &amp; Sustainings</h2>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
-            {sustainings.map((c) => (
-              <li key={c.id}>
-                {c.stage === "Need to Release" ? "Release" : "Sustain"} — {c.candidate_name || "—"}, {c.position}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {announcements.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>Announcements</h2>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
-            {announcements.map((a) => <li key={a.id}>{a.text}</li>)}
-          </ul>
-        </>
-      )}
-
-      {events.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>Upcoming</h2>
-          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
-            {events.map((e) => (
-              <li key={e.id}>
-                {e.title} — {[e.when ? fmtShort(e.when) : "TBC", e.event_time, e.location].filter(Boolean).join(", ")}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      <div style={{ marginTop: 14 }}>
-        <PrintRow label="Closing Prayer" value={agenda.closing_prayer || "—"} />
-      </div>
+      {/* Straight down the running order. This used to be its own arrangement
+          of the same material, which is how the paper copy came to be reading
+          the lesson before the announcements weeks after the screen had
+          stopped. */}
+      {blocks.map((b) => (
+        b.kind === "person" ? (
+          <PrintRow key={b.key} label={b.label} value={b.value} />
+        ) : (
+          <div key={b.key}>
+            <h2 style={{ fontSize: 14, margin: "14px 0 4px" }}>{b.label}</h2>
+            {b.kind === "lesson" ? (
+              b.reason ? (
+                <div style={{ fontSize: 13 }}>{b.reason}</div>
+              ) : (
+                <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+                  <div>Teacher: {b.teacher}</div>
+                  {b.talk && <div>Talk: “{b.talk}”{b.speaker ? ` — ${b.speaker}` : ""}</div>}
+                  {b.link && <div style={{ wordBreak: "break-all" }}>{b.link}</div>}
+                </div>
+              )
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.65 }}>
+                {b.items.map((it) => (
+                  <li key={it.id}>
+                    {b.kind === "notices" && it.text}
+                    {b.kind === "list" && `${it.lead} — ${it.text}`}
+                    {b.kind === "events" && [
+                      it.title,
+                      [it.when ? fmtShort(it.when) : "TBC", it.where].filter(Boolean).join(" · "),
+                    ].join(" — ")}
+                    {b.kind === "events" && it.signUp ? " (sign-up)" : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )
+      ))}
     </div>
   );
 

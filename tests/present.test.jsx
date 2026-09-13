@@ -1,6 +1,6 @@
 import { render, cleanup, act, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { runningOrder, NOBODY } from "../src/lib/domain/runningOrder";
+import { runningOrder, agendaText, NOBODY, SECTIONS } from "../src/lib/domain/runningOrder";
 import { rowsFor, MIN_ROWS, MAX_ROWS } from "../src/lib/domain/textRows";
 
 /**
@@ -18,6 +18,7 @@ import { rowsFor, MIN_ROWS, MAX_ROWS } from "../src/lib/domain/textRows";
 
 let ITEMS = [];
 let EVENTS = [];
+let CALLINGS = [];
 let AGENDA = null;
 let WRITES = [];
 
@@ -25,6 +26,7 @@ function table(name) {
   const rows =
     name === "agenda_items" ? ITEMS :
     name === "events" ? EVENTS :
+    name === "callings" ? CALLINGS :
     name === "members" ? [] : [];
 
   const capture = (op) => (arg) => {
@@ -91,7 +93,12 @@ const ANNOUNCEMENTS = [
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   ITEMS = ANNOUNCEMENTS.map((a) => ({ ...a }));
-  EVENTS = [];
+  // All four middle sections present, so an ordering assertion is measuring
+  // the order rather than which of them happened to be empty.
+  EVENTS = [{ id: "e1", kind: "temple", title: "Stake Temple Cleaning",
+    event_date: "2026-09-19", event_time: "8:00 AM" }];
+  CALLINGS = [{ id: "c1", stage: "Called", candidate_name: "Ben Savio",
+    position: "Quorum Instructor", sort_order: 0 }];
   AGENDA = {
     id: "a1", kind: "sunday", meeting_date: "2026-09-06", carried_over: true,
     conducting: "Cameron Pearson", opening_prayer: "Karl Moore", closing_prayer: "",
@@ -137,14 +144,38 @@ describe("the order the meeting runs in", () => {
     signUps: ["e1"],
   });
 
-  it("puts the closing prayer last, not next to the opening one", () => {
-    // On the editing screen the two prayers sit inches apart because they're
-    // the same kind of control. Read out in that order the meeting would end
-    // before the lesson.
+  /**
+   * "either add a manual reorder for things...or move Announcements and
+   *  Callings & Sustainings above Lesson."
+   *
+   * Business first, lesson last. The lesson runs to the end of the hour, so
+   * anything after it is whatever there turns out to be time for — which is
+   * how announcements came to be the thing that got skipped. Upcoming sits
+   * with the announcements because that's what it is.
+   */
+  it("does the business first and the lesson last", () => {
     const keys = full().map((b) => b.key);
     expect(keys).toEqual([
-      "conducting", "opening", "lesson", "sustainings", "announcements", "upcoming", "closing",
+      "conducting", "opening", "announcements", "upcoming", "sustainings", "lesson", "closing",
     ]);
+  });
+
+  it("and the closing prayer after the lesson, not beside the opening one", () => {
+    // On the editing screen the two prayers sit inches apart because they're
+    // the same kind of control. Read out in that order the meeting would end
+    // before it started.
+    const keys = full().map((b) => b.key);
+    expect(keys[keys.length - 1]).toBe("closing");
+    expect(keys.indexOf("closing")).toBeGreaterThan(keys.indexOf("lesson"));
+  });
+
+  it("is stated in exactly one place", () => {
+    // The screen lays its sections out from SECTIONS and everything else
+    // renders the blocks. Four surfaces used to each hold their own copy of
+    // this order, and two of them were already stale.
+    expect(SECTIONS).toEqual(["announcements", "upcoming", "sustainings", "lesson"]);
+    const keys = full().map((b) => b.key);
+    expect(keys.slice(2, -1)).toEqual(SECTIONS);
   });
 
   it("keeps a prayer nobody is down for, and says so", () => {
@@ -166,6 +197,15 @@ describe("the order the meeting runs in", () => {
     expect(keys).not.toContain("upcoming");
     // The prayers and the lesson still stand.
     expect(keys).toEqual(["conducting", "opening", "lesson", "closing"]);
+  });
+
+  it("and the lesson still sits after where the business would have been", () => {
+    // Dropping the empty blocks must not quietly promote the lesson past
+    // business that simply isn't there this week.
+    const keys = runningOrder({
+      agenda: {}, announcements: [{ id: "n1", text: "One thing." }],
+    }).map((b) => b.key);
+    expect(keys.indexOf("announcements")).toBeLessThan(keys.indexOf("lesson"));
   });
 
   it("says why there's no lesson rather than leaving a hole", () => {
@@ -307,13 +347,13 @@ describe("presentation mode", () => {
     expect(sheet.querySelectorAll("textarea, input, select")).toHaveLength(0);
   });
 
-  it("runs the meeting's order, with the closing prayer at the end", async () => {
+  it("runs the meeting's order", async () => {
     await open();
     const keys = [...document.querySelectorAll("[data-present] [data-block]")]
       .map((el) => el.dataset.block);
     expect(keys[0]).toBe("conducting");
     expect(keys[keys.length - 1]).toBe("closing");
-    expect(keys.indexOf("announcements")).toBeGreaterThan(keys.indexOf("lesson"));
+    expect(keys.indexOf("announcements")).toBeLessThan(keys.indexOf("lesson"));
   });
 
   it("keeps the announcements in the order they were put in", async () => {
@@ -339,5 +379,72 @@ describe("presentation mode", () => {
       await new Promise((r) => setTimeout(r, 10));
     });
     expect(document.querySelector("[data-present]")).toBeNull();
+  });
+});
+
+/**
+ * One order, four surfaces.
+ *
+ * The screen, the sheet you read from, the PDF and Copy all present the same
+ * meeting. Each used to arrange it separately, and two of them were already
+ * stale by the time this was noticed — the printed copy and Copy still had the
+ * lesson before the announcements. These pin all four to the same sequence, so
+ * moving one and forgetting the others fails here rather than on a Sunday.
+ */
+describe("every surface agrees on the order", () => {
+  const positions = (text, labels) => labels.map((l) => text.indexOf(l));
+  const rising = (xs) => xs.every((n, i) => n >= 0 && (i === 0 || n > xs[i - 1]));
+
+  it("on the editing screen", async () => {
+    const dom = await mount();
+    const at = positions(dom.container.textContent,
+      ["Announcements", "Upcoming Events", "Callings & Sustainings", "Lesson"]);
+    expect(at, `sections came out at ${at}`).toSatisfy(rising);
+  });
+
+  it("in presentation mode", async () => {
+    await mount();
+    await act(async () => {
+      fireEvent.click(present());
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    const keys = [...document.querySelectorAll("[data-present] [data-block]")]
+      .map((el) => el.dataset.block);
+    expect(keys).toEqual([
+      "conducting", "opening", "announcements", "upcoming", "sustainings", "lesson", "closing",
+    ]);
+  });
+
+  it("on the printed copy", async () => {
+    const dom = await mount();
+    await act(async () => {
+      fireEvent.click([...dom.container.querySelectorAll("button")]
+        .find((b) => b.textContent.trim() === "PDF"));
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const sheet = document.querySelector(".eq-print-root");
+    expect(sheet, "the print sheet didn't render").toBeTruthy();
+    const at = positions(sheet.textContent,
+      ["Announcements", "Coming Up", "Callings & Sustainings", "Lesson", "Closing Prayer"]);
+    expect(at, `headings came out at ${at}`).toSatisfy(rising);
+  });
+
+  it("and in what Copy puts on the clipboard", () => {
+    const text = agendaText(runningOrder({
+      agenda: { opening_prayer: "Karl Moore", closing_prayer: "Ryan Talbot" },
+      conducting: "Cameron Pearson",
+      lesson: { teacher_name: "Seth Adamson" },
+      sustainings: [{ id: "c1", stage: "Called", candidate_name: "Ben Savio", position: "Instructor" }],
+      announcements: [{ id: "n1", text: LONG }],
+      events: [{ id: "e1", title: "Stake Temple Cleaning", when: "2026-09-19" }],
+      signUps: ["e1"],
+    }), "Sunday Quorum Meeting").join("\n");
+
+    const at = positions(text,
+      ["Announcements:", "Coming Up:", "Callings & Sustainings:", "Lesson:", "Closing Prayer:"]);
+    expect(at, `lines came out at ${at}`).toSatisfy(rising);
+    // ...and the whole announcement went with it, not a first line.
+    expect(text).toContain(LONG);
+    expect(text).toContain("Stake Temple Cleaning");
   });
 });
