@@ -10,6 +10,7 @@ import { T, card, Btn, Input, Area, Select, Chip, SectionTitle, Empty } from "..
 import {
   QUESTION_TYPES, needsOptions, normalizeOptions, optionLabel, capacityState,
   FORM_TEMPLATES, responsesToCsv, summarize, capacityTotals, namesByOption,
+  unmatchedPicks, strandedBy,
 } from "../lib/domain/forms";
 import FormFill from "../member/FormFill";
 import SummaryGraphic from "../components/SummaryGraphic";
@@ -338,11 +339,34 @@ function Builder({ form, questions, patchForm, reload, adding, setAdding, setErr
 
   const saveEdit = async (q) => {
     if (!eDraft?.label.trim()) return;
+    const next = textToOptions(eDraft.type, eOptText);
+
+    // Renaming a slot detaches every answer already recorded under the old
+    // name — the slot goes to zero and the answers stop appearing anywhere.
+    // That is a thing you might well want to do; it is not a thing that should
+    // happen without being told. Only asked when the options actually change,
+    // so fixing a typo in the question text costs no round trip.
+    if (needsOptions(eDraft.type) && eOptText !== optionsToText(q.type, q.options)) {
+      const { data } = await supabase.from("form_answers")
+        .select("value").eq("question_id", q.id);
+      const lost = strandedBy(q, (data || []).map((r) => r.value), next);
+      if (lost.length) {
+        const detail = lost.map((l) => `  ${l.label} — ${l.count}`).join("\n");
+        const total = lost.reduce((n, l) => n + l.count, 0);
+        const ok = confirm(
+          `${total} answer${total === 1 ? "" : "s"} would stop matching:\n\n${detail}\n\n` +
+          "They won't be deleted, but they'll no longer count toward these " +
+          "slots. Save anyway?"
+        );
+        if (!ok) return;
+      }
+    }
+
     const { error } = await supabase.from("form_questions").update({
       type: eDraft.type,
       label: eDraft.label.trim(),
       required: eDraft.required,
-      options: textToOptions(eDraft.type, eOptText),
+      options: next,
     }).eq("id", q.id);
     if (error) { setErr(error.message); return; }
     setEditing(null);
@@ -621,6 +645,12 @@ function TallySummary({ q, summary, values, rows }) {
     ? options.map((o) => optionLabel(o))
     : summary.tally.map(([label]) => label);
 
+  // Answers that match no current option — see unmatchedPicks. Renaming a slot
+  // after people have signed up detaches everything already recorded under the
+  // old name, and until this they went nowhere at all: the slot read 0 and the
+  // answers were simply absent.
+  const orphans = unmatchedPicks(q, rows);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {totals && totals.needed > 0 && (
@@ -678,6 +708,14 @@ function TallySummary({ q, summary, values, rows }) {
                 </div>
               )}
 
+              {/* What somebody typed against an "Other" slot. The count on
+                  its own is the least useful line on the page. */}
+              {who.notes?.length > 0 && (
+                <div style={{ fontSize: 13.5, color: T.sub, marginTop: 6, lineHeight: 1.5 }}>
+                  {who.notes.join(" · ")}
+                </div>
+              )}
+
               {cap && !cap.full && (
                 <div style={{ fontSize: 13, color: T.gold, fontWeight: 700, marginTop: 6 }}>
                   {cap.limit - cap.taken} still needed
@@ -686,6 +724,33 @@ function TallySummary({ q, summary, values, rows }) {
             </div>
           );
         })}
+
+        {orphans.length > 0 && (
+          <div data-orphans style={{
+            background: T.goldSoft, border: `1px solid ${T.gold}`,
+            borderRadius: 10, padding: "9px 11px",
+          }}>
+            <div style={{ fontSize: 13.5, color: T.gold, fontWeight: 700, lineHeight: 1.5 }}>
+              {orphans.reduce((n, o) => n + o.names.length + o.anonymous, 0)} answer
+              {orphans.reduce((n, o) => n + o.names.length + o.anonymous, 0) === 1 ? "" : "s"} to
+              options that no longer exist
+            </div>
+            <div style={{ fontSize: 13, color: T.sub, marginTop: 3, lineHeight: 1.5 }}>
+              These were recorded against a slot that has since been renamed or
+              removed, so they aren't counted above. Rename the slot back to
+              match, or ask these people to sign up again.
+            </div>
+            {orphans.map((o) => (
+              <div key={o.label} data-orphan={o.label}
+                style={{ fontSize: 14, color: T.ink, marginTop: 6 }}>
+                <span style={{ fontWeight: 700 }}>{o.label}</span>
+                {" — "}
+                {[...o.names, ...(o.anonymous ? [`${o.anonymous} anonymous`] : [])].join(", ")}
+                {o.notes?.length ? ` (${o.notes.join(" · ")})` : ""}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

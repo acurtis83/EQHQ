@@ -39,16 +39,56 @@ export function optionLabel(o) {
   return typeof o === "string" ? o : String(o?.label ?? "");
 }
 
+/* ------------------------------ what got picked --------------------------- */
+
+/**
+ * A pick, which is usually a string and sometimes isn't.
+ *
+ * "I signed up and marked Other and put 'Drinks' in the text box."
+ *
+ * An "Other" slot is only useful with the words next to it, and the words used
+ * to live in a different question — a count in one place and loose text in
+ * another, with nothing joining them. So a pick can now be
+ * `{ option: "Other", text: "Drinks" }` as well as a bare `"Salad"`.
+ *
+ * Everything that counts, groups or exports picks goes through these, so a
+ * stored answer from before this — a bare string, or even a bare string
+ * instead of an array — still reads correctly. There is a lot of that: the
+ * shape has changed twice.
+ */
+export function pickLabel(entry) {
+  return typeof entry === "string" ? entry : String(entry?.option ?? "");
+}
+
+export function pickText(entry) {
+  return typeof entry === "string" ? "" : String(entry?.text ?? "").trim();
+}
+
+/** One answer value as a list of picks, whatever shape it was stored in. */
+export function pickList(value) {
+  if (value == null) return [];
+  const arr = Array.isArray(value) ? value : [value];
+  return arr.filter((e) => pickLabel(e) !== "");
+}
+
+/**
+ * Whether an option should offer a box to type in.
+ *
+ * Decided from the label rather than a flag on the option, so a form somebody
+ * already built with an "Other" slot starts working without being edited —
+ * and editing options is itself the thing that breaks answers (see
+ * unmatchedPicks below). Matches "Other", "Other:", "Other (please specify)".
+ */
+export function isOtherOption(label) {
+  return /^other\b/i.test(String(label || "").trim());
+}
+
 // How many spots are left on a capacity option, given existing picks.
 // picks: array of answer values already recorded for this question.
 export function capacityTaken(optionLabelText, picks) {
   let n = 0;
   for (const v of picks) {
-    if (Array.isArray(v)) {
-      if (v.includes(optionLabelText)) n += 1;
-    } else if (v === optionLabelText) {
-      n += 1;
-    }
+    if (pickList(v).some((e) => pickLabel(e) === optionLabelText)) n += 1;
   }
   return n;
 }
@@ -264,7 +304,14 @@ export function templateByKey(key) {
 // CSV for the results view. One row per response, one column per question.
 export function responsesToCsv(form, questions, responses, answersByResponse) {
   const esc = (v) => {
-    const s = v == null ? "" : Array.isArray(v) ? v.join("; ") : String(v);
+    // An "Other" pick carries what was typed with it, so the spreadsheet says
+    // "Other: Drinks" rather than "[object Object]" — which is what a bare
+    // String() gives you now that a pick isn't always a string.
+    const one = (e) => (pickText(e) ? `${pickLabel(e)}: ${pickText(e)}` : pickLabel(e));
+    const s = v == null ? ""
+      : Array.isArray(v) ? v.map(one).join("; ")
+      : typeof v === "object" ? one(v)
+      : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
 
@@ -307,8 +354,8 @@ export function summarize(question, values) {
   if (["choice", "checkboxes", "capacity", "yesno"].includes(question.type)) {
     const tally = {};
     for (const v of present) {
-      for (const one of Array.isArray(v) ? v : [v]) {
-        const k = String(one);
+      for (const one of pickList(v)) {
+        const k = pickLabel(one);
         tally[k] = (tally[k] || 0) + 1;
       }
     }
@@ -358,15 +405,70 @@ export function namesByOption(question, rows) {
   const out = {};
   for (const r of rows || []) {
     if (isBlank(r.value)) continue;
-    for (const one of Array.isArray(r.value) ? r.value : [r.value]) {
-      const k = String(one);
-      (out[k] ||= { names: [], anonymous: 0 });
+    for (const one of pickList(r.value)) {
+      const k = pickLabel(one);
+      (out[k] ||= { names: [], anonymous: 0, notes: [] });
       const name = (r.name || "").trim();
       if (name) out[k].names.push(name);
       else out[k].anonymous += 1;
+      // What they typed against an "Other" slot, kept with whoever typed it —
+      // "Other (1)" on its own is the least useful line on the page.
+      const text = pickText(one);
+      if (text) out[k].notes.push(name ? `${name}: ${text}` : text);
     }
   }
   // Stable order so the list doesn't reshuffle between renders.
   for (const k of Object.keys(out)) out[k].names.sort((a, b) => a.localeCompare(b));
   return out;
+}
+
+/**
+ * Which answers a proposed set of options would strand.
+ *
+ * Called before saving an edit, because after saving there is nothing left to
+ * warn about — the answers are already detached and the only clue is a slot
+ * that reads zero. Renaming "Other (drinks, chips)" to "Other" looks like
+ * tidying up and silently unhooks everyone who already picked it.
+ *
+ * @param {object[]} values  every stored answer value for this question
+ * @param {*}        nextOptions  the options as they'd be saved
+ * @returns {{label: string, count: number}[]}  losers, most-picked first
+ */
+export function strandedBy(question, values, nextOptions) {
+  const after = new Set(normalizeOptions(question.type, nextOptions).map(optionLabel));
+  const counts = {};
+  for (const v of values || []) {
+    for (const e of pickList(v)) {
+      const label = pickLabel(e);
+      if (!after.has(label)) counts[label] = (counts[label] || 0) + 1;
+    }
+  }
+  return Object.entries(counts)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/**
+ * Answers that match none of the question's current options.
+ *
+ * "the Other category still shows 0. I signed up and marked Other"
+ *
+ * Results are tallied by matching the stored text against the option's
+ * CURRENT label, so renaming an option after people have signed up detaches
+ * every answer already recorded under the old one. The slot reads zero, the
+ * answers appear nowhere, and nothing on screen suggests either — which is
+ * how a form can quietly lose a sign-up.
+ *
+ * Nothing here repairs the data: guessing which new option an old answer
+ * meant is exactly the guess that would put somebody down for the wrong
+ * thing. It surfaces them so a person can decide.
+ */
+export function unmatchedPicks(question, rows) {
+  const known = new Set(normalizeOptions(question.type, question.options).map(optionLabel));
+  if (!known.size) return [];
+  const named = namesByOption(question, rows);
+  return Object.keys(named)
+    .filter((label) => !known.has(label))
+    .sort((a, b) => a.localeCompare(b))
+    .map((label) => ({ label, ...named[label] }));
 }

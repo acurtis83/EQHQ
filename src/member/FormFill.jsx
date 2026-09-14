@@ -7,6 +7,7 @@ import { newId } from "../lib/newId";
 
 import {
   capacityState, isBlank, normalizeOptions, optionLabel, validateResponse,
+  isOtherOption, pickLabel, pickText,
 } from "../lib/domain/forms";
 
 /**
@@ -305,19 +306,14 @@ function QuestionInput({ q, value, onChange, picks }) {
     const arr = Array.isArray(value) ? value : [];
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {options.map((o) => {
-          const label = optionLabel(o);
-          const on = arr.includes(label);
-          return (
-            <button
-              key={label}
-              onClick={() => onChange(on ? arr.filter((x) => x !== label) : [...arr, label])}
-              style={pickStyle(on)}
-            >
-              {label}
-            </button>
-          );
-        })}
+        {options.map((o) => (
+          <Pick
+            key={optionLabel(o)}
+            label={optionLabel(o)}
+            picks={arr}
+            onChange={onChange}
+          />
+        ))}
       </div>
     );
   }
@@ -339,28 +335,16 @@ function QuestionInput({ q, value, onChange, picks }) {
           {anyLeft ? "Pick as many as you'd like to bring." : "Every slot is spoken for."}
         </div>
         {options.map((o) => {
-          const label = optionLabel(o);
           const st = capacityState(o, picks);
-          const on = arr.includes(label);
-          const disabled = st.full && !on;
           return (
-            <button
-              key={label}
-              disabled={disabled}
-              aria-pressed={on}
-              onClick={() => onChange(on ? arr.filter((x) => x !== label) : [...arr, label])}
-              style={{
-                ...pickStyle(on),
-                opacity: disabled ? 0.55 : 1,
-                cursor: disabled ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", gap: 8,
-              }}
-            >
-              <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
-              <span style={{ fontSize: 13.5, fontWeight: 700, color: st.full ? T.red : T.sub }}>
-                {st.full ? "Full" : `${st.remaining} left`}
-              </span>
-            </button>
+            <Pick
+              key={optionLabel(o)}
+              label={optionLabel(o)}
+              picks={arr}
+              onChange={onChange}
+              full={st.full}
+              right={st.full ? "Full" : `${st.remaining} left`}
+            />
           );
         })}
         {arr.length > 1 && (
@@ -372,6 +356,70 @@ function QuestionInput({ q, value, onChange, picks }) {
     );
   }
   return <Input value={value || ""} onChange={onChange} />;
+}
+
+/**
+ * One choice, and — if it's an "Other" — a box to say what.
+ *
+ * "I signed up and marked Other and put 'Drinks' in the text box."
+ *
+ * The box used to be a separate question, so the pick and the words behind it
+ * were two unrelated answers: the results counted one and listed the other
+ * somewhere else entirely. What's typed here is stored inside the pick, so a
+ * slot that says "Other (1)" can also say what the one is.
+ *
+ * Ticking Other doesn't demand the text. Somebody who taps it and moves on has
+ * still told you they're bringing something, and refusing the submission over
+ * a blank box would lose that.
+ */
+function Pick({ label, picks, onChange, full = false, right = null }) {
+  const at = picks.findIndex((p) => pickLabel(p) === label);
+  const on = at >= 0;
+  const other = isOtherOption(label);
+  const disabled = full && !on;
+
+  const toggle = () => {
+    if (on) return onChange(picks.filter((_, i) => i !== at));
+    return onChange([...picks, other ? { option: label, text: "" } : label]);
+  };
+
+  const setText = (text) => {
+    const next = [...picks];
+    next[at] = { option: label, text };
+    onChange(next);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <button
+        disabled={disabled}
+        aria-pressed={on}
+        onClick={toggle}
+        style={{
+          ...pickStyle(on),
+          opacity: disabled ? 0.55 : 1,
+          cursor: disabled ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", gap: 8,
+        }}
+      >
+        <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
+        {right && (
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: full ? T.red : T.sub }}>
+            {right}
+          </span>
+        )}
+      </button>
+      {on && other && (
+        <Input
+          value={pickText(picks[at])}
+          onChange={setText}
+          aria-label={`${label} — what are you bringing?`}
+          placeholder="What are you bringing?"
+          style={{ marginLeft: 12, width: "auto" }}
+        />
+      )}
+    </div>
+  );
 }
 
 function pickStyle(on) {

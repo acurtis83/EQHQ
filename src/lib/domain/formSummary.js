@@ -1,7 +1,7 @@
 import { fmtDate } from "./dates.js";
 import {
   normalizeOptions, optionLabel, capacityState, capacityTotals,
-  namesByOption, summarize,
+  namesByOption, summarize, unmatchedPicks,
 } from "./forms.js";
 
 /**
@@ -100,6 +100,8 @@ export function buildSummaryText({ form, questions, responses, byResponse, today
         ? who.names.join(", ")
         : (who.anonymous ? `${who.anonymous} anonymous` : "nobody yet");
       let line = `— ${parts.join(" ")}: ${listed}`;
+      // What they typed against an "Other" slot travels with the count.
+      if (who.notes?.length) line += ` — ${who.notes.join("; ")}`;
 
       if (cap && !cap.full) {
         const short = cap.limit - cap.taken;
@@ -107,6 +109,14 @@ export function buildSummaryText({ form, questions, responses, byResponse, today
         gaps.push(`— ${q.label}: ${label} (${short} still needed)`);
       }
       out.push(line);
+    }
+
+    // Answers recorded against a slot that has since been renamed. Left out,
+    // they'd be a sign-up that reached nobody: not in the count above, not in
+    // this summary, not anywhere.
+    for (const o of unmatchedPicks(q, rowsFor(q.id))) {
+      const listed = [...o.names, ...(o.anonymous ? [`${o.anonymous} anonymous`] : [])].join(", ");
+      out.push(`— ${o.label} (no longer a slot): ${listed}${o.notes?.length ? ` — ${o.notes.join("; ")}` : ""}`);
     }
     out.push("");
   }
