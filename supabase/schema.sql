@@ -478,6 +478,16 @@ create table if not exists teaching_assignments (
   talk_link text,
   notes text,
   no_lesson_reason text,
+  -- The Quick Summary members read on the feed: four fixed parts rather than
+  -- one blob, because the sheet is the same shape every week and a single
+  -- free-text column would have to be parsed back into those parts by every
+  -- screen that showed it. Takeaways are a real array for the same reason —
+  -- splitting a string on newlines in three places is how three screens come
+  -- to disagree about what an empty line means.
+  primer_idea text,
+  primer_takeaways text[],
+  primer_scripture text,
+  primer_question text,
   created_at timestamptz not null default now()
 );
 create index if not exists teaching_date_idx on teaching_assignments (date);
@@ -838,9 +848,24 @@ $$;
 -- with its owner's rights and so is NOT blocked by the underlying table's RLS.
 -- That is the intent here; the column list is the security boundary.
 
+-- Kept in step with supabase/lesson-primer.sql, column for column and in the
+-- same order. They diverged once and it cost a confusing error: a replace can
+-- only append columns, so the migration had to drop the view, and a fresh
+-- project built from this file would then have had a different shape from a
+-- migrated one.
 create or replace view public_lessons
 with (security_invoker = off) as
-  select date, teacher_name, talk_title, speaker, talk_link
+  select
+    date,
+    teacher_name,
+    topic,
+    talk_title,
+    speaker,
+    talk_link,
+    primer_idea,
+    primer_takeaways,
+    primer_scripture,
+    primer_question
   from teaching_assignments;
 
 create or replace view public_calendar_exceptions

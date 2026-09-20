@@ -40,8 +40,22 @@ alter table teaching_assignments
 -- with its owner's rights and isn't blocked by the table's RLS. That is the
 -- intent: the column list is the security boundary, because a select policy
 -- would expose every column of every matched row.
+--
+-- Dropped and rebuilt rather than replaced. `create or replace view` can only
+-- ADD columns at the end — it matches the existing ones by position, so
+-- putting `topic` third reads as renaming talk_title and Postgres refuses:
+--
+--   ERROR: cannot change name of view column "talk_title" to "topic"
+--
+-- Appending the new columns instead would have worked and left the view in a
+-- different shape here than in schema.sql, which is how a fresh project and a
+-- migrated one drift apart. Nothing depends on this view but the app, which
+-- selects by name, so dropping it costs nothing and both paths end up
+-- identical. The grant below is re-applied because dropping takes it too.
 
-create or replace view public_lessons
+drop view if exists public_lessons;
+
+create view public_lessons
 with (security_invoker = off) as
   select
     date,
