@@ -143,6 +143,28 @@ export function parsePrimer(text) {
 }
 
 /**
+ * How many of the four headings a piece of text actually uses.
+ *
+ * Exists because "did this parse" is not the same question for a person and
+ * for a model. A human pasting a draft may reasonably open with a sentence
+ * and no heading at all, and parsePrimer takes that as the big idea on
+ * purpose. A model that was handed the exact format and replied with prose
+ * has not written a primer — it has most likely declined, or explained
+ * itself, and "I'm sorry, I can't help with that" makes a perfectly good big
+ * idea as far as the parser is concerned.
+ *
+ * So the automated path asks this as well, and wants more than one: a stray
+ * "Scripture:" inside a paragraph of prose shouldn't qualify.
+ */
+export function countHeadings(text) {
+  let n = 0;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    if (splitHeading(line)) n += 1;
+  }
+  return n;
+}
+
+/**
  * The fields as the database stores them.
  *
  * Empty strings become null rather than "", so "has a primer" is one check
