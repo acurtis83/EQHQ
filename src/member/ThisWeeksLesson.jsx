@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CalendarRange } from "lucide-react";
+import { ArrowUpRight, CalendarRange, Zap } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T } from "../components/ui";
 import {
@@ -9,6 +9,8 @@ import {
 import { talkUrl } from "../presidency/Teaching";
 import { hasTalk, sundayLabel } from "../lib/domain/lesson";
 import TeachingSchedule from "./TeachingSchedule";
+import QuickSummary from "./QuickSummary";
+import { hasPrimer } from "../lib/domain/primer";
 
 // The coming Sunday the quorum gathers — today counts if it's Sunday.
 function nextGatheringSunday(fromIso) {
@@ -57,6 +59,7 @@ const PILL = {
 
 export default function ThisWeeksLesson() {
   const [showSchedule, setShowSchedule] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const [state, setState] = useState({ loading: true });
 
   useEffect(() => {
@@ -230,6 +233,21 @@ export default function ThisWeeksLesson() {
           </a>
         )}
 
+        {/* "Great for those first sitting down in EQ to get up to speed."
+            Next to Read the talk, and only when there is one — a button that
+            opens an empty sheet is worse than no button. It sits second
+            because the talk itself is still the thing to read; this is the
+            way in for somebody who hasn't. */}
+        {!reason && hasPrimer(row) && (
+          <button
+            onClick={() => setShowSummary(true)}
+            style={{ ...PILL, cursor: "pointer", font: "inherit", fontSize: 14, fontWeight: 600 }}
+          >
+            <Zap size={14} />
+            Quick Summary
+          </button>
+        )}
+
         {/* The way in to the full schedule. Members have no navigation of
             their own — the feed is the whole app for them — so this is the
             only place a teacher could reasonably find it. */}
@@ -242,6 +260,7 @@ export default function ThisWeeksLesson() {
         </button>
       </div>
 
+      {showSummary && <QuickSummary row={row} onClose={() => setShowSummary(false)} />}
       {showSchedule && <TeachingSchedule onClose={() => setShowSchedule(false)} />}
     </div>
   );

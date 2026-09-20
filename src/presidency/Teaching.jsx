@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Wand2, X, ExternalLink, CalendarOff, Search, Repeat, Check } from "lucide-react";
+import {
+  Wand2, X, ExternalLink, CalendarOff, Search, Repeat, Check, Zap, ClipboardPaste,
+} from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn, Input, Area, Select, Chip, Empty } from "../components/ui";
 import { fmtDate, toIso, isoParts, scheduleBetween, NO_LESSON } from "../lib/domain/dates";
@@ -8,6 +10,9 @@ import {
   SLOTS, slotLabel, rotationFromRows, teacherFor, pendingRotation, memberFor,
   emptySlots, assignmentFields,
 } from "../lib/domain/teachingRotation";
+import {
+  parsePrimer, primerColumns, primerFromRow, isEmptyPrimer,
+} from "../lib/domain/primer";
 
 // Prefer the real direct link. The search URL is only a fallback for talks
 // typed in by hand, where we have a title but no link.
@@ -537,6 +542,7 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
   const [talkLink, setTalkLink] = useState(row?.talk_link || "");
   const [notes, setNotes] = useState(row?.notes || "");
   const [talkQuery, setTalkQuery] = useState("");
+  const [primer, setPrimer] = useState(() => primerFromRow(row));
 
   const matches = useMemo(() => {
     const q = talkQuery.trim().toLowerCase();
@@ -637,6 +643,8 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
             <Area value={notes} onChange={setNotes} rows={2} placeholder="Anything the teacher should know" />
           </Lbl>
 
+          <PrimerEditor value={primer} onChange={setPrimer} />
+
           <Btn
             kind="primary" size="lg" style={{ justifyContent: "center" }}
             onClick={() => onSave({
@@ -648,6 +656,7 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
               talk_link: talkLink.trim() || null,
               notes: notes.trim() || null,
               no_lesson_reason: null,
+              ...primerColumns(primer),
             })}
           >
             Save
@@ -662,6 +671,111 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
         </>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * The Quick Summary, as the presidency fills it in.
+ *
+ * Four fields rather than one box, because the sheet members read is four
+ * fixed parts in a fixed order — and a single box would have to be parsed
+ * back into them every time anybody looked at it.
+ *
+ * Collapsed until you want it. It's the longest thing on this sheet and it is
+ * not filled in every week, so unfolded by default it pushes Save off the
+ * screen on a phone for the many Sundays nobody writes one.
+ *
+ * The paste box is the point, for now. There's no AI in a page with no server
+ * to keep a key in, so a summary gets drafted somewhere else and arrives here
+ * as text — headed sections, bulleted takeaways, whatever shape it came out
+ * in. parsePrimer sorts it into the fields, which then get checked and edited
+ * like anything else: the paste is a shortcut past the typing, not a promise
+ * that what was pasted is right. The same parser is what a "Draft it" button
+ * would fill these in with if the server function ever gets built.
+ */
+function PrimerEditor({ value, onChange }) {
+  const [open, setOpen] = useState(() => !isEmptyPrimer(value));
+  const [paste, setPaste] = useState("");
+  const set = (k, v) => onChange({ ...value, [k]: v });
+
+  const applyPaste = () => {
+    const parsed = parsePrimer(paste);
+    if (isEmptyPrimer(parsed)) return;
+    onChange(parsed);
+    setPaste("");
+  };
+
+  return (
+    <div style={{ ...card, background: T.inset, padding: 13, display: "flex", flexDirection: "column", gap: 10 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, width: "100%",
+          background: "transparent", border: "none", padding: 0, cursor: "pointer",
+          font: "inherit", textAlign: "left",
+        }}
+      >
+        <Zap size={15} style={{ color: T.primaryDeep, flex: "0 0 auto" }} />
+        <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, flex: 1, minWidth: 0 }}>
+          Quick Summary
+        </span>
+        {!isEmptyPrimer(value) && <Chip color={T.green} bg={T.greenSoft}>Written</Chip>}
+        <span style={{ fontSize: 13.5, color: T.sub }}>{open ? "Hide" : "Add"}</span>
+      </button>
+
+      {open && (
+        <>
+          <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5 }}>
+            What a brother sees if he taps Quick Summary on the feed. Leave it
+            blank and no button appears.
+          </div>
+
+          <Lbl label="Paste a draft">
+            <Area
+              value={paste} onChange={setPaste} rows={3}
+              aria-label="Paste a draft summary"
+              placeholder="Paste a summary here and it'll be split into the boxes below."
+            />
+          </Lbl>
+          {paste.trim() && (
+            <Btn kind="soft" size="sm" onClick={applyPaste} style={{ alignSelf: "flex-start" }}>
+              <ClipboardPaste size={14} />Fill the boxes
+            </Btn>
+          )}
+
+          <Lbl label="The big idea">
+            <Area value={value.idea} onChange={(v) => set("idea", v)} rows={2}
+              aria-label="The big idea"
+              placeholder="One or two sentences — the thing to keep if you keep nothing else" />
+          </Lbl>
+
+          <Lbl label="Takeaways — one per line">
+            <Area
+              rows={4}
+              aria-label="Takeaways"
+              value={(value.takeaways || []).join("\n")}
+              // Split on save rather than on every keystroke: splitting as you
+              // type means pressing Return creates an empty item that the next
+              // render filters away, and the caret jumps to the line above.
+              onChange={(v) => set("takeaways", v.split("\n"))}
+              placeholder={"Grace isn't a reward for effort\nSmall consistent acts beat big gestures"}
+            />
+          </Lbl>
+
+          <Lbl label="Scripture">
+            <Input value={value.scripture} onChange={(v) => set("scripture", v)}
+              aria-label="Scripture"
+              placeholder="Mosiah 5:7" />
+          </Lbl>
+
+          <Lbl label="Worth thinking about">
+            <Area value={value.question} onChange={(v) => set("question", v)} rows={2}
+              aria-label="Worth thinking about"
+              placeholder="A question to sit with" />
+          </Lbl>
+        </>
+      )}
+    </div>
   );
 }
 
