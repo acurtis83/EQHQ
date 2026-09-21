@@ -1,7 +1,7 @@
 import { render, screen, cleanup, act, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
-  parsePrimer, primerColumns, primerFromRow, isEmptyPrimer, hasPrimer, primerToText,
+  parsePrimer, primerColumns, primerFromRow, isEmptyPrimer, hasPrimer, primerToText, primerOrPaste,
 } from "../src/lib/domain/primer";
 
 /**
@@ -272,5 +272,39 @@ describe("the Quick Summary button", () => {
     const dom = await mountLesson();
     expect(dom.container.textContent).toMatch(/no quorum meeting/i);
     expect(summaryBtn()).toBeUndefined();
+  });
+});
+
+/* --------------------- a paste that was never applied --------------------- */
+
+/**
+ * "i just saved the summary and dont see the quick summary"
+ *
+ * The paste box is a staging area and it is the FIELDS that get saved, so
+ * pasting and then pressing Save — the obvious thing to do — discarded the
+ * paste and wrote four nulls. Silently: no error, no warning, and the only
+ * symptom was a button that never appeared on the feed.
+ */
+describe("saving with text still in the paste box", () => {
+  const DRAFT = "THE BIG IDEA\nGrace comes first.\n\nSCRIPTURE\nAlma 32:21";
+
+  it("rescues it rather than writing nulls", () => {
+    const empty = { idea: "", takeaways: [], scripture: "", question: "" };
+    const out = primerOrPaste(empty, DRAFT);
+    expect(out.idea).toBe("Grace comes first.");
+    expect(primerColumns(out).primer_idea).toBe("Grace comes first.");
+  });
+
+  it("but never overwrites fields somebody filled in", () => {
+    // Those may have been edited after the paste, and an edit is a more
+    // deliberate act than leaving text in a box.
+    const edited = { idea: "My own wording.", takeaways: [], scripture: "", question: "" };
+    expect(primerOrPaste(edited, DRAFT).idea).toBe("My own wording.");
+  });
+
+  it("and leaves an empty primer empty when the paste is junk", () => {
+    const empty = { idea: "", takeaways: [], scripture: "", question: "" };
+    expect(isEmptyPrimer(primerOrPaste(empty, "   "))).toBe(true);
+    expect(primerColumns(primerOrPaste(empty, "")).primer_idea).toBeNull();
   });
 });

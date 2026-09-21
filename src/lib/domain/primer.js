@@ -165,6 +165,29 @@ export function countHeadings(text) {
 }
 
 /**
+ * The fields, or a pasted draft that was never applied.
+ *
+ * "i just saved the summary and dont see the quick summary"
+ *
+ * The paste box is a staging area: text goes in, "Fill the boxes" parses it
+ * into the four fields, and it is the FIELDS that get saved. Which means
+ * pasting and then pressing Save — the obvious thing to do, and the thing
+ * anybody would do — discarded the paste and wrote four nulls. Silently, and
+ * the only symptom was a button that never appeared.
+ *
+ * So a pending paste counts. The explicit button stays, because seeing what
+ * was read before saving is worth having, but forgetting it is no longer a
+ * way to lose your work. Fields already filled in win: they may have been
+ * edited after the paste, and an edit is a more deliberate act than leaving
+ * text in a box.
+ */
+export function primerOrPaste(primer, paste) {
+  if (!isEmptyPrimer(primer)) return primer;
+  const parsed = parsePrimer(paste);
+  return isEmptyPrimer(parsed) ? primer : parsed;
+}
+
+/**
  * The fields as the database stores them.
  *
  * Empty strings become null rather than "", so "has a primer" is one check

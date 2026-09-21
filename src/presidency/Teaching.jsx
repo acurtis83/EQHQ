@@ -11,7 +11,7 @@ import {
   emptySlots, assignmentFields,
 } from "../lib/domain/teachingRotation";
 import {
-  parsePrimer, primerColumns, primerFromRow, isEmptyPrimer,
+  parsePrimer, primerColumns, primerFromRow, isEmptyPrimer, primerOrPaste,
 } from "../lib/domain/primer";
 
 // Prefer the real direct link. The search URL is only a fallback for talks
@@ -543,6 +543,9 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
   const [notes, setNotes] = useState(row?.notes || "");
   const [talkQuery, setTalkQuery] = useState("");
   const [primer, setPrimer] = useState(() => primerFromRow(row));
+  // Held here rather than inside PrimerEditor so Save can rescue a paste that
+  // was never applied — see primerOrPaste.
+  const [primerPaste, setPrimerPaste] = useState("");
 
   const matches = useMemo(() => {
     const q = talkQuery.trim().toLowerCase();
@@ -643,7 +646,10 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
             <Area value={notes} onChange={setNotes} rows={2} placeholder="Anything the teacher should know" />
           </Lbl>
 
-          <PrimerEditor value={primer} onChange={setPrimer} />
+          <PrimerEditor
+            value={primer} onChange={setPrimer}
+            paste={primerPaste} setPaste={setPrimerPaste}
+          />
 
           <Btn
             kind="primary" size="lg" style={{ justifyContent: "center" }}
@@ -656,7 +662,7 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
               talk_link: talkLink.trim() || null,
               notes: notes.trim() || null,
               no_lesson_reason: null,
-              ...primerColumns(primer),
+              ...primerColumns(primerOrPaste(primer, primerPaste)),
             })}
           >
             Save
@@ -693,16 +699,30 @@ function AssignSheet({ sunday, row, members, talks, rotation, isStakeConf, onClo
  * that what was pasted is right. The same parser is what a "Draft it" button
  * would fill these in with if the server function ever gets built.
  */
-function PrimerEditor({ value, onChange }) {
+function PrimerEditor({ value, onChange, paste, setPaste }) {
   const [open, setOpen] = useState(() => !isEmptyPrimer(value));
-  const [paste, setPaste] = useState("");
   const set = (k, v) => onChange({ ...value, [k]: v });
 
   const applyPaste = () => {
     const parsed = parsePrimer(paste);
     if (isEmptyPrimer(parsed)) return;
     onChange(parsed);
-    setPaste("");
+  };
+
+  /**
+   * Fill the boxes as soon as something pasteable arrives.
+   *
+   * This box exists to be pasted into, so parsing on arrival is what somebody
+   * expects to happen — and it means the button below is a way to re-apply
+   * after an edit rather than a step you can miss. The text is left in place
+   * so you can see what was read against what it produced.
+   */
+  const onPaste = (v) => {
+    setPaste(v);
+    if (isEmptyPrimer(value)) {
+      const parsed = parsePrimer(v);
+      if (!isEmptyPrimer(parsed)) onChange(parsed);
+    }
   };
 
   return (
@@ -732,14 +752,14 @@ function PrimerEditor({ value, onChange }) {
 
           <Lbl label="Paste a draft">
             <Area
-              value={paste} onChange={setPaste} rows={3}
+              value={paste} onChange={onPaste} rows={3}
               aria-label="Paste a draft summary"
               placeholder="Paste a summary here and it'll be split into the boxes below."
             />
           </Lbl>
           {paste.trim() && (
             <Btn kind="soft" size="sm" onClick={applyPaste} style={{ alignSelf: "flex-start" }}>
-              <ClipboardPaste size={14} />Fill the boxes
+              <ClipboardPaste size={14} />Fill the boxes again
             </Btn>
           )}
 
