@@ -112,6 +112,44 @@ describe("reading a pasted draft", () => {
     expect(p.idea).toBe("First.\n\nSecond.");
   });
 
+  it("puts a wrapped bullet back together", () => {
+    // "I had to go in and fix the takeaway points so split line sentences
+    //  didnt split into multiple bullet points"
+    //
+    // A draft arrives hard-wrapped by whatever wrote it. Treating every line
+    // as a new bullet turned four points into eleven fragments, each starting
+    // mid-sentence — and it had to be unpicked by hand, which is the whole
+    // job the paste box exists to remove.
+    const p = parsePrimer(`TAKEAWAYS
+• A literal resurrection changes how you carry mortality: deficiencies are
+  temporary, and even a premature death is not the end of anyone's identity
+• Peacemaking isn't only for bishops mediating disputes — it's parents
+  raising children in righteousness`);
+    expect(p.takeaways).toHaveLength(2);
+    expect(p.takeaways[0]).toBe(
+      "A literal resurrection changes how you carry mortality: deficiencies are " +
+      "temporary, and even a premature death is not the end of anyone's identity"
+    );
+    expect(p.takeaways[1]).toContain("parents raising children in righteousness");
+  });
+
+  it("across three lines just the same", () => {
+    const p = parsePrimer("Takeaways\n- one part\n  second part\n  third part\n- a new point");
+    expect(p.takeaways).toEqual(["one part second part third part", "a new point"]);
+  });
+
+  it("and numbered lists start new points too", () => {
+    const p = parsePrimer("Takeaways\n1. First point that\n   wraps here\n2. Second point");
+    expect(p.takeaways).toEqual(["First point that wraps here", "Second point"]);
+  });
+
+  it("but a list with no markers is still one per line", () => {
+    // With nothing marking the starts, every line must be one — there's
+    // nothing else it could mean.
+    const p = parsePrimer("Takeaways\nFirst thing\nSecond thing\nThird thing");
+    expect(p.takeaways).toEqual(["First thing", "Second thing", "Third thing"]);
+  });
+
   it("and reads nothing out of nothing", () => {
     expect(isEmptyPrimer(parsePrimer(""))).toBe(true);
     expect(isEmptyPrimer(parsePrimer("   \n\n  "))).toBe(true);
