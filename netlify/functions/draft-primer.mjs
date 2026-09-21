@@ -60,8 +60,26 @@ const env = (name) => process.env[name] || "";
  */
 const secretKey = () => env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
 
+/**
+ * The project URL, from whichever name it's already under.
+ *
+ * VITE_SUPABASE_URL is set because the app needs it: Vite only compiles a
+ * variable into the browser bundle if its name starts with VITE_, which is an
+ * opt-in gate against publishing a secret by accident. Netlify hands functions
+ * every variable whatever its prefix, so this can read the one that already
+ * exists rather than asking for a second copy of the same string — two copies
+ * of a value is two places to change it and one of them to forget.
+ *
+ * Deliberately NOT done for the secret key. A VITE_ fallback there would mean
+ * a key that bypasses row-level security could be picked up from a variable
+ * whose whole purpose is to be published, and the one time somebody set it
+ * that way nothing would complain. The asymmetry is the point: this URL is
+ * already public, that key never can be.
+ */
+const projectUrl = () => env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
+
 async function supabase(path, init = {}) {
-  const url = `${env("SUPABASE_URL").replace(/\/$/, "")}/rest/v1/${path}`;
+  const url = `${projectUrl().replace(/\/$/, "")}/rest/v1/${path}`;
   const res = await fetch(url, {
     ...init,
     headers: {
@@ -100,8 +118,11 @@ async function draft({ title, speaker, text }) {
  * run report the same way and a log line is worth reading.
  */
 export async function run({ date, dry = false } = {}) {
-  for (const need of ["SUPABASE_URL", "ANTHROPIC_API_KEY"]) {
-    if (!env(need)) return { ok: false, did: `${need} isn't set in Netlify.` };
+  if (!env("ANTHROPIC_API_KEY")) {
+    return { ok: false, did: "ANTHROPIC_API_KEY isn't set in Netlify." };
+  }
+  if (!projectUrl()) {
+    return { ok: false, did: "SUPABASE_URL isn't set in Netlify (VITE_SUPABASE_URL also works)." };
   }
   if (!secretKey()) {
     return { ok: false, did: "SUPABASE_SECRET_KEY isn't set in Netlify (SUPABASE_SERVICE_ROLE_KEY also works)." };

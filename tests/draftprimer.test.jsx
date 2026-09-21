@@ -242,6 +242,31 @@ describe("a scheduled run", () => {
     expect(PATCHED, "an unreadable draft was saved anyway").toBeNull();
   });
 
+  it("uses the project URL the app already has", async () => {
+    // VITE_SUPABASE_URL is set because the browser needs it. Asking for a
+    // second copy under another name is two places to change one string.
+    delete process.env.SUPABASE_URL;
+    process.env.VITE_SUPABASE_URL = "https://example.supabase.co";
+    const out = await run({ date: "2026-09-27" });
+    expect(out.ok).toBe(true);
+    expect(PATCHED).toBeTruthy();
+    delete process.env.VITE_SUPABASE_URL;
+  });
+
+  it("but never takes the secret key from a VITE_ variable", async () => {
+    // Anything named VITE_ is compiled into the bundle every member
+    // downloads. A key that bypasses row-level security must not be
+    // reachable from one, even if somebody sets it there by mistake.
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY = "sb_secret_leaked";
+    process.env.VITE_SUPABASE_SECRET_KEY = "sb_secret_leaked";
+    const out = await run({ date: "2026-09-27" });
+    expect(out.ok, "it picked up a key from a published variable").toBe(false);
+    expect(PATCHED).toBeNull();
+    delete process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.VITE_SUPABASE_SECRET_KEY;
+  });
+
   it("takes the newer Supabase secret key under its own name", async () => {
     // Supabase is retiring service_role in favour of sb_secret_... Either
     // name works, so a project on the new keys doesn't end up with a variable

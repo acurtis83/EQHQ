@@ -23,15 +23,20 @@ function for why each of those matters.
 
 ### What you have to set up, once
 
-Three environment variables, in **Netlify → Site configuration → Environment
-variables**. None of them go in `.env`, and none of them get a `VITE_` prefix:
-anything prefixed `VITE_` is compiled into the JavaScript every member
-downloads.
+Two environment variables to add, in **Netlify → Site configuration →
+Environment variables**.
+
+A word on the `VITE_` prefix, since the site already has two of those. Vite
+only compiles a variable into the JavaScript the browser downloads if its name
+starts with `VITE_` — an opt-in gate, so a secret can't be published by
+accident. Netlify hands *functions* every variable whatever its prefix, which
+is why this one can reuse the project URL that's already there and why neither
+of the keys below may ever be given that prefix.
 
 | variable | where it comes from |
 | --- | --- |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys. Needs a card on the account. |
-| `SUPABASE_URL` | Supabase → Project Settings → API → Project URL. Same one the app uses. |
+| `SUPABASE_URL` | **Already set** as `VITE_SUPABASE_URL` — the function reads that, so there's nothing to add. |
 | `SUPABASE_SECRET_KEY` | Supabase → Settings → API Keys → **Secret key** (`sb_secret_…`). |
 
 On an older project that tab may not exist yet — then it's Settings → API →
