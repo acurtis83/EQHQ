@@ -93,6 +93,25 @@ describe("reading a pasted draft", () => {
     expect(p.question).toBe("");
   });
 
+  it("keeps a paragraph break the writer put in", () => {
+    // Two paragraphs run together into one slab is exactly the clunkiness a
+    // summary is supposed to save you from.
+    const p = parsePrimer("THE BIG IDEA\nFirst thought.\n\nSecond thought.");
+    expect(p.idea).toBe("First thought.\n\nSecond thought.");
+  });
+
+  it("but rejoins a sentence that was merely hard-wrapped", () => {
+    // A pasted draft is wrapped by whatever wrote it, so one sentence can
+    // arrive across several lines. Those are not paragraphs.
+    const p = parsePrimer("THE BIG IDEA\nOne sentence that happens\nto be wrapped across lines.");
+    expect(p.idea).toBe("One sentence that happens to be wrapped across lines.");
+  });
+
+  it("and a run of blank lines is still one break", () => {
+    const p = parsePrimer("THE BIG IDEA\nFirst.\n\n\n\nSecond.");
+    expect(p.idea).toBe("First.\n\nSecond.");
+  });
+
   it("and reads nothing out of nothing", () => {
     expect(isEmptyPrimer(parsePrimer(""))).toBe(true);
     expect(isEmptyPrimer(parsePrimer("   \n\n  "))).toBe(true);

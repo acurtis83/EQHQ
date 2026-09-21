@@ -78,8 +78,14 @@ export default function QuickSummary({ row, onClose }) {
             <section data-primer="idea">
               <Eyebrow>The Big Idea</Eyebrow>
               {/* The one line somebody would keep if they kept nothing else,
-                  so it's set larger than everything under it. */}
-              <div style={{ fontSize: 17.5, lineHeight: 1.5, color: T.ink, marginTop: 5 }}>
+                  so it's set larger than everything under it. pre-line keeps
+                  any paragraph break the writer put in; without it two
+                  paragraphs render as one slab, which is the thing a summary
+                  is meant to save you from. */}
+              <div style={{
+                fontSize: 17.5, lineHeight: 1.5, color: T.ink, marginTop: 5,
+                whiteSpace: "pre-line",
+              }}>
                 {p.idea}
               </div>
             </section>
