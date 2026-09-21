@@ -242,6 +242,27 @@ describe("a scheduled run", () => {
     expect(PATCHED, "an unreadable draft was saved anyway").toBeNull();
   });
 
+  it("takes the newer Supabase secret key under its own name", async () => {
+    // Supabase is retiring service_role in favour of sb_secret_... Either
+    // name works, so a project on the new keys doesn't end up with a variable
+    // called SERVICE_ROLE holding something else.
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SECRET_KEY = "sb_secret_abc";
+    const out = await run({ date: "2026-09-27" });
+    expect(out.ok).toBe(true);
+    expect(PATCHED).toBeTruthy();
+    delete process.env.SUPABASE_SECRET_KEY;
+  });
+
+  it("and says which one to set when neither is there", async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const out = await run({ date: "2026-09-27" });
+    expect(out.ok).toBe(false);
+    expect(out.did).toContain("SUPABASE_SECRET_KEY");
+    expect(out.did, "the older name isn't mentioned as a fallback")
+      .toContain("SUPABASE_SERVICE_ROLE_KEY");
+  });
+
   it("says so rather than throwing when a key is missing", async () => {
     // A scheduled job that crashes leaves a stack trace nobody reads. This
     // has to name the thing to go and fix.

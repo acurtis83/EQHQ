@@ -32,7 +32,16 @@ downloads.
 | --- | --- |
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys. Needs a card on the account. |
 | `SUPABASE_URL` | Supabase → Project Settings → API → Project URL. Same one the app uses. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → `service_role`. **Not** the anon key. |
+| `SUPABASE_SECRET_KEY` | Supabase → Settings → API Keys → **Secret key** (`sb_secret_…`). |
+
+On an older project that tab may not exist yet — then it's Settings → API →
+Project API keys → **`service_role`** (Reveal), and the variable is called
+`SUPABASE_SERVICE_ROLE_KEY` instead. The function takes either name. Supabase
+is retiring `service_role`, so use the newer secret key if your project offers
+one.
+
+Either way it is **not** the anon / publishable key. That one is meant to be
+public and ships in the app; it also can't write to `teaching_assignments`.
 
 A word on that last one. The service role key bypasses row-level security
 completely — it can read and write every table regardless of policy. It is the

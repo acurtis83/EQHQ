@@ -48,13 +48,25 @@ export function nextGathering(fromIso) {
 
 const env = (name) => process.env[name] || "";
 
+/**
+ * The key that can write to the database, under either of its names.
+ *
+ * Supabase is replacing `service_role` with a `sb_secret_...` key and will
+ * retire the old one. Both are sent exactly the same way, so which one a
+ * project has is not this function's business — but the variable NAME would
+ * otherwise be a small lie sitting in Netlify for a year, and the kind of
+ * thing that sends somebody hunting for a service_role key their project no
+ * longer offers. Either name works; the newer one wins if both are set.
+ */
+const secretKey = () => env("SUPABASE_SECRET_KEY") || env("SUPABASE_SERVICE_ROLE_KEY");
+
 async function supabase(path, init = {}) {
   const url = `${env("SUPABASE_URL").replace(/\/$/, "")}/rest/v1/${path}`;
   const res = await fetch(url, {
     ...init,
     headers: {
-      apikey: env("SUPABASE_SERVICE_ROLE_KEY"),
-      Authorization: `Bearer ${env("SUPABASE_SERVICE_ROLE_KEY")}`,
+      apikey: secretKey(),
+      Authorization: `Bearer ${secretKey()}`,
       "Content-Type": "application/json",
       ...(init.headers || {}),
     },
@@ -88,8 +100,11 @@ async function draft({ title, speaker, text }) {
  * run report the same way and a log line is worth reading.
  */
 export async function run({ date, dry = false } = {}) {
-  for (const need of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "ANTHROPIC_API_KEY"]) {
+  for (const need of ["SUPABASE_URL", "ANTHROPIC_API_KEY"]) {
     if (!env(need)) return { ok: false, did: `${need} isn't set in Netlify.` };
+  }
+  if (!secretKey()) {
+    return { ok: false, did: "SUPABASE_SECRET_KEY isn't set in Netlify (SUPABASE_SERVICE_ROLE_KEY also works)." };
   }
 
   const sunday = date || nextGathering(toIso(new Date()));
