@@ -363,6 +363,24 @@ describe("running it by hand", () => {
     expect(PATCHED).toBeNull();
   });
 
+  it("isn't defeated by whitespace on a pasted value", async () => {
+    // Pasting into an environment-variable field picks up a trailing newline
+    // more often than anyone admits, and the failure is indistinguishable
+    // from a wrong token: a bare 404 with nothing to go on.
+    process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string\n";
+    const out = await call("token=a-long-random-string&date=2026-09-27");
+    expect(out.status).toBe(200);
+    expect(PATCHED).toBeTruthy();
+  });
+
+  it("but a genuinely different token still fails", async () => {
+    // Trimming must not become "close enough".
+    process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string";
+    expect((await call("token=a-long-random-strin&dry=1")).status).toBe(404);
+    expect((await call("token=A-LONG-RANDOM-STRING&dry=1")).status).toBe(404);
+    expect(PATCHED).toBeNull();
+  });
+
   it("runs with the right token", async () => {
     process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string";
     const out = await call("token=a-long-random-string&date=2026-09-27");

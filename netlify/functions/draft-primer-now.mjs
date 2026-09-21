@@ -25,15 +25,22 @@ import { run } from "../../src/lib/draftPrimer.mjs";
  * requests is a way to learn the token one character at a time.
  */
 function sameToken(given, want) {
-  if (!want || !given || given.length !== want.length) return false;
+  // Trimmed on both sides. Pasting into an environment-variable field picks up
+  // a trailing space or newline more often than anyone admits, and a token
+  // that is right except for an invisible character fails in exactly the same
+  // way as a wrong one — a bare 404 with nothing to go on. Whitespace at
+  // either end of a secret is never meaningful, so it is never the difference.
+  const a = String(given || "").trim();
+  const b = String(want || "").trim();
+  if (!a || !b || a.length !== b.length) return false;
   let diff = 0;
-  for (let i = 0; i < want.length; i += 1) diff |= given.charCodeAt(i) ^ want.charCodeAt(i);
+  for (let i = 0; i < b.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
 
 export default async function handler(req) {
   const url = new URL(req.url);
-  const want = process.env.PRIMER_TRIGGER_TOKEN || "";
+  const want = (process.env.PRIMER_TRIGGER_TOKEN || "").trim();
 
   if (!want) {
     return new Response(
