@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stripTags, talkBody, looksLikeTalk } from "../src/lib/domain/talkText";
 import { primerPrompt, readReply, SYSTEM } from "../src/lib/domain/primerPrompt";
-import { run, nextGathering } from "../netlify/functions/draft-primer.mjs";
+import { run, nextGathering } from "../src/lib/draftPrimer.mjs";
 
 /**
  * The weekly draft.
@@ -318,5 +318,63 @@ describe("which Sunday it picks", () => {
     const picked = nextGathering("2026-03-31");
     expect(picked).not.toBe("2026-04-05");
     expect(picked > "2026-04-05").toBe(true);
+  });
+});
+
+/* ------------------------ the hand-triggered endpoint --------------------- */
+
+/**
+ * A Netlify function with a schedule is schedule-ONLY — Netlify answers 403 to
+ * any HTTP request for it. Right for a job that spends money and writes to the
+ * database, and it means the documented ?dry=1 test could never have worked in
+ * production. So the manual run is a second, public endpoint, and being public
+ * is exactly why it's guarded.
+ */
+describe("running it by hand", () => {
+  const call = async (query) => {
+    const { default: handler } = await import("../netlify/functions/draft-primer-now.mjs");
+    const res = await handler(new Request(`https://eqhq.netlify.app/x?${query}`));
+    return { status: res.status, body: await res.text() };
+  };
+
+  it("refuses everything when no token is configured", async () => {
+    // Fails closed. An endpoint that stands open because a variable wasn't
+    // set works perfectly for months and then costs whatever somebody feels
+    // like costing the day they find it.
+    delete process.env.PRIMER_TRIGGER_TOKEN;
+    const out = await call("dry=1");
+    expect(out.status).toBe(503);
+    expect(out.body).toContain("PRIMER_TRIGGER_TOKEN");
+    expect(PATCHED).toBeNull();
+  });
+
+  it("gives a wrong token nothing to learn from", async () => {
+    process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string";
+    const out = await call("token=wrong&dry=1");
+    expect(out.status).toBe(404);
+    // No hint that the endpoint exists, let alone why the token failed.
+    expect(out.body).not.toContain("PRIMER_TRIGGER_TOKEN");
+    expect(PATCHED).toBeNull();
+  });
+
+  it("and no token at all is the same answer", async () => {
+    process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string";
+    expect((await call("dry=1")).status).toBe(404);
+    expect(PATCHED).toBeNull();
+  });
+
+  it("runs with the right token", async () => {
+    process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string";
+    const out = await call("token=a-long-random-string&date=2026-09-27");
+    expect(out.status).toBe(200);
+    expect(PATCHED, "the right token didn't get through").toBeTruthy();
+  });
+
+  it("and a dry run still writes nothing", async () => {
+    process.env.PRIMER_TRIGGER_TOKEN = "a-long-random-string";
+    const out = await call("token=a-long-random-string&date=2026-09-27&dry=1");
+    expect(out.status).toBe(200);
+    expect(JSON.parse(out.body).primer.idea).toBeTruthy();
+    expect(PATCHED).toBeNull();
   });
 });

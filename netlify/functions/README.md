@@ -7,6 +7,7 @@ browser can't do the job:
 | --- | --- |
 | `conference-talks.js` | churchofjesuschrist.org sends no CORS headers, so a page can't fetch it |
 | `draft-primer.mjs` | holds an API key, which anything in the bundle would publish |
+| `draft-primer-now.mjs` | the same job, run by hand — see below |
 
 ---
 
@@ -63,16 +64,33 @@ month on the Anthropic side; Netlify's free tier covers the invocation.
 
 ### Checking it without waiting for Tuesday
 
+`draft-primer` itself cannot be called over HTTP. A Netlify function with a
+`schedule` in its config is schedule-only and answers **403** to any request —
+which is the behaviour you want for a job that spends money and writes to the
+database, but it means there is nothing to curl.
+
+So the manual run is a second endpoint, `draft-primer-now`, guarded by a token
+you invent. Add a fourth variable:
+
+| variable | value |
+| --- | --- |
+| `PRIMER_TRIGGER_TOKEN` | any long random string you make up |
+
+It **fails closed**: with that variable unset the endpoint refuses everything
+with a 503. A wrong token gets a bare 404 that says nothing about why. This is
+a public URL that costs money on every call, so it does not stand open just
+because a variable was forgotten.
+
 ```
 # what it would do, writing nothing
-curl "https://eqhq.netlify.app/.netlify/functions/draft-primer?dry=1"
+curl "https://eqhq.netlify.app/.netlify/functions/draft-primer-now?token=YOUR_TOKEN&dry=1"
 
-# a particular Sunday
-curl "https://eqhq.netlify.app/.netlify/functions/draft-primer?date=2026-09-27"
+# a particular Sunday, for real
+curl "https://eqhq.netlify.app/.netlify/functions/draft-primer-now?token=YOUR_TOKEN&date=2026-09-27"
 ```
 
 Both return JSON with a `did` field saying in words what happened — including
-naming a missing environment variable, rather than throwing a stack trace into
+naming a missing environment variable rather than throwing a stack trace into
 a log nobody reads. The scheduled run logs the same line, under
 **Netlify → Logs → Functions**.
 
