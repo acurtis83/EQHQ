@@ -98,6 +98,65 @@ export function actionFor(post) {
 }
 
 /**
+ * Posts, with a multi-date assignment showing the date it next happens.
+ *
+ * "why is the Stake Temple Cleaning assignment not showing on the FEED or
+ *  upcoming events?"
+ *
+ * Because a post carries one date and that assignment has five. It was
+ * stamped with the first, and the morning after that date passed the whole
+ * thing left the feed with four still to come — silently, because from the
+ * feed's point of view it had simply happened.
+ *
+ * The real dates live in the planner, and this folds them back in: a post
+ * with dates ahead of it reports the next one, and keeps reporting the next
+ * one until they're all behind. A post with none — which is almost all of
+ * them — is returned exactly as it was.
+ *
+ * `remaining` is how many dates are still to come, so a row can say "5 dates"
+ * rather than pretending to be a single evening. `form_id` is the form for
+ * that particular date when a shift has its own sign-up sheet.
+ *
+ * @param {object[]} posts
+ * @param {object[]} dates  rows from public_event_dates: { post_id, event_date, ... }
+ * @param {string}   todayIso
+ */
+export function withEventDates(posts = [], dates = [], todayIso = "") {
+  const today = String(todayIso || "").slice(0, 10);
+  const byPost = new Map();
+  for (const d of dates || []) {
+    if (!d?.post_id || !d?.event_date) continue;
+    if (String(d.event_date) < today) continue;
+    const list = byPost.get(d.post_id) || [];
+    list.push(d);
+    byPost.set(d.post_id, list);
+  }
+  for (const list of byPost.values()) {
+    list.sort((a, b) => String(a.event_date).localeCompare(String(b.event_date)));
+  }
+
+  return (posts || []).map((p) => {
+    const own = byPost.get(p?.id);
+    // No dates of its own, or every one of them is past: leave the post
+    // alone. Falling back to the planner's first date would resurrect a
+    // finished series months later, which is the mirror of the bug this
+    // fixes and every bit as confusing.
+    if (!own?.length) return p;
+    const next = own[0];
+    return {
+      ...p,
+      event_date: next.event_date,
+      event_time: next.event_time || p.event_time,
+      // A form on the date beats the event's general one — that's how a
+      // particular shift gets its own sheet, and it's the rule the Sunday
+      // agenda already follows.
+      form_id: next.form_id || p.form_id,
+      remaining: own.length,
+    };
+  });
+}
+
+/**
  * Everything still ahead, soonest first.
  *
  * Dated posts only. An undated announcement has nothing to sort by and no

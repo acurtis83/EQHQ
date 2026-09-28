@@ -19,7 +19,7 @@ import { FlyerHeader, FlyerPicker } from "../components/Flyer";
 import { categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./categories";
 import { useCategories } from "../lib/useCategories";
 import { activeCategories } from "../lib/domain/categories";
-import { upcomingFrom } from "../lib/domain/upcomingAction";
+import { upcomingFrom, withEventDates } from "../lib/domain/upcomingAction";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
 
@@ -44,6 +44,7 @@ export default function Feed({ focus, onFocusHandled }) {
   const { isPresidency, presidency } = useAuth();
   const { rows: categories } = useCategories();
   const [posts, setPosts] = useState([]);
+  const [dates, setDates] = useState([]);
   // Set when a Home Hub card sent you to a specific post.
   const [focusId, setFocusId] = useState(null);
   const [comments, setComments] = useState([]);
@@ -61,7 +62,7 @@ export default function Feed({ focus, onFocusHandled }) {
   const [showPast, setShowPast] = useState(false);
 
   const load = useCallback(async () => {
-    const [p, c, sl, cl, lk] = await Promise.all([
+    const [p, c, sl, cl, lk, pd] = await Promise.all([
       // Ordered in JS rather than SQL: "soonest first, but undated posts still
       // near the top" isn't a single ORDER BY.
       supabase.from("posts").select("*"),
@@ -69,6 +70,10 @@ export default function Feed({ focus, onFocusHandled }) {
       supabase.from("signup_slots").select("*").order("sort_order", { ascending: true }),
       supabase.from("signup_claims").select("*").order("created_at", { ascending: true }),
       supabase.from("post_links").select("*").order("sort_order", { ascending: true }),
+      // The real dates behind a multi-date assignment. A post carries one
+      // date; the temple cleaning has five, so without these it left the feed
+      // the morning after the first of them with four still to come.
+      supabase.from("public_event_dates").select("*"),
     ]);
     if (p.error) setErr(p.error.message);
     else setPosts(p.data || []);
@@ -76,6 +81,10 @@ export default function Feed({ focus, onFocusHandled }) {
     if (!sl.error) setSlots(sl.data || []);
     if (!cl.error) setClaims(cl.data || []);
     if (!lk.error) setLinks(lk.data || []);
+    // A database that hasn't run supabase/post-dates.sql errors here, and
+    // that's survivable: every post keeps its own single date, which is
+    // exactly the behaviour before this existed.
+    if (!pd.error) setDates(pd.data || []);
     setLoading(false);
   }, []);
 
@@ -147,8 +156,8 @@ export default function Feed({ focus, onFocusHandled }) {
   // category it's filed under — Upcoming is the calendar, and a calendar that
   // shows only one kind of thing isn't one.
   const upcoming = useMemo(
-    () => upcomingFrom(posts, toIso(new Date())),
-    [posts]
+    () => upcomingFrom(withEventDates(posts, dates, toIso(new Date())), toIso(new Date())),
+    [posts, dates]
   );
 
   const commentsFor = (id) => comments.filter((c) => c.post_id === id);

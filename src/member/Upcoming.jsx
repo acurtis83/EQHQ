@@ -28,7 +28,15 @@ function shortDate(iso) {
 function UpcomingRow({ post, name, setName, onOpen, categories }) {
   const meta = categoryMeta(post.category, categories);
   const action = actionFor(post);
-  const when = [shortDate(post.event_date), post.event_time].filter(Boolean).join("  •  ");
+  // "5 dates" when an assignment runs over several, so the row doesn't read
+  // as a single evening. The date shown is the next one still ahead —
+  // withEventDates resolves that — and the count is how many are left,
+  // including this one.
+  const when = [
+    shortDate(post.event_date),
+    post.event_time,
+    post.remaining > 1 ? `${post.remaining} dates` : null,
+  ].filter(Boolean).join("  •  ");
 
   return (
     <div

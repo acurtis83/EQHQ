@@ -1,5 +1,6 @@
 import { render, screen, cleanup, act, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { withEventDates, upcomingFrom } from "../src/lib/domain/upcomingAction";
 
 /**
  * The Feed, laid out the way the flyer shows it.
@@ -15,6 +16,7 @@ let POSTS = [];
 let RSVPS = [];
 let NOTICES = [];
 let LINKS = [];
+let EVENT_DATES = [];
 let WRITES = [];
 
 function query(table) {
@@ -22,6 +24,7 @@ function query(table) {
     : table === "public_rsvps" ? RSVPS
     : table === "sunday_announcements_public" ? NOTICES
     : table === "post_links" ? LINKS
+    : table === "public_event_dates" ? EVENT_DATES
     : [];
   const capture = (op) => (arg) => {
     WRITES.push({ table, op, arg });
@@ -99,6 +102,7 @@ beforeEach(() => {
   RSVPS = [];
   NOTICES = [];
   LINKS = [];
+  EVENT_DATES = [];
   WRITES = [];
   localStorage.clear();
 });
@@ -334,5 +338,132 @@ describe("an RSVP is one RSVP", () => {
 
     expect(rowFor("bbq").textContent).toContain("1 coming");
     expect(document.getElementById("post-bbq").textContent).toContain("Ryan Talbot");
+  });
+});
+
+
+/* -------------------- an assignment with several dates -------------------- */
+
+/**
+ * "why is the Stake Temple Cleaning assignment not showing on the FEED or
+ *  upcoming events?"
+ *
+ * Because a post carries ONE date and that assignment has five. It was
+ * stamped with the first, and the morning after that date passed the whole
+ * thing left the feed with four still to come — silently, because from the
+ * feed's point of view it had simply happened.
+ *
+ * Checked against the live row: event_date was 2026-09-18 with dates running
+ * to December.
+ */
+describe("a post whose event runs over several dates", () => {
+  const TODAY = "2026-09-28";
+  const TEMPLE = {
+    id: "p-temple", title: "Stake Temple Cleaning Assignment",
+    category: "assignment", event_date: "2026-09-18",
+    link_url: "https://docs.google.com/x", link_label: "Sign Up",
+  };
+  const DATES = [
+    { post_id: "p-temple", event_date: "2026-09-18" },
+    { post_id: "p-temple", event_date: "2026-10-03", event_time: "8:00 AM" },
+    { post_id: "p-temple", event_date: "2026-11-07" },
+    { post_id: "p-temple", event_date: "2026-12-15" },
+  ];
+
+  it("shows the next date still ahead, not the first one ever", () => {
+    const [p] = withEventDates([TEMPLE], DATES, TODAY);
+    expect(p.event_date).toBe("2026-10-03");
+    expect(p.event_time).toBe("8:00 AM");
+  });
+
+  it("and so it stays on the feed instead of vanishing", () => {
+    // The whole complaint, in one assertion.
+    expect(upcomingFrom([TEMPLE], TODAY), "the bug as it was").toHaveLength(0);
+    expect(upcomingFrom(withEventDates([TEMPLE], DATES, TODAY), TODAY)).toHaveLength(1);
+  });
+
+  it("counts how many are left, so it doesn't read as one evening", () => {
+    const [p] = withEventDates([TEMPLE], DATES, TODAY);
+    expect(p.remaining).toBe(3);
+  });
+
+  it("rolls forward as each date passes", () => {
+    expect(withEventDates([TEMPLE], DATES, "2026-10-04")[0].event_date).toBe("2026-11-07");
+    expect(withEventDates([TEMPLE], DATES, "2026-11-08")[0].event_date).toBe("2026-12-15");
+  });
+
+  it("and leaves the series alone once every date is behind", () => {
+    // Falling back to the planner's first date would resurrect a finished
+    // series months later — the mirror of the bug this fixes.
+    const [p] = withEventDates([TEMPLE], DATES, "2026-12-16");
+    expect(p.event_date).toBe("2026-09-18");
+    expect(p.remaining).toBeUndefined();
+    expect(upcomingFrom([p], "2026-12-16")).toHaveLength(0);
+  });
+
+  it("prefers a form attached to the specific date", () => {
+    // A particular shift can have its own sign-up sheet.
+    const dated = [{ post_id: "p-temple", event_date: "2026-10-03", form_id: "shift-2" }];
+    const [p] = withEventDates([{ ...TEMPLE, form_id: "general" }], dated, TODAY);
+    expect(p.form_id).toBe("shift-2");
+  });
+
+  it("and every ordinary post is returned untouched", () => {
+    const bbq = { id: "p-bbq", title: "EQ BBQ", event_date: "2026-09-30" };
+    expect(withEventDates([bbq], DATES, TODAY)[0]).toBe(bbq);
+  });
+
+  it("with no dates loaded at all, nothing changes", () => {
+    // A database that hasn't run post-dates.sql yet must behave exactly as
+    // it did before.
+    expect(withEventDates([TEMPLE], [], TODAY)[0]).toBe(TEMPLE);
+  });
+});
+
+
+/**
+ * ...and that the Feed actually asks for them.
+ *
+ * withEventDates is checked above on its own, which proves the rule and
+ * nothing about whether anything calls it. Removing the call from Feed.jsx
+ * left every one of those tests passing — the failure this repo keeps
+ * finding. This one mounts the real feed.
+ */
+describe("the feed, with a multi-date assignment", () => {
+  // NOW is Sun 6 September 2026. The first cleaning date is behind us and
+  // three are still to come, which is the live situation exactly.
+  const PAST = "2026-08-15";
+
+  beforeEach(() => {
+    POSTS = [{
+      id: "temple", category: "assignment", title: "Stake Temple Cleaning Assignment",
+      event_date: PAST, link_url: "https://docs.google.com/x", link_label: "Sign Up",
+      created_at: daysAgo(30),
+    }];
+    EVENT_DATES = [
+      { post_id: "temple", event_date: PAST },
+      { post_id: "temple", event_date: "2026-10-03", event_time: "8:00 AM" },
+      { post_id: "temple", event_date: "2026-11-07" },
+      { post_id: "temple", event_date: "2026-12-15" },
+    ];
+  });
+
+  it("puts it back in Upcoming, on its next date", async () => {
+    const dom = await mount();
+    expect(rows(), "the assignment is still missing from the feed").toContain("temple");
+    expect(dom.container.textContent).toContain("Stake Temple Cleaning Assignment");
+  });
+
+  it("and says how many dates are left", async () => {
+    const dom = await mount();
+    expect(dom.container.textContent).toContain("3 dates");
+  });
+
+  it("but without the dates it stays gone, as it did", async () => {
+    // The same post with no date rows — a database that hasn't run
+    // post-dates.sql — behaves exactly as before.
+    EVENT_DATES = [];
+    await mount();
+    expect(rows()).not.toContain("temple");
   });
 });
