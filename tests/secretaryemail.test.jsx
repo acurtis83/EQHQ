@@ -203,7 +203,7 @@ describe("which Sunday is which", () => {
 /* ---------------------------- condensing it ------------------------------- */
 
 import {
-  comingUp, withoutRestated, moreOnApp, COMING_UP_SHOWN,
+  comingUp, withoutRestated, COMING_UP_SHOWN,
   buildEmailText, buildEmailHtml,
 } from "../src/lib/domain/weeklyEmail";
 
@@ -268,19 +268,6 @@ describe("announcements that restate an event", () => {
   });
 });
 
-describe("what was left out", () => {
-  it("is counted and pointed at the app", () => {
-    // An email that silently drops an event somebody asked to have announced
-    // is worse than a long email.
-    expect(moreOnApp(6, 3)).toMatch(/^3 more events on the /);
-    expect(moreOnApp(4, 3)).toMatch(/^1 more event on the /);
-  });
-
-  it("and says nothing when nothing was trimmed", () => {
-    expect(moreOnApp(3, 3)).toBe("");
-    expect(moreOnApp(0, 0)).toBe("");
-  });
-});
 
 describe("the condensed email, whole", () => {
   const ARGS = {
@@ -312,7 +299,10 @@ describe("the condensed email, whole", () => {
     // fail for the wrong reason.
     expect(text, "a December event crowded out a near one")
       .not.toMatch(/— Ward Christmas Party —/);
-    expect(text).toMatch(/2 more events on the/);
+    // Nothing is said about what was trimmed. The app link under the lesson
+    // is the answer to "what else is on"; a second one at the bottom made a
+    // deliberately short email read as apologising for its length.
+    expect(text, "the trimmed-events line came back").not.toMatch(/more events? on the/);
   });
 
   it("drops the announcement that restates a listed event", () => {
@@ -333,6 +323,16 @@ describe("the condensed email, whole", () => {
       .toContain("tickets go on sale in October");
   });
 
+  it("and the GroupMe invitation still closes it", () => {
+    // It sits after COMING UP, which is the block the cap rewrote, so it is
+    // exactly the line a careless trim would take with it.
+    const text = buildEmailText({ ...ARGS, groupMeUrl: "https://groupme.com/join_group/123" });
+    expect(text).toContain("EQ GroupMe");
+    expect(text).toContain("https://groupme.com/join_group/123");
+    const html = buildEmailHtml({ ...ARGS, groupMeUrl: "https://groupme.com/join_group/123" });
+    expect(html).toContain("https://groupme.com/join_group/123");
+  });
+
   it("and still carries every sign-up link", () => {
     // "lets still attach the links to event signups"
     const text = buildEmailText(ARGS);
@@ -348,6 +348,6 @@ describe("the condensed email, whole", () => {
     expect(html).toContain("Padel Night");
     expect(html).not.toContain("<strong>Ward Christmas Party</strong>");
     expect(html).not.toContain("kid friendly");
-    expect(html).toMatch(/2 more events on the/);
+    expect(html).not.toMatch(/more events? on the/);
   });
 });

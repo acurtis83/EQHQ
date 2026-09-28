@@ -25,6 +25,12 @@ const dash = "—";
  * Coming Up used to print six events with no far horizon, so a temple
  * assignment in December sat next to Wednesday's barbecue at the same weight.
  */
+// Nothing is printed about what was trimmed. A "2 more events on the app"
+// line was written and then removed at Drew's request: the email already
+// carries one line pointing at the app, directly under the lesson, and a
+// second one at the bottom made a deliberately short email feel like it was
+// apologising for its own length. The app link near the top is the answer to
+// "what else is on".
 export const COMING_UP_SHOWN = 3;
 export const COMING_UP_DAYS = 14;
 
@@ -77,19 +83,6 @@ export function comingUp(events = [], todayIso = "", opts = {}) {
 export function withoutRestated(announcements = [], shownEvents = []) {
   const restated = new Set(restatingEvents(announcements, shownEvents).map((r) => r.item));
   return announcements.filter((a) => !restated.has(a));
-}
-
-/**
- * "and 2 more on the app" — or nothing, when nothing was trimmed.
- *
- * An email that silently drops an event somebody asked to have announced is
- * worse than a long email. This says what was left out and where it is, which
- * is also the push to the app the email is supposed to carry.
- */
-export function moreOnApp(total, shown) {
-  const n = Math.max(0, (total || 0) - (shown || 0));
-  if (!n) return "";
-  return `${n} more event${n === 1 ? "" : "s"} on the ${APP_NAME}`;
 }
 
 /**
@@ -261,7 +254,6 @@ export function buildEmailText({
   // would be a difference nobody could explain.
   const shown = comingUp(events, todayIso || sundayIso);
   const notesIn = withoutRestated(announcements, shown);
-  const more = moreOnApp(events.length, shown.length);
   const out = [];
   out.push(`Brethren,`);
   out.push("");
@@ -336,15 +328,6 @@ export function buildEmailText({
       const link = eventLink(e, siteUrl);
       if (link) out.push(`    ${link.label}: ${link.href}`);
     }
-    // Written as "sentence: url" like the links above, so linkify puts the
-    // anchor on the app's name and the plain reader still gets an address.
-    if (more && siteUrl) {
-      out.push("");
-      out.push(`${more}: ${String(siteUrl).replace(/\/+$/, "")}`);
-    } else if (more) {
-      out.push("");
-      out.push(more);
-    }
   }
 
   // The closing line, before the signature. Written as "sentence: url" like
@@ -386,7 +369,6 @@ export function buildEmailHtml({
 }) {
   const shown = comingUp(events, todayIso || sundayIso);
   const notesIn = withoutRestated(announcements, shown);
-  const more = moreOnApp(events.length, shown.length);
   const P = 'margin:0 0 12px;font-size:15px;line-height:1.55;color:#17181c';
   const H = 'margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
   const parts = [];
@@ -448,15 +430,6 @@ export function buildEmailHtml({
           (link ? `<br><a href="${escHtml(link.href)}" style="color:#0063d6">${escHtml(link.label)}</a>` : "") +
           `</li>`;
       }).join("") + `</ul>`);
-    if (more) {
-      const home = String(siteUrl || "").replace(/\/+$/, "");
-      const [before, after] = more.split(APP_NAME);
-      parts.push(`<p style="${P};font-size:14px;color:#626974">${escHtml(before)}` +
-        (home
-          ? `<a href="${escHtml(home)}" style="color:#0063d6">${escHtml(APP_NAME)}</a>`
-          : escHtml(APP_NAME)) +
-        `${escHtml(after)}</p>`);
-    }
   }
 
   // The site link has moved up under the lesson, so GroupMe is on its own
