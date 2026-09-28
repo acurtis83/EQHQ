@@ -33,6 +33,9 @@ function Lbl({ label, children }) {
 export default function EmailSheet({
   agenda, sundayIso, weekIso, lesson, noLessonReason, announcements, events,
   senderName, onSave, onClose,
+  // The day the email is being written. Defaulted rather than required so an
+  // older caller still gets a sensible fortnight rather than none.
+  todayIso = new Date().toISOString().slice(0, 10),
 }) {
   // Where the app is served from, so a form_id can become a link someone can
   // tap. Read here rather than baked into the builder, which stays pure.
@@ -42,8 +45,12 @@ export default function EmailSheet({
   const { settings } = useSettings();
   const groupMeUrl = safeUrl(settings[SETTING_KEYS.GROUPME_URL]);
   const generate = useCallback(
-    () => buildEmailText({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl }),
-    [sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl]
+    // todayIso decides which events count as "the next fortnight". Passed in
+    // rather than read inside the builder, which stays pure — and it means the
+    // horizon is measured from the day the email is written, not the Sunday
+    // it's about.
+    () => buildEmailText({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl, todayIso }),
+    [sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl, todayIso]
   );
 
   // A saved body wins, so an edit survives reopening. "Regenerate" is how you
@@ -60,7 +67,7 @@ export default function EmailSheet({
     // edits would silently not make it into the email.
     const plain = text;
     const html = agenda.email_body === text && !edited
-      ? buildEmailHtml({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl })
+      ? buildEmailHtml({ sundayIso, lesson, noLessonReason, announcements, events, senderName, siteUrl, groupMeUrl, todayIso })
       : textToHtml(text);
     try {
       if (kind === "html" && window.ClipboardItem && navigator.clipboard?.write) {

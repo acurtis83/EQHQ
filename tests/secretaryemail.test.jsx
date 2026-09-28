@@ -199,3 +199,155 @@ describe("which Sunday is which", () => {
     expect([...picker.options].every((o) => /^Meeting of /.test(o.textContent))).toBe(true);
   });
 });
+
+/* ---------------------------- condensing it ------------------------------- */
+
+import {
+  comingUp, withoutRestated, moreOnApp, COMING_UP_SHOWN,
+  buildEmailText, buildEmailHtml,
+} from "../src/lib/domain/weeklyEmail";
+
+/**
+ * "can we just limit it to 3 items prioritizing anything in the next 7-14
+ *  days? Also, if an announcement is a duplicate of an upcoming event we dont
+ *  need doubles. We are trying to condense the email"
+ *
+ * Coming Up printed six events with no far horizon, so a temple assignment in
+ * December sat next to Wednesday's barbecue at the same weight.
+ */
+describe("which events make the email", () => {
+  const ev = (id, when) => ({ id, title: `Event ${id}`, when });
+  const TODAY = "2026-09-28";
+
+  it("three of them, soonest first", () => {
+    const out = comingUp(
+      [ev("d", "2026-10-20"), ev("a", "2026-09-30"), ev("c", "2026-10-08"), ev("b", "2026-10-02")],
+      TODAY
+    );
+    expect(out.map((e) => e.id)).toEqual(["a", "b", "c"]);
+    expect(out).toHaveLength(COMING_UP_SHOWN);
+  });
+
+  it("prefers the fortnight over anything past it", () => {
+    // The December temple assignment must not push out Wednesday's barbecue
+    // just because it was entered first.
+    const out = comingUp([ev("far", "2026-12-15"), ev("soon", "2026-09-30")], TODAY);
+    expect(out.map((e) => e.id)).toEqual(["soon", "far"]);
+  });
+
+  it("but fills from beyond it rather than printing an empty section", () => {
+    // A hard cutoff would tell the quorum nothing is coming when something is.
+    const out = comingUp([ev("far", "2026-11-20"), ev("further", "2026-12-15")], TODAY);
+    expect(out.map((e) => e.id)).toEqual(["far", "further"]);
+  });
+
+  it("and an undated one sorts last, being the least urgent by definition", () => {
+    const out = comingUp([{ id: "tbc", title: "Still planning" }, ev("soon", "2026-09-30")], TODAY);
+    expect(out.map((e) => e.id)).toEqual(["soon", "tbc"]);
+  });
+});
+
+describe("announcements that restate an event", () => {
+  const BBQ = { id: "e1", title: "Fall EQ BBQ", when: "2026-09-30" };
+  const NOTE = { id: "n1", text: "Fall EQ BBQ on Wednesday at 6pm, kid friendly." };
+  const OTHER = { id: "n2", text: "Church cleaning Saturday at 8am." };
+
+  it("are dropped when the event is in the email", () => {
+    const out = withoutRestated([NOTE, OTHER], [BBQ]);
+    expect(out.map((a) => a.id)).toEqual(["n2"]);
+  });
+
+  it("but kept when the event got trimmed out", () => {
+    // Then the announcement is the only place that information still appears,
+    // and dropping it would lose it — the opposite of condensing.
+    expect(withoutRestated([NOTE, OTHER], []).map((a) => a.id)).toEqual(["n1", "n2"]);
+  });
+
+  it("and an unrelated announcement is never touched", () => {
+    expect(withoutRestated([OTHER], [BBQ])).toEqual([OTHER]);
+  });
+});
+
+describe("what was left out", () => {
+  it("is counted and pointed at the app", () => {
+    // An email that silently drops an event somebody asked to have announced
+    // is worse than a long email.
+    expect(moreOnApp(6, 3)).toMatch(/^3 more events on the /);
+    expect(moreOnApp(4, 3)).toMatch(/^1 more event on the /);
+  });
+
+  it("and says nothing when nothing was trimmed", () => {
+    expect(moreOnApp(3, 3)).toBe("");
+    expect(moreOnApp(0, 0)).toBe("");
+  });
+});
+
+describe("the condensed email, whole", () => {
+  const ARGS = {
+    sundayIso: "2026-10-04",
+    todayIso: "2026-09-28",
+    lesson: { teacher_name: "Nick Crump", talk_title: "Alive in Christ" },
+    announcements: [
+      { id: "n1", text: "Fall EQ BBQ on Wednesday at 6pm, kid friendly." },
+      { id: "n2", text: "Church cleaning Saturday at 8am, names G-L." },
+      { id: "n3", text: "Ward Christmas Party tickets go on sale in October." },
+    ],
+    events: [
+      { id: "e1", title: "Fall EQ BBQ", when: "2026-09-30", form_id: "bbq" },
+      { id: "e2", title: "Temple Cleaning", when: "2026-10-03", link_url: "https://x.io/t", link_is_signup: true },
+      { id: "e3", title: "Padel Night", when: "2026-10-09" },
+      { id: "e4", title: "Ward Christmas Party", when: "2026-12-12" },
+      { id: "e5", title: "Stake Conference", when: "2026-11-01" },
+    ],
+    siteUrl: "https://eqhq.netlify.app",
+  };
+
+  it("prints three events and says how many more", () => {
+    const text = buildEmailText(ARGS);
+    expect(text).toContain("Fall EQ BBQ");
+    expect(text).toContain("Temple Cleaning");
+    expect(text).toContain("Padel Night");
+    // The event LISTING, not the string — an announcement may legitimately
+    // name a trimmed event, and asserting on the bare title would pass or
+    // fail for the wrong reason.
+    expect(text, "a December event crowded out a near one")
+      .not.toMatch(/— Ward Christmas Party —/);
+    expect(text).toMatch(/2 more events on the/);
+  });
+
+  it("drops the announcement that restates a listed event", () => {
+    const text = buildEmailText(ARGS);
+    expect(text).toContain("Church cleaning Saturday");
+    // The BBQ has its own line under COMING UP with a date and a link; saying
+    // it again four lines up is the same information twice.
+    expect(text.match(/kid friendly/g), "the BBQ was announced twice").toBeNull();
+  });
+
+  it("but keeps one that restates an event the cap trimmed out", () => {
+    // The Christmas Party didn't make the three, so this announcement is the
+    // only place it appears at all. Deduping against every event rather than
+    // the shown ones would delete it and mention it nowhere.
+    const text = buildEmailText(ARGS);
+    expect(text).not.toContain("Ward Christmas Party —");
+    expect(text, "the only mention of a trimmed event was deleted")
+      .toContain("tickets go on sale in October");
+  });
+
+  it("and still carries every sign-up link", () => {
+    // "lets still attach the links to event signups"
+    const text = buildEmailText(ARGS);
+    expect(text).toContain("https://eqhq.netlify.app/?f=bbq");
+    expect(text).toContain("https://x.io/t");
+  });
+
+  it("the formatted copy agrees with the plain one", () => {
+    // The secretary can hand-edit the plain text and send that instead, so an
+    // email whose contents depended on which button he pressed would be a
+    // difference nobody could explain.
+    const html = buildEmailHtml(ARGS);
+    expect(html).toContain("Padel Night");
+    expect(html).not.toContain("<strong>Ward Christmas Party</strong>");
+    expect(html).not.toContain("kid friendly");
+    expect(html).toMatch(/2 more events on the/);
+  });
+});

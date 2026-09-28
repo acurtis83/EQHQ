@@ -11,8 +11,86 @@ import { fmtDate, fmtShort } from "./dates.js";
 // is gone; the feed's lesson card still uses it to decide whether to show the
 // Read the talk button, so the function stays where it is.
 import { signUpHref } from "./upcomingAction.js";
+import { restatingEvents } from "./announcements.js";
 
 const dash = "—";
+
+/* --------------------------- condensing the email ------------------------- */
+
+/**
+ * "can we just limit it to 3 items prioritizing anything in the next 7-14
+ *  days? Also, if an announcement is a duplicate of an upcoming event we dont
+ *  need doubles. We are trying to condense the email"
+ *
+ * Coming Up used to print six events with no far horizon, so a temple
+ * assignment in December sat next to Wednesday's barbecue at the same weight.
+ */
+export const COMING_UP_SHOWN = 3;
+export const COMING_UP_DAYS = 14;
+
+const whenOf = (e) => String(e?.when || e?.event_date || "");
+
+/**
+ * The few events worth putting in an email, soonest first.
+ *
+ * "prioritizing anything in the next 7-14 days"
+ *
+ * Which a date sort already does, and that is worth saying plainly because the
+ * first version of this didn't. It split the list into "inside the fortnight"
+ * and "after it" and concatenated them — and since the list was already sorted
+ * by date, the two halves came back in exactly the order they went in. A
+ * mutation test removing the split changed no result, which is how a rule that
+ * looks load-bearing and isn't gets found.
+ *
+ * So: sort, take three. The near term wins because it is nearer. COMING_UP_DAYS
+ * survives only as the horizon the tests describe, not as a filter — a hard
+ * cutoff was considered and rejected, because a quiet fortnight would print an
+ * empty section and tell the quorum nothing is coming when something is.
+ *
+ * Undated events sort last. They're still being planned, so they're the least
+ * urgent thing in the list by definition.
+ */
+export function comingUp(events = [], todayIso = "", opts = {}) {
+  const limit = opts.limit ?? COMING_UP_SHOWN;
+  return [...events]
+    .sort((a, b) => {
+      const x = whenOf(a);
+      const y = whenOf(b);
+      if (!x) return y ? 1 : 0;
+      if (!y) return -1;
+      return x.localeCompare(y);
+    })
+    .slice(0, limit);
+}
+
+/**
+ * Announcements, minus the ones that restate an event the email is showing.
+ *
+ * Only against the events that made the cut. An announcement restating an
+ * event that got trimmed is the only place that information still appears, so
+ * dropping it would lose it entirely — which is the opposite of condensing.
+ *
+ * The matching is restatingEvents(), the same rule that already warns Karl
+ * about this when he's editing. It warns there and acts here; one rule, so the
+ * warning can't say one thing and the email do another.
+ */
+export function withoutRestated(announcements = [], shownEvents = []) {
+  const restated = new Set(restatingEvents(announcements, shownEvents).map((r) => r.item));
+  return announcements.filter((a) => !restated.has(a));
+}
+
+/**
+ * "and 2 more on the app" — or nothing, when nothing was trimmed.
+ *
+ * An email that silently drops an event somebody asked to have announced is
+ * worse than a long email. This says what was left out and where it is, which
+ * is also the push to the app the email is supposed to carry.
+ */
+export function moreOnApp(total, shown) {
+  const n = Math.max(0, (total || 0) - (shown || 0));
+  if (!n) return "";
+  return `${n} more event${n === 1 ? "" : "s"} on the ${APP_NAME}`;
+}
 
 /**
  * Subject line. Dated so a thread doesn't collapse weeks together in Gmail.
@@ -175,7 +253,15 @@ export function buildEmailText({
   sundayIso, lesson, noLessonReason, announcements = [], events = [], senderName = "",
   siteUrl = "",
   groupMeUrl = "",
+  todayIso = "",
 }) {
+  // Trimmed before anything is written, and by the same two rules the HTML
+  // build uses. The secretary can hand-edit the plain text and send that
+  // instead, so an email whose contents depended on which button he pressed
+  // would be a difference nobody could explain.
+  const shown = comingUp(events, todayIso || sundayIso);
+  const notesIn = withoutRestated(announcements, shown);
+  const more = moreOnApp(events.length, shown.length);
   const out = [];
   out.push(`Brethren,`);
   out.push("");
@@ -221,7 +307,7 @@ export function buildEmailText({
   }
 
   // --- announcements ---
-  const notes = announcements.map(asNote).filter((n) => n.text);
+  const notes = notesIn.map(asNote).filter((n) => n.text);
   if (notes.length) {
     out.push("");
     out.push("ANNOUNCEMENTS");
@@ -233,10 +319,10 @@ export function buildEmailText({
   }
 
   // --- what's coming ---
-  if (events.length) {
+  if (shown.length) {
     out.push("");
     out.push("COMING UP");
-    for (const e of events) {
+    for (const e of shown) {
       // `when` is the resolved occurrence for a repeating event; a one-off
       // just has its own date.
       const on = e.when || e.event_date;
@@ -249,6 +335,15 @@ export function buildEmailText({
       // "label: url" shape is what turns into a named hyperlink.
       const link = eventLink(e, siteUrl);
       if (link) out.push(`    ${link.label}: ${link.href}`);
+    }
+    // Written as "sentence: url" like the links above, so linkify puts the
+    // anchor on the app's name and the plain reader still gets an address.
+    if (more && siteUrl) {
+      out.push("");
+      out.push(`${more}: ${String(siteUrl).replace(/\/+$/, "")}`);
+    } else if (more) {
+      out.push("");
+      out.push(more);
     }
   }
 
@@ -287,7 +382,11 @@ export function buildEmailHtml({
   sundayIso, lesson, noLessonReason, announcements = [], events = [], senderName = "",
   siteUrl = "",
   groupMeUrl = "",
+  todayIso = "",
 }) {
+  const shown = comingUp(events, todayIso || sundayIso);
+  const notesIn = withoutRestated(announcements, shown);
+  const more = moreOnApp(events.length, shown.length);
   const P = 'margin:0 0 12px;font-size:15px;line-height:1.55;color:#17181c';
   const H = 'margin:26px 0 8px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#626974';
   const parts = [];
@@ -328,7 +427,7 @@ export function buildEmailHtml({
       `${escHtml(after)}</p>`);
   }
 
-  const notes = announcements.map(asNote).filter((n) => n.text);
+  const notes = notesIn.map(asNote).filter((n) => n.text);
   if (notes.length) {
     parts.push(`<div style="${H}">Announcements</div>`);
     parts.push(`<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6;color:#17181c">` +
@@ -337,10 +436,10 @@ export function buildEmailHtml({
         `</li>`).join("") + `</ul>`);
   }
 
-  if (events.length) {
+  if (shown.length) {
     parts.push(`<div style="${H}">Coming Up</div>`);
     parts.push(`<ul style="margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.6;color:#17181c">` +
-      events.map((e) => {
+      shown.map((e) => {
         const on = e.when || e.event_date;
         const when = on ? fmtShort(on) : "Date to be confirmed";
         const bits = [when, e.event_time, e.location].filter(Boolean).map(escHtml).join(", ");
@@ -349,6 +448,15 @@ export function buildEmailHtml({
           (link ? `<br><a href="${escHtml(link.href)}" style="color:#0063d6">${escHtml(link.label)}</a>` : "") +
           `</li>`;
       }).join("") + `</ul>`);
+    if (more) {
+      const home = String(siteUrl || "").replace(/\/+$/, "");
+      const [before, after] = more.split(APP_NAME);
+      parts.push(`<p style="${P};font-size:14px;color:#626974">${escHtml(before)}` +
+        (home
+          ? `<a href="${escHtml(home)}" style="color:#0063d6">${escHtml(APP_NAME)}</a>`
+          : escHtml(APP_NAME)) +
+        `${escHtml(after)}</p>`);
+    }
   }
 
   // The site link has moved up under the lesson, so GroupMe is on its own
