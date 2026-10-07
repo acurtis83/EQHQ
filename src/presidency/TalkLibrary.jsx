@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, ExternalLink, AlertTriangle } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { bySession } from "../lib/domain/parseTalks";
 import { T, card, Btn, Select, Chip, SectionTitle } from "../components/ui";
 
 // Fallback only. The real list is discovered from the Church site so it can't
@@ -39,10 +40,14 @@ export default function TalkLibrary() {
       .from("talks")
       .select("*")
       .order("year", { ascending: false })
-      .order("month", { ascending: false })
-      .order("slug", { ascending: true });
+      .order("month", { ascending: false });
     if (error) setErr(error.message);
-    else setRows(data || []);
+    // Sorted here, not in the query. Postgres orders slugs as plain text, so
+    // "210soares" — the tenth talk of Saturday afternoon — landed directly
+    // after "21christofferson", and the saved library disagreed with the
+    // import preview about the order of the same conference. bySession is the
+    // comparator the parser already uses.
+    else setRows([...(data || [])].sort(bySession));
     setLoading(false);
   }, []);
 

@@ -220,6 +220,46 @@ export function parseConferenceHtml(html, opts = {}) {
   }
 
   // Session order, then position within the session.
-  talks.sort((a, b) => a.slug.localeCompare(b.slug, undefined, { numeric: true }));
+  talks.sort(bySession);
   return { talks, skipped };
+}
+
+/**
+ * Session, then position within it, read off the URL slug.
+ *
+ * "are these loaded in order that they were given? or posted on the churchs
+ *  website?"
+ *
+ * Given. The slug is a session digit followed by a position: "11oaks" is the
+ * first talk of Saturday morning, "210soares" the tenth of Saturday
+ * afternoon, "59oaks" the ninth of Sunday afternoon. Two numbers, not one,
+ * and both of the obvious sorts get that wrong in a different way:
+ *
+ *   plain text      "210soares" lands after "21christofferson", because the
+ *                   character "0" sorts before "c". This is what the saved
+ *                   library did.
+ *   numeric-aware   "210soares" lands after "59oaks", because 210 > 59. The
+ *                   tenth talk of Saturday afternoon ends up after Sunday
+ *                   afternoon's closing remarks. This is what the PARSER did,
+ *                   and it had been doing it since the import was written —
+ *                   found only when a test compared the two halves against
+ *                   each other rather than each against itself.
+ *
+ * So the digits are split apart and compared as what they are. Anything whose
+ * slug doesn't start with a digit sorts last rather than throwing; the parser
+ * already filters those out, and a crash in a comparator would take the whole
+ * library down over one odd URL.
+ */
+function slugParts(slug) {
+  const m = /^(\d)(\d*)/.exec(String(slug || ""));
+  if (!m) return [99, 99];
+  return [Number(m[1]), Number(m[2] || 0)];
+}
+
+export function bySession(a, b) {
+  const [sa, pa] = slugParts(a?.slug);
+  const [sb, pb] = slugParts(b?.slug);
+  return sa - sb
+    || pa - pb
+    || String(a?.slug || "").localeCompare(String(b?.slug || ""));
 }
