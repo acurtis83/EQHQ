@@ -8,6 +8,7 @@ import Feed from "./member/Feed";
 import FormFill from "./member/FormFill";
 import Roster from "./presidency/Roster";
 import QuorumSettings from "./presidency/QuorumSettings";
+import UsageTracker from "./presidency/UsageTracker";
 import ConductingSchedule from "./presidency/ConductingSchedule";
 import Callings from "./presidency/Callings";
 import Ministering from "./presidency/Ministering";
@@ -47,6 +48,7 @@ const SETTINGS_SECTIONS = [
   { key: "categories", label: "Categories" },
   { key: "conducting", label: "Conducting" },
   { key: "roster", label: "Roster" },
+  { key: "usage", label: "Usage" },
   { key: "talks", label: "Conference Talks" },
   { key: "import", label: "Import" },
 ];
@@ -60,6 +62,7 @@ function SettingsTab() {
       {section === "categories" && <CategorySettings />}
       {section === "conducting" && <ConductingSchedule />}
       {section === "roster" && <Roster />}
+      {section === "usage" && <UsageTracker />}
       {section === "talks" && <TalkLibrary />}
       {section === "import" && <ImportLegacy />}
     </div>

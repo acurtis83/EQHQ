@@ -5,6 +5,7 @@ import Rsvp from "./Rsvp";
 import { categoryMeta } from "./categories";
 import { DOW, MON, isoParts, toIso } from "../lib/domain/dates";
 import { ACTION, actionFor, shownCount } from "../lib/domain/upcomingAction";
+import { recordTap } from "../lib/record";
 
 
 /** "Sat, Sep 20" — the same shape the rest of the app uses for a short date. */
@@ -85,6 +86,7 @@ function UpcomingRow({ post, name, setName, onOpen, categories }) {
             href={action.href}
             target="_blank"
             rel="noreferrer"
+            onClick={() => recordTap("signup")}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
               background: T.primary, color: "var(--on-primary)",
@@ -100,7 +102,7 @@ function UpcomingRow({ post, name, setName, onOpen, categories }) {
           // send you there rather than happening in the row. No arrow: it had
           // one, which read as "this leaves the app" — exactly backwards, since
           // this is the button that *doesn't*.
-          <Btn size="sm" kind="primary" onClick={() => onOpen?.(post.id)}>
+          <Btn size="sm" kind="primary" onClick={() => { recordTap("signup"); onOpen?.(post.id); }}>
             Sign Up
           </Btn>
         ))}

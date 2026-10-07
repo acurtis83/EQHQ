@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
+import { recordTap } from "../lib/record";
 import { T, card, Btn } from "../components/ui";
 import QrCode from "../components/QrCode";
 import { useSettings, SETTING_KEYS, safeUrl } from "../lib/useSettings";
@@ -51,6 +52,7 @@ export default function GroupMeCard() {
         <a
           href={url}
           target="_blank"
+          onClick={() => recordTap("groupme")}
           rel="noreferrer"
           style={{
             flex: "0 0 auto", textDecoration: "none",

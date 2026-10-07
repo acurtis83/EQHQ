@@ -20,6 +20,7 @@ import { categoryMeta, isPast, sortForFeed, splitByPast, STALE_DAYS } from "./ca
 import { useCategories } from "../lib/useCategories";
 import { activeCategories } from "../lib/domain/categories";
 import { upcomingFrom, withEventDates } from "../lib/domain/upcomingAction";
+import { recordOpen, recordTap } from "../lib/record";
 import SignUpList from "./SignUpList";
 import PostLinks from "./PostLinks";
 

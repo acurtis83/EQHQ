@@ -11,6 +11,7 @@ import { hasTalk, sundayLabel } from "../lib/domain/lesson";
 import TeachingSchedule from "./TeachingSchedule";
 import QuickSummary from "./QuickSummary";
 import { hasPrimer } from "../lib/domain/primer";
+import { recordTap } from "../lib/record";
 
 // The coming Sunday the quorum gathers — today counts if it's Sunday.
 function nextGatheringSunday(fromIso) {
@@ -227,7 +228,8 @@ export default function ThisWeeksLesson() {
           // A real anchor, as in Upcoming: it leaves the app, so long-press,
           // open-in-new-tab and "copy link" all have to work, and a screen
           // reader should call it a link rather than a button.
-          <a href={url} target="_blank" rel="noreferrer" style={PILL}>
+          <a href={url} target="_blank" rel="noreferrer" style={PILL}
+            onClick={() => recordTap("talk")}>
             Read the talk
             <ArrowUpRight size={15} />
           </a>
@@ -240,7 +242,7 @@ export default function ThisWeeksLesson() {
             way in for somebody who hasn't. */}
         {!reason && hasPrimer(row) && (
           <button
-            onClick={() => setShowSummary(true)}
+            onClick={() => { recordTap("summary"); setShowSummary(true); }}
             style={{ ...PILL, cursor: "pointer", font: "inherit", fontSize: 14, fontWeight: 600 }}
           >
             <Zap size={14} />
@@ -252,7 +254,7 @@ export default function ThisWeeksLesson() {
             their own — the feed is the whole app for them — so this is the
             only place a teacher could reasonably find it. */}
         <button
-          onClick={() => setShowSchedule(true)}
+          onClick={() => { recordTap("schedule"); setShowSchedule(true); }}
           style={{ ...PILL, cursor: "pointer", font: "inherit", fontSize: 14, fontWeight: 600 }}
         >
           <CalendarRange size={14} />
