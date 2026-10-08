@@ -11,11 +11,16 @@
  * checked without a browser. It is only the opening bid, though: the component
  * measures the sheet once it's in the DOM and adjusts from there.
  *
- * The printed agenda is a one-line-per-item summary — name, date, category —
- * and nothing else. Notes, owners and attachments stay in the app. That was a
- * deliberate trade: carrying them meant three or four lines an item, and a
- * page that had to shrink to 9pt to hold a normal week. A sheet somebody can
- * read across a table beats a sheet that repeats what's already on the phone.
+ * The printed agenda is a short summary per item — name, date, category, and
+ * the note if there is one. Owners and the text of links still stay in the
+ * app.
+ *
+ * Notes were left out originally, and the reason that decision was safe to
+ * reverse is worth keeping: the problem was never notes, it was charging
+ * EVERY item three or four lines whether it had anything to say or not, which
+ * meant a normal week couldn't hold twelve items above 9pt. Only items with a
+ * note pay for one now, and the cost is counted in the estimate, so a heavy
+ * week steps down a type size rather than spilling onto a second sheet.
  *
  * Sign-up links are the one exception, and they earned it. The Upcoming panel
  * is the part that gets read out, and "there's a sign-up for it" with no way
@@ -191,8 +196,42 @@ function linesFor(text, size, width = nameW()) {
 export function itemRowH(tier, it, grouped) {
   const LINE = 1.3;
   const textH = linesFor(it.text, tier.body) * tier.body * LINE +
-    (hasMeta(it, grouped) ? 1 + tier.note * LINE : 0);
+    (hasMeta(it, grouped) ? 1 + tier.note * LINE : 0) +
+    noteH(tier, it);
   return Math.max(textH, itemRulesH(tier));
+}
+
+/**
+ * How much room an item's note takes under it.
+ *
+ * "on the PDF for the presidency meeting can we include any note for the
+ *  agenda items?"
+ *
+ * This reverses a deliberate omission, and the reason it's safe to reverse is
+ * that only the items which HAVE a note pay for one. The original decision
+ * charged every item three or four lines whether it had anything to say or
+ * not, and a normal week then couldn't hold twelve items above 9pt.
+ *
+ * Charged by the lines it actually wraps to, in the name column's width. An
+ * uncounted second line on six items is ninety pixels the fitter never knew
+ * about, which is the difference between one page and two.
+ *
+ * Capped at NOTE_LINES. A note is context for the item, and somebody who has
+ * typed six lines into it has written a document — the app holds the whole
+ * thing and the sheet shows the opening of it, which is the same trade the
+ * printed agenda makes everywhere else.
+ */
+export const NOTE_LINES = 3;
+
+export function noteLines(tier, it) {
+  const text = String(it?.notes || "").trim();
+  if (!text) return 0;
+  return Math.min(NOTE_LINES, linesFor(text, tier.note));
+}
+
+export function noteH(tier, it) {
+  const n = noteLines(tier, it);
+  return n ? 2 + n * tier.note * 1.3 : 0;
 }
 
 /**
@@ -420,6 +459,10 @@ export function flattenItems(sections = [], categories = []) {
         // "Ministering Checks" says more than an empty line does.
         catLabel: label(it.category) || s.label || "",
         accent: PRINT_ACCENTS[it.category] || PRINT_ACCENT_DEFAULT,
+        // Not the URL — just that there is one. A link printed in full is
+        // forty characters of noise nobody can tap, but knowing something is
+        // attached is what stops it being forgotten while reading off paper.
+        attached: !!(it.link_url || it.attachment_url),
       });
     }
   }

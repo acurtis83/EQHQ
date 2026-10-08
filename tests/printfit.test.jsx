@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import AgendaPrint from "../src/components/AgendaPrint";
 import { AGENDA_CATEGORIES } from "../src/lib/domain/agendaCategories";
 import {
-  PRINTABLE_H, TIER, BODY_PT, FLOOR_PT, ITEM_RULES, PT, RULE_TOTAL,
+  PRINTABLE_H, TIER, TIERS, BODY_PT, FLOOR_PT, ITEM_RULES, PT, RULE_TOTAL,
   choosePrintPlan, writeLinesFor,
 } from "../src/lib/domain/printPlan";
 
@@ -178,5 +178,131 @@ describe("the printed page", () => {
     await act(async () => { render(sheet()); });
     expect(ruleCount()).toBeGreaterThanOrEqual(3);
     expect(document.body.innerHTML).not.toContain("repeating-linear-gradient");
+  });
+});
+
+/* --------------------------- notes on the sheet --------------------------- */
+
+import { noteLines, noteH, itemRowH, NOTE_LINES } from "../src/lib/domain/printPlan";
+
+/**
+ * "on the PDF for the presidency meeting can we include any note for the
+ *  agenda items?"
+ *
+ * This reverses a deliberate omission. The reason it's safe to reverse is the
+ * thing to protect: the original problem was never notes, it was charging
+ * every item three or four lines whether it had anything to say or not, so a
+ * normal week couldn't hold twelve items above 9pt.
+ */
+describe("an item's note", () => {
+  const TIER = TIERS[0];
+  const bare = { id: 1, text: "Follow up with the Hills" };
+  const short = { ...bare, notes: "Cam spoke to them Sunday." };
+  const noted = {
+    ...bare,
+    notes: "Cam spoke to them Sunday and they asked for a call this week; " +
+      "he thinks a visit would be better received than a phone call, and " +
+      "offered to go along if somebody can make an evening work.",
+  };
+
+  it("costs nothing when there isn't one", () => {
+    expect(noteLines(TIER, bare)).toBe(0);
+    expect(noteH(TIER, bare)).toBe(0);
+    expect(noteH(TIER, { ...bare, notes: "   " })).toBe(0);
+  });
+
+  it("is charged by the lines it wraps to, not a flat one", () => {
+    // An uncounted second line on six items is ninety pixels the fitter never
+    // knew about — the difference between one page and two.
+    expect(noteLines(TIER, short)).toBe(1);
+    expect(noteLines(TIER, noted)).toBeGreaterThan(1);
+    expect(noteH(TIER, noted)).toBeGreaterThan(noteH(TIER, short));
+  });
+
+  it("and capped, so one long note can't take the page", () => {
+    const essay = { ...bare, notes: "word ".repeat(400) };
+    expect(noteLines(TIER, essay)).toBe(NOTE_LINES);
+  });
+
+  it("makes its own row taller without touching anyone else's", () => {
+    expect(itemRowH(TIER, noted, false)).toBeGreaterThan(itemRowH(TIER, bare, false));
+  });
+
+  it("but never shorter than the writing space beside it", () => {
+    // The ruled lines are why the note went in the left column at all. A row
+    // must still be tall enough to hold them.
+    expect(itemRowH(TIER, bare, false)).toBeGreaterThanOrEqual(ITEM_RULES * TIER.body);
+  });
+});
+
+describe("the page, with notes on it", () => {
+  const withNotes = (n, notes) => Array.from({ length: n }, (_, i) => ({
+    id: i, section: "items", text: `Agenda item number ${i}`,
+    category: AGENDA_CATEGORIES[i % 6].key, notes,
+  }));
+
+  it("is charged for them, so the fitter can't be surprised", () => {
+    const plain = choosePrintPlan({
+      sections: [{ key: "items", label: "Items", items: withNotes(8, null) }],
+    });
+    const noted = choosePrintPlan({
+      sections: [{ key: "items", label: "Items", items: withNotes(8, "A sentence of context about this item.") }],
+    });
+    expect(noted.height).toBeGreaterThan(plain.height);
+  });
+
+  it("and steps the type down rather than spilling onto a second sheet", () => {
+    const heavy = choosePrintPlan({
+      sections: [{
+        key: "items", label: "Items",
+        items: withNotes(13, "Two lines of context that will certainly wrap in the name column of the printed sheet."),
+      }],
+    });
+    expect(heavy.bodyPt).toBeLessThan(BODY_PT);
+    expect(heavy.bodyPt).toBeGreaterThanOrEqual(FLOOR_PT);
+  });
+});
+
+describe("the printed item", () => {
+  it("shows the note, and marks an attachment without printing the URL", async () => {
+    const items = [{
+      id: 1, section: "items", text: "Temple recommend interviews",
+      category: AGENDA_CATEGORIES[0].key,
+      notes: "Bishop asked for a list before the 15th.",
+      link_url: "https://docs.google.com/spreadsheets/d/1FoXgUAxBA2xsQfNHdiYJFztGTLtodJpEE0",
+    }];
+    await act(async () => {
+      render(
+        <AgendaPrint
+          agenda={{ meeting_date: "2026-10-14" }}
+          sections={[{ key: "items", label: "Agenda Items" }]}
+          bySection={{ items }}
+          events={[]}
+          categories={AGENDA_CATEGORIES}
+        />
+      );
+    });
+    const sheet = document.querySelector("[data-eq-sheet]");
+    expect(sheet.querySelector("[data-eq-note]"), "the note isn't on the sheet").toBeTruthy();
+    expect(sheet.textContent).toContain("Bishop asked for a list before the 15th.");
+    expect(sheet.textContent).toContain("attached");
+    // Forty characters nobody can tap.
+    expect(sheet.textContent, "the raw URL was printed").not.toContain("docs.google.com");
+  });
+
+  it("and an item without one gets no empty line", async () => {
+    await act(async () => {
+      render(
+        <AgendaPrint
+          agenda={{ meeting_date: "2026-10-14" }}
+          sections={[{ key: "items", label: "Agenda Items" }]}
+          bySection={{ items: [{ id: 2, section: "items", text: "Just an item" }] }}
+          events={[]}
+          categories={AGENDA_CATEGORIES}
+        />
+      );
+    });
+    expect(document.querySelector("[data-eq-sheet] [data-eq-note]")).toBeNull();
+    expect(document.querySelector("[data-eq-sheet]").textContent).not.toContain("attached");
   });
 });

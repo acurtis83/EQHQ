@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import {
   choosePrintPlan, flattenItems, groupByCategory, groupEvents, printAccent,
   COL_GAP, ITEM_RULES, NAME_FRAC, RULE_H, itemRuleH, writeLinesFor, signUpLine,
+  NOTE_LINES,
 } from "../lib/domain/printPlan";
 import { fmtDate, fmtShort } from "../lib/domain/dates";
 
@@ -162,9 +163,14 @@ function Head({ children, right, accent = "#111", size }) {
  * appears — and with nothing else on it that line is dropped rather than left
  * hanging under the name.
  *
- * Owners, links and attachments are still deliberately not here. This is the
- * sheet on the table during the meeting; the detail is on the phone next to
- * it, and carrying it would cost the note column its width.
+ * The note comes with it now, under the name and inside the same column, so
+ * the ruled writing space on the right survives — that space exists because
+ * people were otherwise writing on the back of the sheet. Only items with a
+ * note pay for the room, and the estimate charges for the lines it wraps to.
+ *
+ * Owners and the text of links are still deliberately absent. A URL printed
+ * in full is forty characters nobody can tap; a small mark saying something
+ * is attached does the only job paper can do here.
  */
 function PrintItem({ it, plan, showCategory }) {
   const meta = [showCategory ? it.catLabel : "", it.due_date ? fmtShort(it.due_date) : ""]
@@ -186,6 +192,22 @@ function PrintItem({ it, plan, showCategory }) {
             lineHeight: 1.3, marginTop: 1,
           }}>
             {meta.join("  ·  ")}
+            {/* Not the link itself — just that there is one, so it isn't
+                forgotten while somebody is reading off paper. */}
+            {it.attached ? "  ·  \u25CF attached" : ""}
+          </div>
+        )}
+        {it.notes && (
+          <div data-eq-note style={{
+            fontFamily: SANS, fontSize: plan.note, color: "#565656",
+            lineHeight: 1.3, marginTop: 2,
+            // Clipped rather than allowed to run: the estimate charges for
+            // NOTE_LINES at most, and a note that overflowed its allowance
+            // would push the page past what the fitter was told to expect.
+            display: "-webkit-box", WebkitLineClamp: NOTE_LINES,
+            WebkitBoxOrient: "vertical", overflow: "hidden",
+          }}>
+            {it.notes}
           </div>
         )}
       </div>
