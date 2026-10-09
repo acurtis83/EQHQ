@@ -588,3 +588,117 @@ describe("the sign-up rule is one rule", () => {
     expect(t).toMatch(/Sign up for the Stake Blood Drive/i);
   });
 });
+
+/* --------------------- announcements that are over ------------------------ */
+
+import { readFileSync } from "node:fs";
+import { announcementAge, STALE_DAYS } from "../src/lib/domain/announcements";
+
+/**
+ * "the announcements on the FEED include a temple cleaning that is in the
+ *  past....or should updated to the new date"
+ *
+ * Checked against the live feed: "Stake Temple Cleaning Assignment - Friday
+ * Oct 2", still showing on the 9th. Two separate faults — the line itself had
+ * finished, and the whole block was twelve days old because nobody had opened
+ * a newer Sunday agenda.
+ */
+describe("how old the announcements are", () => {
+  it("says nothing on an ordinary week", async () => {
+    // Saturday, about last Sunday. Normal, and commenting on it is noise.
+    expect(announcementAge("2026-10-04", "2026-10-10")).toEqual({ days: 6, stale: false });
+  });
+
+  it("but says so once a Sunday has been missed", async () => {
+    const age = announcementAge("2026-09-27", "2026-10-09");
+    expect(age.days).toBe(12);
+    expect(age.stale).toBe(false);
+    expect(announcementAge("2026-09-27", "2026-10-12").stale).toBe(true);
+  });
+
+  it("and survives a missing or malformed date rather than throwing", async () => {
+    // The hub renders before the date arrives, and a crash here takes the
+    // whole feed with it.
+    // days matters as much as stale: without the guard it comes back NaN and
+    // the feed renders "NaN days ago", which is worse than saying nothing.
+    expect(announcementAge("", "2026-10-09")).toEqual({ days: 0, stale: false });
+    expect(announcementAge("2026-10-09", "")).toEqual({ days: 0, stale: false });
+    expect(announcementAge("not-a-date", "2026-10-09")).toEqual({ days: 0, stale: false });
+    expect(announcementAge(null, undefined)).toEqual({ days: 0, stale: false });
+  });
+
+  it("is a fortnight, not a week", async () => {
+    expect(STALE_DAYS).toBe(14);
+  });
+});
+
+describe("the hub, when the block has gone stale", () => {
+  it("says how old it is instead of reading as current", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 9, 20, 9, 0, 0));   // 20 Oct
+    TABLES.sunday_announcements_public = [
+      { meeting_date: "2026-09-27", text: "Stake choir Sundays until December.", link_url: "", sort_order: 0 },
+    ];
+    const dom = await openHub();
+    const line = dom.container.querySelector("[data-announced-when]");
+    expect(line, "the source date isn't shown at all").toBeTruthy();
+    expect(line.textContent).toMatch(/may be out of date/);
+    vi.useRealTimers();
+  });
+
+  it("and keeps showing them, because they may still be true", async () => {
+    // A choir rehearsing until December doesn't stop being true because the
+    // presidency missed a week. Hiding the block would lose it.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 9, 20, 9, 0, 0));
+    TABLES.sunday_announcements_public = [
+      { meeting_date: "2026-09-27", text: "Stake choir Sundays until December.", link_url: "", sort_order: 0 },
+    ];
+    const dom = await openHub();
+    expect(dom.container.textContent).toContain("Stake choir Sundays until December.");
+    vi.useRealTimers();
+  });
+
+  it("and stays quiet on a normal week", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 9, 1, 9, 0, 0));    // 1 Oct
+    TABLES.sunday_announcements_public = [
+      { meeting_date: "2026-09-27", text: "Something recent.", link_url: "", sort_order: 0 },
+    ];
+    const dom = await openHub();
+    expect(dom.container.querySelector("[data-announced-when]").textContent)
+      .not.toMatch(/out of date/);
+    vi.useRealTimers();
+  });
+});
+
+describe("the view members read", () => {
+  const SQL = readFileSync(`${process.cwd()}/supabase/announcement-expiry.sql`, "utf8");
+  const BASE = readFileSync(`${process.cwd()}/supabase/announcements-public.sql`, "utf8");
+
+  it("drops an announcement whose Show-until date has passed", () => {
+    // The box already existed and only governed the carry-forward, so an
+    // announcement could be marked finished and still be on the feed — a
+    // control that looked like it worked.
+    expect(SQL).toMatch(/i\.expires_on is null or i\.expires_on >= current_date/);
+  });
+
+  it("and keeps one with no date, which is most of them", () => {
+    expect(SQL).toMatch(/expires_on is null or/);
+  });
+
+  it("is defined the same way in the migration and the base file", () => {
+    // These drifted once before, on public_lessons, and a fresh project then
+    // behaves differently from a migrated one.
+    expect(BASE).toMatch(/i\.expires_on is null or i\.expires_on >= current_date/);
+  });
+
+  it("and still publishes only the four safe columns", () => {
+    // agenda_items carries notes, who and due_date. The column list is the
+    // security boundary.
+    const cols = /select([\s\S]*?)from agenda_items/.exec(SQL)[1];
+    for (const unsafe of ["notes", "who", "due_date", "done"]) {
+      expect(cols, `${unsafe} reached the feed`).not.toMatch(new RegExp(`\\bi\\.${unsafe}\\b`));
+    }
+  });
+});

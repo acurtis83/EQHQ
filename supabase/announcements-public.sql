@@ -49,6 +49,10 @@ create or replace view sunday_announcements_public as
   join agendas a on a.id = i.agenda_id
   where a.kind = 'sunday'
     and i.section = 'announcements'
+    -- "Repeat until" governs the feed as well as the carry-forward. Null
+    -- means "until somebody removes it"; a date means the last day it is
+    -- worth saying. See supabase/announcement-expiry.sql.
+    and (i.expires_on is null or i.expires_on >= current_date)
     and a.meeting_date = (
       select max(meeting_date) from agendas
       where kind = 'sunday' and meeting_date <= current_date

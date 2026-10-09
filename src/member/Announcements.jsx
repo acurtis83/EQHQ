@@ -3,7 +3,7 @@ import { Megaphone, ExternalLink } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { T, card, Btn } from "../components/ui";
 import { DOW, MON, isoParts } from "../lib/domain/dates";
-import { MAX_SHOWN, sundayAnnouncements } from "../lib/domain/announcements";
+import { MAX_SHOWN, sundayAnnouncements, announcementAge } from "../lib/domain/announcements";
 
 /**
  * What was announced at the last quorum meeting.
@@ -82,11 +82,22 @@ export default function Announcements() {
       {/* Which Sunday, said once at the top rather than on every row. Without
           it these read as current notices, and on a Saturday that's six days
           of drift with nothing on screen to explain it. */}
-      {when && (
-        <div style={{ fontSize: 12.5, color: T.faint, marginTop: -4, paddingBottom: 8 }}>
-          From {longDate(when)}
-        </div>
-      )}
+      {when && (() => {
+        // Said plainly once they're old enough to mislead. Grey "From Sun,
+        // Sep 27" is easy to skim past on a Friday twelve days later, and the
+        // whole hub then reads as current.
+        const age = announcementAge(when, new Date().toISOString().slice(0, 10));
+        return (
+          <div data-announced-when style={{
+            fontSize: 12.5, marginTop: -4, paddingBottom: 8,
+            color: age.stale ? T.gold : T.faint,
+            fontWeight: age.stale ? 700 : 400,
+          }}>
+            From {longDate(when)}
+            {age.stale ? ` · ${age.days} days ago — may be out of date` : ""}
+          </div>
+        );
+      })()}
 
       {shown.map((a, i) => (
         <div

@@ -568,11 +568,14 @@ export default function SundayAgenda({ onGo }) {
                         </div>
                         <Btn size="sm" kind="plain" onClick={() => removeItem(a.id)}><Trash2 size={13} /></Btn>
                       </div>
-                      {/* Carries to following Sundays until this date passes,
-                          or it's removed, or the presidency item behind it is
-                          finished. Blank means it keeps going until removed. */}
+                      {/* One date, two jobs: it carries to following Sundays
+                          until this date passes, AND members stop seeing it on
+                          the feed the morning after. It used to do only the
+                          first, so an announcement could be marked finished
+                          and still be on the feed — a control that looked like
+                          it worked. Blank means it runs until removed. */}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 20, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 12.5, color: T.faint, flex: "0 0 auto" }}>Repeat until</span>
+                        <span style={{ fontSize: 12.5, color: T.faint, flex: "0 0 auto" }}>Show until</span>
                         <Input
                           type="date" value={a.expires_on || ""}
                           onChange={(v) => patchItem(a.id, { expires_on: v || null })}

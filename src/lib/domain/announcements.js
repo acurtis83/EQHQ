@@ -22,6 +22,41 @@
 export const MAX_SHOWN = 4;
 
 /**
+ * Past this, the announcements are old enough to say so.
+ *
+ * Two weeks is roughly "the presidency has missed a Sunday" rather than "it's
+ * Saturday and the meeting was last Sunday", which is normal and needs no
+ * comment.
+ */
+export const STALE_DAYS = 14;
+
+/**
+ * How old the announcements on the feed are, and whether that's worth saying.
+ *
+ * "the announcements on the FEED include a temple cleaning that is in the
+ *  past"
+ *
+ * The hub shows the most recent Sunday meeting that exists, and keeps showing
+ * it until a newer one replaces it — which is right on a Wednesday and wrong
+ * when nobody has opened the agenda for a fortnight. The date was already on
+ * screen in grey; this is what lets it be said plainly instead.
+ *
+ * Nothing is hidden. They may still be perfectly current — a choir rehearsing
+ * until December doesn't stop being true because the presidency missed a
+ * week — so the honest move is to show them and date them, not to guess.
+ */
+export function announcementAge(meetingIso, todayIso) {
+  const from = String(meetingIso || "").slice(0, 10);
+  const today = String(todayIso || "").slice(0, 10);
+  if (!from || !today) return { days: 0, stale: false };
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${today}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return { days: 0, stale: false };
+  const days = Math.max(0, Math.round((b - a) / 86400000));
+  return { days, stale: days > STALE_DAYS };
+}
+
+/**
  * The announcements from one Sunday, in the order they were read out.
  *
  * Blank rows are dropped. The agenda's add-row leaves an empty item behind
